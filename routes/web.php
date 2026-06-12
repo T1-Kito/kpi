@@ -1,0 +1,47 @@
+<?php
+
+use App\Http\Controllers\Web\AlertController;
+use App\Http\Controllers\Web\AuditLogController;
+use App\Http\Controllers\Web\CustomerController;
+use App\Http\Controllers\Web\DashboardController;
+use App\Http\Controllers\Web\GoodsIssueController;
+use App\Http\Controllers\Web\GoodsReceiptController;
+use App\Http\Controllers\Web\InventoryController;
+use App\Http\Controllers\Web\KpiController;
+use App\Http\Controllers\Web\LeadController;
+use App\Http\Controllers\Web\OrganizationController;
+use App\Http\Controllers\Web\PurchaseOrderController;
+use App\Http\Controllers\Web\PurchaseRequestController;
+use App\Http\Controllers\Web\QuotationController;
+use App\Http\Controllers\Web\RoleController;
+use App\Http\Controllers\Web\SalesOrderController;
+use App\Http\Controllers\Web\SettingController;
+use App\Http\Controllers\Web\SkuController;
+use App\Http\Controllers\Web\SupplierController;
+use App\Http\Controllers\Web\TaskController;
+use App\Http\Controllers\Web\UserController;
+use App\Http\Controllers\Web\WarehouseController;
+use Illuminate\Support\Facades\Route;
+
+Route::view('/', 'pages.auth.login')->name('login');
+Route::get('/dashboard', DashboardController::class)->name('dashboard');
+Route::get('/leads', LeadController::class)->name('leads.index');
+Route::get('/quotations', QuotationController::class)->name('quotations.index');
+Route::get('/sales-orders', SalesOrderController::class)->name('sales-orders.index');
+Route::get('/customers', CustomerController::class)->name('customers.index');
+Route::get('/suppliers', SupplierController::class)->name('suppliers.index');
+Route::get('/skus', SkuController::class)->name('skus.index');
+Route::get('/warehouses', WarehouseController::class)->name('warehouses.index');
+Route::get('/users', UserController::class)->name('users.index');
+Route::get('/organization', OrganizationController::class)->name('organization.index');
+Route::get('/roles', RoleController::class)->name('roles.index');
+Route::get('/inventory', InventoryController::class)->name('inventory.index');
+Route::get('/purchase-requests', PurchaseRequestController::class)->name('purchase-requests.index');
+Route::get('/purchase-orders', PurchaseOrderController::class)->name('purchase-orders.index');
+Route::get('/goods-receipts', GoodsReceiptController::class)->name('goods-receipts.index');
+Route::get('/goods-issues', GoodsIssueController::class)->name('goods-issues.index');
+Route::get('/tasks', TaskController::class)->name('tasks.index');
+Route::get('/alerts', AlertController::class)->name('alerts.index');
+Route::get('/kpi', KpiController::class)->name('kpi.index');
+Route::get('/audit-logs', AuditLogController::class)->name('audit-logs.index');
+Route::get('/settings', SettingController::class)->name('settings.index');

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>@yield('title', 'VK-KPI')</title>
+    <link rel="stylesheet" href="/assets/css/app.css">
+    <link rel="stylesheet" href="/assets/css/components.css">
+    <link rel="stylesheet" href="/assets/css/pages.css">
+</head>
+<body data-page="@yield('page', 'dashboard')">
+    <main class="app-shell">
+        @include('partials.sidebar')
+
+        <section class="main">
+            <div class="topbar">
+                <div class="page-title">
+                    <h1 data-pjax-title>@yield('page_title')</h1>
+                    <div class="subtitle" data-pjax-subtitle>@yield('page_subtitle')</div>
+                </div>
+                <div class="toolbar">
+                    @include('partials.notifications')
+                    <span data-pjax-actions>
+                        @yield('page_actions')
+                    </span>
+                </div>
+            </div>
+
+            <div data-pjax-content>
+                @yield('content')
+            </div>
+        </section>
+    </main>
+
+    @include('components.modal')
+    @include('components.detail-drawer')
+    <div id="toast" class="toast" role="status"></div>
+
+    <script src="/assets/js/services/api.js"></script>
+    <script src="/assets/js/table.js"></script>
+    <script src="/assets/js/modal.js"></script>
+    <script src="/assets/js/detail-drawer.js"></script>
+    <script src="/assets/js/layout.js"></script>
+    <script src="/assets/js/notifications.js"></script>
+    <script src="/assets/js/app.js"></script>
+    @stack('scripts')
+</body>
+</html>
