@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\InventoryBalance;
+use App\Support\DataScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -15,6 +16,7 @@ class InventoryBalanceController extends Controller
         $query = InventoryBalance::query()
             ->where('tenant_id', $request->user()->tenant_id)
             ->with(['sku:id,sku_code,name,unit,min_stock,max_stock', 'warehouse:id,code,name']);
+        DataScope::warehouseScope($query, $request->user());
 
         if ($warehouseId = $request->query('warehouse_id')) {
             $query->where('warehouse_id', $warehouseId);

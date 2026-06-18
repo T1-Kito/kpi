@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Task;
+use App\Support\DataScope;
 use App\Support\TaskService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,6 +22,7 @@ class TaskController extends Controller
         $query = Task::query()
             ->where('tenant_id', $request->user()->tenant_id)
             ->with(['assignee:id,name,email', 'department:id,code,name']);
+        DataScope::task($query, $request->user());
 
         if ($status = $request->query('status')) {
             $query->where('status', $status);
@@ -71,6 +73,7 @@ class TaskController extends Controller
     public function show(Request $request, Task $task): JsonResponse
     {
         abort_if($task->tenant_id !== $request->user()->tenant_id, 404);
+        abort_if(! DataScope::task(Task::whereKey($task->id), $request->user())->exists(), 404);
 
         return response()->json([
             'data' => $task->load(['assignee:id,name,email', 'department:id,code,name', 'history']),

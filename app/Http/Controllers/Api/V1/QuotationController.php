@@ -6,17 +6,24 @@ use App\Http\Controllers\Controller;
 use App\Models\Alert;
 use App\Models\Approval;
 use App\Models\Lead;
+use App\Models\PrintTemplate;
 use App\Models\Quotation;
 use App\Models\SalesOrder;
 use App\Models\Task;
+use App\Services\Print\QuotationDocxMergeService;
+use App\Support\DataScope;
 use App\Support\QuotationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class QuotationController extends Controller
 {
-    public function __construct(private readonly QuotationService $quotations)
+    public function __construct(
+        private readonly QuotationService $quotations,
+        private readonly QuotationDocxMergeService $docxMerge,
+    )
     {
     }
 
@@ -25,7 +32,13 @@ class QuotationController extends Controller
         $pageSize = min((int) $request->query('page_size', 20), 100);
         $query = Quotation::query()
             ->where('tenant_id', $request->user()->tenant_id)
-            ->with(['customer:id,code,name', 'items.sku:id,sku_code,name']);
+            ->with([
+                'customer:id,code,name,contact_name,phone,email,address,billing_address,tax_code,credit_limit',
+                'items.sku:id,sku_code,name,unit',
+                'salesOwner:id,name,email',
+                'duplicatedFrom:id,code,status,created_at',
+            ]);
+        DataScope::owned($query, $request->user(), 'sales_owner_id', 'salesOwner');
 
         if ($status = $request->query('status')) {
             $query->where('status', $status);
@@ -64,11 +77,13 @@ class QuotationController extends Controller
     public function show(Request $request, Quotation $quotation): JsonResponse
     {
         abort_if($quotation->tenant_id !== $request->user()->tenant_id, 404);
+        abort_if(! DataScope::owned(Quotation::whereKey($quotation->id), $request->user(), 'sales_owner_id', 'salesOwner')->exists(), 404);
 
         $quotation->load([
-            'customer:id,code,name,contact_name,phone,email',
+            'customer:id,code,name,contact_name,phone,email,address,billing_address,tax_code,credit_limit',
             'items.sku:id,sku_code,name,unit',
             'salesOwner:id,name,email',
+            'duplicatedFrom:id,code,status,created_at',
         ]);
 
         $lead = $quotation->lead_id
@@ -125,6 +140,64 @@ class QuotationController extends Controller
         ]]);
     }
 
+    public function duplicate(Request $request, Quotation $quotation): JsonResponse
+    {
+        abort_if($quotation->tenant_id !== $request->user()->tenant_id, 404);
+        abort_if(! DataScope::owned(Quotation::whereKey($quotation->id), $request->user(), 'sales_owner_id', 'salesOwner')->exists(), 404);
+
+        $quotation->load('items');
+        $copy = $this->quotations->create($request->user(), [
+            'customer_id' => $quotation->customer_id,
+            'duplicated_from_id' => $quotation->id,
+            'items' => $quotation->items->map(fn ($item): array => [
+                'sku_id' => $item->sku_id,
+                'quantity' => (float) $item->quantity,
+                'unit_price' => (float) $item->unit_price,
+                'vat_rate' => (float) ($item->vat_rate ?? 0),
+            ])->all(),
+        ]);
+
+        return response()->json(['data' => $copy], 201);
+    }
+
+    public function exportWord(Request $request, Quotation $quotation): BinaryFileResponse|JsonResponse
+    {
+        abort_if($quotation->tenant_id !== $request->user()->tenant_id, 404);
+        abort_if(! DataScope::owned(Quotation::whereKey($quotation->id), $request->user(), 'sales_owner_id', 'salesOwner')->exists(), 404);
+
+        $templateId = $request->query('template_id');
+        $templateQuery = PrintTemplate::where('tenant_id', $request->user()->tenant_id)
+            ->where('module', 'quotation')
+            ->where('status', 'active');
+
+        if ($templateId && $templateId !== 'default') {
+            $templateQuery->whereKey($templateId);
+        } else {
+            $templateQuery->orderByDesc('is_default')->latest('id');
+        }
+
+        $template = $templateQuery->first();
+
+        if (! $template || ! $template->file_path) {
+            return response()->json([
+                'message' => 'Mẫu in này chưa có file Word gốc để trộn dữ liệu.',
+            ], 422);
+        }
+
+        $quotation->load([
+            'customer:id,code,name,contact_name,phone,email,address,billing_address,tax_code',
+            'items.sku:id,sku_code,name,unit',
+            'salesOwner:id,name,email',
+        ]);
+
+        $path = $this->docxMerge->merge($quotation, $template);
+        $fileName = $this->safeFileName($quotation->code ?: 'bao-gia').'.docx';
+
+        return response()->download($path, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ])->deleteFileAfterSend(true);
+    }
+
     public function approve(Request $request, Quotation $quotation): JsonResponse
     {
         abort_if($quotation->tenant_id !== $request->user()->tenant_id, 404);
@@ -137,4 +210,12 @@ class QuotationController extends Controller
 
         return response()->json(['data' => $quotation]);
     }
+
+    private function safeFileName(string $value): string
+    {
+        $name = preg_replace('/[^A-Za-z0-9\-_]+/', '-', $value) ?: 'bao-gia';
+
+        return trim($name, '-') ?: 'bao-gia';
+    }
+
 }

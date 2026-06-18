@@ -81,4 +81,16 @@ class User extends Authenticatable
             ->whereHas('permissions', fn ($query) => $query->where('code', $permissionCode))
             ->exists();
     }
+
+    public function dataScope(): string
+    {
+        $rank = ['own' => 1, 'warehouse' => 2, 'department' => 3, 'company' => 4];
+        $roles = $this->relationLoaded('roles') ? $this->roles : $this->roles()->get(['data_scope']);
+
+        return $roles
+            ->pluck('data_scope')
+            ->filter()
+            ->sortByDesc(fn (string $scope) => $rank[$scope] ?? 0)
+            ->first() ?: 'own';
+    }
 }

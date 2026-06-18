@@ -1,3 +1,4 @@
+(function () {
 let taskState = {
     rows: [],
     q: '',
@@ -7,6 +8,10 @@ let taskState = {
     due: '',
     tab: 'all',
     selectedId: null,
+    view: 'list',
+    detail: null,
+    detailTab: 'overview',
+    detailCache: {},
 };
 
 document.addEventListener('vk:ready', () => loadTasks());
@@ -32,6 +37,20 @@ document.addEventListener('click', (event) => {
     if (!document.getElementById('tasksRoot')) return;
 
     if (event.target.matches('[data-create-task]')) openTaskModal();
+
+    if (event.target.matches('[data-back-task-list]')) {
+        taskState.view = 'list';
+        taskState.selectedId = null;
+        taskState.detail = null;
+        renderTasks();
+        return;
+    }
+
+    if (event.target.matches('[data-task-page-tab]')) {
+        taskState.detailTab = event.target.dataset.taskPageTab;
+        renderTaskDetailPage();
+        return;
+    }
 
     if (event.target.matches('[data-task-tab]')) {
         taskState.tab = event.target.dataset.taskTab;
@@ -60,10 +79,20 @@ document.addEventListener('click', (event) => {
     }
 });
 
-async function loadTasks() {
+async function loadTasks(options = {}) {
     if (!document.getElementById('tasksRoot')) return;
+    if (options.source === 'pjax') {
+        taskState.view = 'list';
+        taskState.selectedId = null;
+        taskState.detail = null;
+        taskState.detailTab = 'overview';
+    }
     const tasks = await VKApi.request('/tasks?page_size=100');
     taskState.rows = tasks.data || [];
+    if (taskState.view === 'detail' && taskState.selectedId) {
+        await openTaskDetail(taskState.selectedId);
+        return;
+    }
     renderTasks(tasks.meta.total);
 }
 
@@ -195,7 +224,7 @@ function renderTaskTable(rows) {
         { label: 'Hạn xử lý', render: row => renderDue(row) },
         { label: 'Ưu tiên', render: row => VKTable.statusBadge(row.priority) },
         { label: 'Trạng thái', render: row => VKTable.statusBadge(row.status) },
-        { label: '', render: row => renderTaskActions(row) },
+        { label: '', className: 'actions-cell', render: row => renderTaskActions(row) },
     ], rows, 'Chưa có công việc', { rowAttr: row => `data-row-detail="${row.id}" class="${taskState.selectedId === row.id ? 'selected' : ''}"` });
 }
 
@@ -326,10 +355,183 @@ async function updateTaskStatus(id, status) {
     loadTasks();
 }
 
-function openTaskDetail(id) {
+async function openTaskDetail(id) {
+    taskState.view = 'detail';
     taskState.selectedId = Number(id);
-    renderTasks();
-    VKDetailDrawer.open({ type: 'task', path: `/tasks/${id}` });
+    taskState.detailTab = 'overview';
+
+    const cached = taskState.detailCache[id] || taskState.rows.find(row => String(row.id) === String(id));
+    if (cached) {
+        taskState.detail = normalizeTaskDetail(cached);
+        renderTaskDetailPage();
+    }
+
+    try {
+        const response = await VKApi.request(`/tasks/${id}`);
+        taskState.detailCache[id] = response.data;
+        taskState.detail = normalizeTaskDetail(response.data);
+        renderTaskDetailPage();
+    } catch (error) {
+        VKModal.toast(error.message || 'Không tải được chi tiết công việc.');
+        if (!cached) {
+            taskState.view = 'list';
+            taskState.selectedId = null;
+            renderTasks();
+        }
+    }
+}
+
+function normalizeTaskDetail(row) {
+    return {
+        ...row,
+        history: row.history || [],
+    };
+}
+
+function renderTaskDetailPage() {
+    const root = document.getElementById('tasksRoot');
+    const row = taskState.detail;
+    if (!root || !row) return;
+
+    root.innerHTML = `
+        <section class="record-page task-record-page">
+            ${renderTaskDetailHead(row)}
+            ${renderTaskDetailTabs(row)}
+            <div class="record-page-body">
+                ${renderTaskDetailContent(row)}
+            </div>
+        </section>
+    `;
+}
+
+function renderTaskDetailHead(row) {
+    return `
+        <div class="record-page-head">
+            <button class="btn small" type="button" data-back-task-list>Quay lại danh sách</button>
+            <div class="record-page-title">
+                <span>Công việc</span>
+                <h2>${VKTable.escapeHtml(row.code || '-')} ${VKTable.statusBadge(row.status || 'new')}</h2>
+                <p><strong>${VKTable.escapeHtml(row.title || '-')}</strong></p>
+            </div>
+            <div class="record-page-meta">
+                <div><span>Ngày tạo</span><strong>${formatTaskDate(row.created_at)}</strong></div>
+                <div><span>Hạn xử lý</span><strong>${formatTaskDate(row.due_at)}</strong></div>
+            </div>
+            <div class="record-page-actions">${renderTaskPageActions(row)}</div>
+        </div>
+    `;
+}
+
+function renderTaskPageActions(row) {
+    const actions = [];
+    if (row.status === 'new') {
+        actions.push(`<button class="btn small" type="button" data-task-change-status="${row.id}" data-status="in_progress">Bắt đầu</button>`);
+    }
+    if (['new', 'in_progress', 'overdue'].includes(row.status)) {
+        actions.push(`<button class="btn primary small" type="button" data-task-change-status="${row.id}" data-status="completed">Hoàn thành</button>`);
+    }
+    return actions.join('');
+}
+
+function renderTaskDetailTabs(row) {
+    const tabs = [
+        ['overview', 'Thông tin'],
+        ['history', `Lịch sử (${row.history?.length || 0})`],
+        ['files', 'Tệp đính kèm'],
+        ['notes', 'Ghi chú'],
+    ];
+
+    return `
+        <div class="record-tabs">
+            ${tabs.map(([key, label]) => `
+                <button class="${taskState.detailTab === key ? 'active' : ''}" type="button" data-task-page-tab="${key}">
+                    ${VKTable.escapeHtml(label)}
+                </button>
+            `).join('')}
+        </div>
+    `;
+}
+
+function renderTaskDetailContent(row) {
+    if (taskState.detailTab === 'history') return renderTaskHistoryPage(row.history || []);
+    if (taskState.detailTab === 'files') return renderTaskEmptyPanel('Tệp đính kèm', 'Chưa có tệp đính kèm');
+    if (taskState.detailTab === 'notes') {
+        return row.description
+            ? `<section class="record-panel"><h3>Mô tả công việc</h3><p class="task-description">${VKTable.escapeHtml(row.description)}</p></section>`
+            : renderTaskEmptyPanel('Ghi chú', 'Chưa có ghi chú');
+    }
+
+    const source = row.source_type ? `${sourceLabel(row.source_type)} #${row.source_id || '-'}` : 'Thủ công';
+    const fields = [
+        ['Mã công việc', row.code || '-'],
+        ['Trạng thái', VKTable.statusBadge(row.status || 'new'), true],
+        ['Tiêu đề', row.title || '-'],
+        ['Ưu tiên', VKTable.statusBadge(row.priority || 'normal'), true],
+        ['Người phụ trách', row.assignee?.name || 'Chưa phân công'],
+        ['Phòng ban', row.department?.name || 'Chưa gắn phòng ban'],
+        ['Loại công việc', VKTable.translateType(row.task_type)],
+        ['Nguồn phát sinh', source],
+        ['Ngày tạo', formatTaskDate(row.created_at)],
+        ['Hạn xử lý', formatTaskDate(row.due_at)],
+    ];
+
+    return `
+        <section class="record-panel task-info-panel">
+            <h3>Thông tin công việc</h3>
+            <div class="sales-order-info-grid">
+                ${fields.map(([label, value, html]) => `
+                    <div>
+                        <span>${VKTable.escapeHtml(label)}</span>
+                        <strong>${html ? value : VKTable.escapeHtml(value)}</strong>
+                    </div>
+                `).join('')}
+            </div>
+        </section>
+        ${row.description ? `<section class="record-panel"><h3>Mô tả</h3><p class="task-description">${VKTable.escapeHtml(row.description)}</p></section>` : ''}
+    `;
+}
+
+function renderTaskHistoryPage(rows) {
+    if (!rows.length) return renderTaskEmptyPanel('Lịch sử', 'Chưa có lịch sử cập nhật');
+    return `
+        <section class="record-panel">
+            <h3>Lịch sử cập nhật</h3>
+            <div class="record-timeline">
+                ${rows.map(item => `
+                    <div class="${taskTimelineTone(item.to_status)}">
+                        <i></i>
+                        <span>
+                            <strong>${VKTable.escapeHtml(VKTable.translateStatus(item.from_status || 'new'))} → ${VKTable.escapeHtml(VKTable.translateStatus(item.to_status))}</strong>
+                            <small>${VKTable.escapeHtml(item.reason || 'Cập nhật trạng thái')} · ${formatTaskDate(item.created_at)}</small>
+                        </span>
+                    </div>
+                `).join('')}
+            </div>
+        </section>
+    `;
+}
+
+function renderTaskEmptyPanel(title, message) {
+    return `<section class="record-panel"><h3>${VKTable.escapeHtml(title)}</h3><div class="empty compact"><strong>${VKTable.escapeHtml(message)}</strong></div></section>`;
+}
+
+function formatTaskDate(value) {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toLocaleString('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+    });
+}
+
+function taskTimelineTone(status) {
+    if (status === 'completed') return 'done';
+    if (['overdue', 'cancelled'].includes(status)) return 'risk';
+    return 'waiting';
 }
 
 function matchTabFilter(row, tab) {
@@ -392,3 +594,6 @@ function getInitials(value) {
 function sourceLabel(value) {
     return VKTable.translateEntity(value);
 }
+
+window.loadTasks = loadTasks;
+})();

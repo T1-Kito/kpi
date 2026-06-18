@@ -1,3 +1,4 @@
+(function () {
 let supplierState = { rows: [], q: '', status: '' };
 
 document.addEventListener('vk:ready', () => loadSuppliers());
@@ -27,9 +28,14 @@ document.addEventListener('click', (event) => {
     if (detail) openSupplierDetail(detail.dataset.supplierDetail || detail.dataset.rowDetail);
 });
 
-async function loadSuppliers() {
-    if (!document.getElementById('suppliersRoot')) return;
+async function loadSuppliers(options = {}) {
+    const root = document.getElementById('suppliersRoot');
+    if (!root) return;
+    if (options.source === 'pjax' && supplierState.rows.length) {
+        renderSuppliers();
+    }
     const suppliers = await VKApi.request('/suppliers');
+    if (document.getElementById('suppliersRoot') !== root) return;
     supplierState.rows = suppliers.data || [];
     renderSuppliers(suppliers.meta.total);
 }
@@ -118,5 +124,19 @@ function openSupplierModal(id = null) {
 
 function openSupplierDetail(id) {
     const row = supplierState.rows.find(item => String(item.id) === String(id));
+    if (!row) return;
+    VKRecordPage.open({
+        root: '#suppliersRoot',
+        type: 'supplier',
+        id,
+        path: `/suppliers/${id}`,
+        preview: { ...row, timeline: [{ label: 'Tạo nhà cung cấp', status: row.status, at: row.created_at }] },
+        onBack: () => renderSuppliers(),
+        actions: () => `<button class="btn primary small" type="button" data-edit-supplier="${id}">Sửa nhà cung cấp</button>`,
+    });
+    return;
     VKDetailDrawer.open({ type: 'supplier', row: { ...row, timeline: [{ label: 'Tạo nhà cung cấp', status: row.status, at: row.created_at }] } });
 }
+
+window.loadSuppliers = loadSuppliers;
+})();

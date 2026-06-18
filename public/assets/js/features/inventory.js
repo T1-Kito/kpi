@@ -1,3 +1,4 @@
+(function () {
 let inventoryState = { balances: [], transactions: [], q: '', status: '' };
 
 document.addEventListener('vk:ready', () => loadInventory());
@@ -15,16 +16,40 @@ document.addEventListener('change', (event) => {
         renderInventory();
     }
 });
+document.addEventListener('click', (event) => {
+    if (!event.target.closest('[data-retry-inventory]')) return;
+    loadInventory();
+});
 
 async function loadInventory() {
-    if (!document.getElementById('inventoryRoot')) return;
-    const [balances, transactions] = await Promise.all([
-        VKApi.request('/inventory-balances'),
-        VKApi.request('/inventory-transactions'),
-    ]);
-    inventoryState.balances = balances.data || [];
-    inventoryState.transactions = transactions.data || [];
-    renderInventory(balances.meta.total);
+    const root = document.getElementById('inventoryRoot');
+    if (!root) return;
+
+    root.innerHTML = VKTable.skeleton ? VKTable.skeleton() : '<div class="list-loading">Đang tải dữ liệu tồn kho...</div>';
+
+    try {
+        const balances = await VKApi.request('/inventory-balances');
+        inventoryState.balances = balances.data || [];
+        renderInventory(balances.meta?.total ?? inventoryState.balances.length);
+
+        try {
+            const transactions = await VKApi.request('/inventory-transactions');
+            inventoryState.transactions = transactions.data || [];
+            renderInventory(balances.meta?.total ?? inventoryState.balances.length);
+        } catch (error) {
+            inventoryState.transactions = [];
+        }
+    } catch (error) {
+        root.innerHTML = `
+            <section class="list-page">
+                <div class="empty">
+                    <strong>Không tải được dữ liệu tồn kho</strong>
+                    <span>${VKTable.escapeHtml(error.message || 'Vui lòng thử tải lại trang.')}</span>
+                    <button class="btn small" type="button" data-retry-inventory>Thử lại</button>
+                </div>
+            </section>
+        `;
+    }
 }
 
 function renderInventory(total = inventoryState.balances.length) {
@@ -145,3 +170,6 @@ function isLowStock(row) {
 function formatDateTime(value) {
     return value ? new Date(value).toLocaleString('vi-VN') : '-';
 }
+
+window.loadInventory = loadInventory;
+})();

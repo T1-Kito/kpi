@@ -95,7 +95,14 @@ class DatabaseSeeder extends Seeder
             'sales.lead.manage' => 'Quản lý khách hàng tiềm năng',
             'sales.quotation.create' => 'Tạo báo giá',
             'sales.margin.approve' => 'Duyệt biên lợi nhuận thấp',
+            'sales.order.view' => 'Xem đơn bán',
             'sales.order.create' => 'Tạo đơn bán',
+            'sales.delivery.view' => 'Xem sổ giao hàng',
+            'sales.delivery.confirm' => 'Xác nhận giao hàng',
+            'finance.invoice.view' => 'Xem hóa đơn bán hàng',
+            'finance.invoice.manage' => 'Phát hành hóa đơn bán hàng',
+            'finance.payment.view' => 'Xem phiếu thu khách hàng',
+            'finance.payment.record' => 'Ghi nhận thanh toán khách hàng',
             'inventory.receipt.confirm' => 'Xác nhận nhập kho',
             'inventory.issue.confirm' => 'Xác nhận xuất kho',
             'procurement.pr.approve' => 'Duyệt yêu cầu mua',
@@ -109,14 +116,14 @@ class DatabaseSeeder extends Seeder
 
         $roleDefinitions = [
             'ROLE-ADMIN' => ['name' => 'Quản trị hệ thống', 'scope' => 'company', 'permissions' => $permissions->keys()->all()],
-            'ROLE-DIR' => ['name' => 'Ban giám đốc', 'scope' => 'company', 'permissions' => ['dashboard.executive.view', 'dashboard.manager.view', 'master.view', 'task.view', 'alert.view', 'audit.view', 'kpi.lock']],
-            'ROLE-MGR' => ['name' => 'Trưởng phòng', 'scope' => 'department', 'permissions' => ['dashboard.manager.view', 'master.view', 'task.view', 'task.create', 'task.approve', 'alert.view', 'sales.margin.approve', 'procurement.pr.approve']],
-            'ROLE-SALES' => ['name' => 'Kinh doanh', 'scope' => 'own', 'permissions' => ['master.view', 'task.view', 'task.create', 'alert.view', 'sales.lead.manage', 'sales.quotation.create', 'sales.order.create']],
+            'ROLE-DIR' => ['name' => 'Ban giám đốc', 'scope' => 'company', 'permissions' => ['dashboard.executive.view', 'dashboard.manager.view', 'master.view', 'task.view', 'alert.view', 'audit.view', 'kpi.lock', 'sales.order.view', 'sales.delivery.view', 'finance.invoice.view', 'finance.payment.view']],
+            'ROLE-MGR' => ['name' => 'Trưởng phòng', 'scope' => 'department', 'permissions' => ['dashboard.manager.view', 'master.view', 'task.view', 'task.create', 'task.approve', 'alert.view', 'sales.margin.approve', 'procurement.pr.approve', 'sales.order.view']],
+            'ROLE-SALES' => ['name' => 'Kinh doanh', 'scope' => 'own', 'permissions' => ['master.view', 'task.view', 'task.create', 'alert.view', 'sales.lead.manage', 'sales.quotation.create', 'sales.order.view', 'sales.order.create', 'sales.delivery.view', 'sales.delivery.confirm', 'finance.invoice.view', 'finance.payment.view']],
             'ROLE-WH' => ['name' => 'Kho', 'scope' => 'warehouse', 'permissions' => ['master.view', 'task.view', 'task.create', 'alert.view', 'inventory.receipt.confirm', 'inventory.issue.confirm']],
             'ROLE-PUR' => ['name' => 'Mua hàng', 'scope' => 'department', 'permissions' => ['master.view', 'task.view', 'task.create', 'alert.view', 'procurement.pr.approve', 'procurement.po.approve']],
             'ROLE-MKT' => ['name' => 'Marketing', 'scope' => 'department', 'permissions' => ['master.view', 'task.view', 'task.create', 'alert.view', 'marketing.campaign.manage']],
             'ROLE-HR' => ['name' => 'Nhân sự', 'scope' => 'department', 'permissions' => ['task.view', 'task.create', 'alert.view']],
-            'ROLE-FIN' => ['name' => 'Tài chính', 'scope' => 'department', 'permissions' => ['task.view', 'task.create', 'alert.view']],
+            'ROLE-FIN' => ['name' => 'Tài chính', 'scope' => 'department', 'permissions' => ['master.view', 'task.view', 'task.create', 'alert.view', 'sales.order.view', 'sales.delivery.view', 'finance.invoice.view', 'finance.invoice.manage', 'finance.payment.view', 'finance.payment.record']],
         ];
 
         $roles = collect($roleDefinitions)->mapWithKeys(function (array $definition, string $code) use ($tenant, $permissions) {

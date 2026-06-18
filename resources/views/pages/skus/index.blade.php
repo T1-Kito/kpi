@@ -13,5 +13,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/skus.js"></script>
+<script src="/assets/js/features/skus.js?v=20260615-2"></script>
 @endpush

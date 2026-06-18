@@ -10,6 +10,7 @@ use App\Models\PurchaseRequest;
 use App\Models\SalesOrder;
 use App\Models\Task;
 use App\Services\Inventory\InventoryService;
+use App\Support\DataScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -23,11 +24,11 @@ class GoodsReceiptController extends Controller
     public function index(Request $request): JsonResponse
     {
         $pageSize = min((int) $request->query('page_size', 20), 100);
-        $rows = GoodsReceipt::query()
+        $query = GoodsReceipt::query()
             ->where('tenant_id', $request->user()->tenant_id)
-            ->with(['purchaseOrder:id,code', 'warehouse:id,code,name', 'items.sku:id,sku_code,name'])
-            ->latest('id')
-            ->paginate($pageSize);
+            ->with(['purchaseOrder:id,code', 'warehouse:id,code,name', 'items.sku:id,sku_code,name,unit']);
+        DataScope::warehouseScope($query, $request->user());
+        $rows = $query->latest('id')->paginate($pageSize);
 
         return response()->json([
             'data' => $rows->items(),
@@ -53,8 +54,9 @@ class GoodsReceiptController extends Controller
     public function show(Request $request, GoodsReceipt $goodsReceipt): JsonResponse
     {
         abort_if($goodsReceipt->tenant_id !== $request->user()->tenant_id, 404);
+        abort_if(! DataScope::warehouseScope(GoodsReceipt::whereKey($goodsReceipt->id), $request->user())->exists(), 404);
 
-        $goodsReceipt->load(['purchaseOrder:id,code,status,purchase_request_id', 'warehouse:id,code,name', 'items.sku:id,sku_code,name']);
+        $goodsReceipt->load(['purchaseOrder:id,code,status,purchase_request_id', 'warehouse:id,code,name', 'items.sku:id,sku_code,name,unit']);
         $purchaseOrder = $goodsReceipt->purchaseOrder;
         $purchaseRequest = $purchaseOrder
             ? PurchaseRequest::where('tenant_id', $goodsReceipt->tenant_id)->whereKey($purchaseOrder->purchase_request_id)->first()

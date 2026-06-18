@@ -24,7 +24,16 @@ class SalesOrderService
     public function createFromQuotation(Quotation $quotation, User $actor): SalesOrder
     {
         return DB::transaction(function () use ($quotation, $actor) {
-            abort_if(! in_array($quotation->status, ['ready', 'approved'], true), 422, 'Quotation chưa sẵn sàng tạo đơn hàng.');
+            abort_if(! in_array($quotation->status, ['ready', 'approved'], true), 422, 'Báo giá chưa sẵn sàng tạo đơn bán.');
+
+            $existing = SalesOrder::where('tenant_id', $actor->tenant_id)
+                ->where('quotation_id', $quotation->id)
+                ->whereNotIn('status', ['cancelled'])
+                ->lockForUpdate()
+                ->first();
+            if ($existing) {
+                abort(422, "Báo giá {$quotation->code} đã tạo đơn bán {$existing->code}. Vui lòng mở đơn bán hiện có để xử lý tiếp.");
+            }
 
             $order = SalesOrder::create([
                 'tenant_id' => $actor->tenant_id,

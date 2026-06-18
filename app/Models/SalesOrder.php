@@ -8,7 +8,30 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SalesOrder extends Model
 {
-    protected $fillable = ['tenant_id', 'code', 'quotation_id', 'customer_id', 'sales_owner_id', 'subtotal_amount', 'tax_amount', 'total_amount', 'stock_status', 'status'];
+    protected $fillable = [
+        'tenant_id',
+        'code',
+        'quotation_id',
+        'customer_id',
+        'sales_owner_id',
+        'subtotal_amount',
+        'tax_amount',
+        'total_amount',
+        'stock_status',
+        'delivery_status',
+        'payment_status',
+        'delivered_at',
+        'completed_at',
+        'status',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'delivered_at' => 'datetime',
+            'completed_at' => 'datetime',
+        ];
+    }
 
     public function items(): HasMany
     {
@@ -18,5 +41,20 @@ class SalesOrder extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function salesOwner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'sales_owner_id');
+    }
+
+    public function deliveries(): HasMany
+    {
+        return $this->hasMany(Delivery::class);
+    }
+
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(SalesInvoice::class);
     }
 }

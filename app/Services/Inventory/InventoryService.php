@@ -113,6 +113,15 @@ class InventoryService
         return DB::transaction(function () use ($order, $actor, $warehouseId, $locationId) {
             abort_if($order->stock_status !== 'reserved', 422, 'Don ban chua giu hang.');
 
+            $existingIssue = GoodsIssue::where('tenant_id', $order->tenant_id)
+                ->where('sales_order_id', $order->id)
+                ->whereIn('status', ['draft', 'confirmed'])
+                ->lockForUpdate()
+                ->first();
+            if ($existingIssue) {
+                abort(422, "Đơn bán {$order->code} đã có phiếu xuất {$existingIssue->code}. Vui lòng mở phiếu xuất hiện có để xử lý tiếp.");
+            }
+
             foreach ($order->items as $item) {
                 $reservedQty = InventoryBalance::where('tenant_id', $order->tenant_id)
                     ->where('warehouse_id', $warehouseId)
@@ -196,11 +205,23 @@ class InventoryService
                 ->where('id', $issue->sales_order_id)
                 ->first();
             $oldOrder = $salesOrder?->only(['status', 'stock_status']);
-            $salesOrder?->update(['status' => 'completed']);
+            $salesOrder?->update([
+                'status' => 'awaiting_delivery',
+                'delivery_status' => 'pending',
+            ]);
 
             $this->audit->record('goods_issue', $issue->id, 'confirm_goods_issue', $actor, $old, $issue->fresh()->only(['status', 'confirmed_by', 'confirmed_at']));
             if ($salesOrder) {
-                $this->audit->record('sales_order', $salesOrder->id, 'complete_sales_order_after_issue', $actor, $oldOrder, $salesOrder->fresh()->only(['status', 'stock_status']));
+                $this->audit->record('sales_order', $salesOrder->id, 'mark_sales_order_awaiting_delivery', $actor, $oldOrder, $salesOrder->fresh()->only(['status', 'stock_status', 'delivery_status']));
+                $this->tasks->create($actor, [
+                    'module' => 'sales',
+                    'task_type' => 'delivery_confirmation',
+                    'priority' => 'high',
+                    'title' => 'Xác nhận giao hàng cho đơn '.$salesOrder->code,
+                    'source_type' => 'SalesOrder',
+                    'source_id' => $salesOrder->id,
+                    'assignee_id' => $salesOrder->sales_owner_id,
+                ]);
             }
             $this->events->publish($issue->tenant_id, 'GoodsIssueConfirmed', 'GoodsIssue', $issue->id, ['code' => $issue->code]);
 

@@ -6,6 +6,7 @@ use App\Models\Department;
 use App\Models\Permission;
 use App\Models\Position;
 use App\Models\Role;
+use App\Models\SlaPolicy;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -138,6 +139,53 @@ class UserRoleAdminApiTest extends TestCase
         $this->withToken($token)->getJson('/api/v1/roles')->assertForbidden();
         $this->withToken($token)->getJson('/api/v1/departments')->assertForbidden();
         $this->withToken($token)->getJson('/api/v1/positions')->assertForbidden();
+        $this->withToken($token)->getJson('/api/v1/sla-policies')->assertForbidden();
+    }
+
+    public function test_admin_can_manage_sla_policies(): void
+    {
+        $this->seed();
+        $token = $this->loginAs('admin@vk-kpi.local');
+
+        $this->withToken($token)
+            ->getJson('/api/v1/sla-policies?page_size=100')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 4);
+
+        $policyId = $this->withToken($token)
+            ->postJson('/api/v1/sla-policies', [
+                'module' => 'finance',
+                'task_type' => 'payment_follow_up',
+                'priority' => 'high',
+                'duration_minutes' => 120,
+                'warning_before_minutes' => 30,
+                'escalation_rules' => ['manager' => true],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.module', 'finance')
+            ->assertJsonPath('data.task_type', 'payment_follow_up')
+            ->json('data.id');
+
+        $this->withToken($token)
+            ->putJson("/api/v1/sla-policies/{$policyId}", [
+                'module' => 'finance',
+                'task_type' => 'payment_follow_up',
+                'priority' => 'high',
+                'duration_minutes' => 180,
+                'warning_before_minutes' => 45,
+                'escalation_rules' => ['manager' => false],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.duration_minutes', 180)
+            ->assertJsonPath('data.warning_before_minutes', 45);
+
+        $this->assertDatabaseHas('sla_policies', [
+            'id' => $policyId,
+            'duration_minutes' => 180,
+            'warning_before_minutes' => 45,
+        ]);
+
+        $this->assertSame(false, SlaPolicy::findOrFail($policyId)->escalation_rules['manager']);
     }
 
     public function test_admin_can_upload_tenant_logo(): void

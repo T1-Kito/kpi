@@ -3,11 +3,14 @@
 namespace Tests\Feature;
 
 use App\Models\GoodsIssue;
+use App\Models\CustomerPayment;
+use App\Models\Delivery;
 use App\Models\InventoryBalance;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseRequest;
 use App\Models\Quotation;
 use App\Models\SalesOrder;
+use App\Models\SalesInvoice;
 use App\Models\Sku;
 use App\Models\Warehouse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -23,10 +26,20 @@ class ProcurementInventoryFlowTest extends TestCase
         $salesToken = $this->loginAs('sales@vk-kpi.local');
         $procurementToken = $this->loginAs('procurement@vk-kpi.local');
         $warehouseToken = $this->loginAs('warehouse@vk-kpi.local');
+        $adminToken = $this->loginAs('admin@vk-kpi.local');
 
-        $quotation = Quotation::where('code', 'QUO-DEMO-001')->firstOrFail();
         $sku = Sku::where('sku_code', 'SKU-PRN-001')->firstOrFail();
         $warehouse = Warehouse::where('code', 'WH-HCM')->firstOrFail();
+        $quotationId = $this->withToken($salesToken)
+            ->postJson('/api/v1/quotations', [
+                'customer_id' => 1,
+                'items' => [
+                    ['sku_id' => $sku->id, 'quantity' => 1, 'unit_price' => 3500000],
+                ],
+            ])
+            ->assertCreated()
+            ->json('data.id');
+        $quotation = Quotation::findOrFail($quotationId);
         $quotation->items()->firstOrFail()->update([
             'quantity' => 999,
             'line_total' => 999 * 3500000,
@@ -114,13 +127,83 @@ class ProcurementInventoryFlowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.status', 'confirmed');
 
-        $this->assertDatabaseHas('sales_orders', ['id' => $salesOrderId, 'status' => 'completed']);
+        $this->assertDatabaseHas('sales_orders', [
+            'id' => $salesOrderId,
+            'status' => 'awaiting_delivery',
+            'delivery_status' => 'pending',
+        ]);
         $this->assertDatabaseHas('inventory_transactions', [
             'sku_id' => $sku->id,
             'transaction_type' => 'issue',
             'source_type' => 'GoodsIssue',
             'source_id' => $issueId,
         ]);
+
+        $deliveryId = $this->withToken($adminToken)
+            ->postJson("/api/v1/sales-orders/{$salesOrderId}/deliveries", [
+                'recipient_name' => 'Anh Minh',
+                'recipient_phone' => '0901000001',
+                'delivery_address' => 'Quận 1, TP.HCM',
+                'proof_note' => 'Khách đã nhận đủ hàng.',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'delivered')
+            ->json('data.id');
+
+        $invoiceId = $this->withToken($adminToken)
+            ->postJson("/api/v1/sales-orders/{$salesOrderId}/invoices", [
+                'invoice_date' => now()->toDateString(),
+                'due_date' => now()->addDays(30)->toDateString(),
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'issued')
+            ->json('data.id');
+
+        $invoice = SalesInvoice::findOrFail($invoiceId);
+        $paymentId = $this->withToken($adminToken)
+            ->postJson("/api/v1/sales-invoices/{$invoiceId}/payments", [
+                'amount' => (float) $invoice->balance_amount,
+                'payment_method' => 'bank_transfer',
+                'reference_no' => 'BANK-DEMO-001',
+            ])
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->assertNotNull(Delivery::find($deliveryId));
+        $this->assertNotNull(CustomerPayment::find($paymentId));
+        $this->assertDatabaseHas('sales_invoices', ['id' => $invoiceId, 'status' => 'paid', 'balance_amount' => 0]);
+        $this->assertDatabaseHas('sales_orders', [
+            'id' => $salesOrderId,
+            'status' => 'completed',
+            'delivery_status' => 'delivered',
+            'payment_status' => 'paid',
+        ]);
+
+        $this->withToken($adminToken)
+            ->getJson('/api/v1/deliveries?page_size=100')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $salesOrderId, 'delivery_status' => 'delivered']);
+        $this->withToken($adminToken)
+            ->getJson("/api/v1/deliveries/{$salesOrderId}")
+            ->assertOk()
+            ->assertJsonPath('data.deliveries.0.id', $deliveryId);
+        $this->withToken($adminToken)
+            ->getJson('/api/v1/sales-invoices?page_size=100')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $invoiceId, 'status' => 'paid']);
+        $this->withToken($adminToken)
+            ->getJson("/api/v1/sales-invoices/{$invoiceId}")
+            ->assertOk()
+            ->assertJsonPath('data.payments.0.id', $paymentId);
+        $this->withToken($adminToken)
+            ->getJson('/api/v1/customer-payments?page_size=100')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $paymentId, 'reference_no' => 'BANK-DEMO-001']);
+        $this->withToken($adminToken)
+            ->getJson("/api/v1/customer-payments/{$paymentId}")
+            ->assertOk()
+            ->assertJsonPath('data.invoice.id', $invoiceId);
+
         $this->assertDatabaseHas('audit_logs', [
             'entity_type' => 'sales_order',
             'entity_id' => $salesOrderId,
@@ -194,6 +277,13 @@ class ProcurementInventoryFlowTest extends TestCase
             ->json('data.id');
 
         $this->withToken($warehouseToken)
+            ->postJson('/api/v1/goods-issues', [
+                'sales_order_id' => $order->id,
+                'warehouse_id' => $warehouse->id,
+            ])
+            ->assertUnprocessable();
+
+        $this->withToken($warehouseToken)
             ->postJson("/api/v1/goods-issues/{$issueId}/confirm")
             ->assertOk()
             ->assertJsonPath('data.status', 'confirmed');
@@ -202,7 +292,11 @@ class ProcurementInventoryFlowTest extends TestCase
         $this->assertEquals(11.0, (float) $after->on_hand);
         $this->assertEquals(0.0, (float) $after->reserved);
         $this->assertEquals(11.0, (float) $after->available);
-        $this->assertDatabaseHas('sales_orders', ['id' => $order->id, 'status' => 'completed']);
+        $this->assertDatabaseHas('sales_orders', [
+            'id' => $order->id,
+            'status' => 'awaiting_delivery',
+            'delivery_status' => 'pending',
+        ]);
         $this->assertDatabaseHas('inventory_transactions', [
             'transaction_type' => 'issue',
             'source_type' => 'GoodsIssue',

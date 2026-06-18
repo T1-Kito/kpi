@@ -7,6 +7,7 @@ use App\Models\Lead;
 use App\Models\Quotation;
 use App\Models\Task;
 use App\Models\Alert;
+use App\Support\DataScope;
 use App\Support\LeadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,6 +25,7 @@ class LeadController extends Controller
         $query = Lead::query()
             ->where('tenant_id', $request->user()->tenant_id)
             ->with('assignee:id,name,email');
+        DataScope::owned($query, $request->user(), 'assigned_to', 'assignee');
 
         if ($request->boolean('mine')) {
             $query->where('assigned_to', $request->user()->id);
@@ -66,6 +68,7 @@ class LeadController extends Controller
     public function show(Request $request, Lead $lead): JsonResponse
     {
         abort_if($lead->tenant_id !== $request->user()->tenant_id, 404);
+        abort_if(! DataScope::owned(Lead::whereKey($lead->id), $request->user(), 'assigned_to', 'assignee')->exists(), 404);
 
         return response()->json(['data' => [
             ...$lead->load('assignee:id,name,email')->toArray(),

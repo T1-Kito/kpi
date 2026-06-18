@@ -10,5 +10,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/inventory.js"></script>
+<script src="/assets/js/features/inventory.js?v=20260615-3"></script>
 @endpush

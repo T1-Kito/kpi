@@ -1,3 +1,4 @@
+(function () {
 let skuState = { rows: [], q: '', status: '' };
 
 document.addEventListener('vk:ready', () => loadSkus());
@@ -123,5 +124,19 @@ function openSkuModal(id = null) {
 
 function openSkuDetail(id) {
     const row = skuState.rows.find(item => String(item.id) === String(id));
+    if (!row) return;
+    VKRecordPage.open({
+        root: '#skusRoot',
+        type: 'sku',
+        id,
+        path: `/skus/${id}`,
+        preview: { ...row, timeline: [{ label: 'Tạo mã hàng', status: row.status, at: row.created_at }] },
+        onBack: () => renderSkus(),
+        actions: () => `<button class="btn primary small" type="button" data-edit-sku="${id}">Sửa mã hàng</button>`,
+    });
+    return;
     VKDetailDrawer.open({ type: 'sku', row: { ...row, timeline: [{ label: 'Tạo mã hàng', status: row.status, at: row.created_at }] } });
 }
+
+window.loadSkus = loadSkus;
+})();

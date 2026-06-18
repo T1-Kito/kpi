@@ -1,3 +1,4 @@
+(function () {
 document.addEventListener('vk:ready', () => loadOrganization());
 document.addEventListener('click', (event) => {
     if (!document.getElementById('organizationRoot')) return;
@@ -128,3 +129,6 @@ function blankOption() {
 function summaryCard(label, value, note) {
     return `<section class="summary-card"><span>${label}</span><strong>${value}</strong><small>${note}</small></section>`;
 }
+
+window.loadOrganization = loadOrganization;
+})();

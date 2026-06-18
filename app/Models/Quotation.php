@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Quotation extends Model
 {
-    protected $fillable = ['tenant_id', 'code', 'customer_id', 'lead_id', 'sales_owner_id', 'subtotal_amount', 'tax_amount', 'total_amount', 'total_cost', 'margin_percent', 'status'];
+    protected $fillable = ['tenant_id', 'code', 'customer_id', 'lead_id', 'duplicated_from_id', 'sales_owner_id', 'subtotal_amount', 'tax_amount', 'total_amount', 'total_cost', 'margin_percent', 'status'];
 
     public function customer(): BelongsTo
     {
@@ -20,8 +20,18 @@ class Quotation extends Model
         return $this->belongsTo(User::class, 'sales_owner_id');
     }
 
+    public function duplicatedFrom(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'duplicated_from_id');
+    }
+
     public function items(): HasMany
     {
         return $this->hasMany(QuotationItem::class);
+    }
+
+    public function salesOrders(): HasMany
+    {
+        return $this->hasMany(SalesOrder::class);
     }
 }

@@ -24,7 +24,7 @@ class PurchaseOrderController extends Controller
         $pageSize = min((int) $request->query('page_size', 20), 100);
         $query = PurchaseOrder::query()
             ->where('tenant_id', $request->user()->tenant_id)
-            ->with(['purchaseRequest:id,code', 'supplier:id,code,name', 'items.sku:id,sku_code,name']);
+            ->with(['purchaseRequest:id,code', 'supplier:id,code,name', 'items.sku:id,sku_code,name,unit']);
 
         if ($status = $request->query('status')) {
             $query->where('status', $status);
@@ -58,7 +58,7 @@ class PurchaseOrderController extends Controller
     {
         abort_if($purchaseOrder->tenant_id !== $request->user()->tenant_id, 404);
 
-        $purchaseOrder->load(['purchaseRequest:id,code,source_type,source_id,status', 'supplier:id,code,name', 'items.sku:id,sku_code,name']);
+        $purchaseOrder->load(['purchaseRequest:id,code,source_type,source_id,status', 'supplier:id,code,name', 'items.sku:id,sku_code,name,unit']);
 
         return response()->json(['data' => [
             ...$purchaseOrder->toArray(),

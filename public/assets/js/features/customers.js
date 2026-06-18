@@ -1,4 +1,5 @@
-let customerState = { rows: [], q: '', status: '' };
+(function () {
+let customerState = { rows: [], q: '', status: '', view: 'list', currentId: null, detailCache: {} };
 
 document.addEventListener('vk:ready', () => loadCustomers());
 document.addEventListener('input', (event) => {
@@ -27,10 +28,18 @@ document.addEventListener('click', (event) => {
     if (detail) openCustomerDetail(detail.dataset.customerDetail || detail.dataset.rowDetail);
 });
 
-async function loadCustomers() {
+async function loadCustomers(options = {}) {
     if (!document.getElementById('customersRoot')) return;
+    if (options.source === 'pjax') {
+        customerState.view = 'list';
+        customerState.currentId = null;
+    }
     const customers = await VKApi.request('/customers');
     customerState.rows = customers.data || [];
+    if (customerState.view === 'detail' && customerState.currentId) {
+        openCustomerDetail(customerState.currentId);
+        return;
+    }
     renderCustomers(customers.meta.total);
 }
 
@@ -69,7 +78,7 @@ function renderCustomerTable(rows) {
 
 function filterRows() {
     return customerState.rows.filter(row => {
-        const haystack = `${row.code || ''} ${row.name || ''} ${row.phone || ''} ${row.email || ''}`.toLowerCase();
+        const haystack = `${row.code || ''} ${row.name || ''} ${row.tax_code || ''} ${row.billing_address || ''} ${row.address || ''} ${row.phone || ''} ${row.email || ''}`.toLowerCase();
         return (!customerState.q || haystack.includes(customerState.q)) && (!customerState.status || row.status === customerState.status);
     });
 }
@@ -82,7 +91,7 @@ function restoreFilters() {
 }
 
 function renderName(row) {
-    return `<strong>${VKTable.escapeHtml(row.name)}</strong><span class="row-note">${VKTable.escapeHtml(row.email || 'Chưa có email')}</span>`;
+    return `<strong>${VKTable.escapeHtml(row.name)}</strong><span class="row-note">${VKTable.escapeHtml(row.tax_code ? `MST: ${row.tax_code}` : (row.email || 'Chưa có mã số thuế'))}</span>`;
 }
 
 function renderContact(row) {
@@ -92,30 +101,91 @@ function renderContact(row) {
 function openCustomerModal(id = null) {
     const row = id ? customerState.rows.find(item => item.id === id) : {};
     VKModal.open(id ? 'Sửa khách hàng' : 'Tạo khách hàng', `
-        <div class="form-grid">
-            ${VKModal.field('name', 'Tên khách hàng', 'text', row?.name || '')}
-            ${VKModal.field('contact_name', 'Người liên hệ', 'text', row?.contact_name || '')}
-            ${VKModal.field('phone', 'Số điện thoại', 'text', row?.phone || '')}
-            ${VKModal.field('email', 'Email', 'email', row?.email || '')}
-            ${VKModal.field('credit_limit', 'Hạn mức công nợ', 'number', row?.credit_limit || '0')}
-            ${VKModal.select('status', 'Trạng thái', [
-                { value: 'active', label: 'Hoạt động' },
-                { value: 'inactive', label: 'Không hoạt động' },
-            ], row?.status || 'active')}
+        <div class="customer-form-sections">
+            <section class="quick-customer-section">
+                <h4><span aria-hidden="true">01</span>Thông tin khách hàng</h4>
+                <div class="quick-customer-grid">
+                    ${customerField('contact_name', 'Tên khách hàng', 'text', row?.contact_name || '', 'KH')}
+                    ${customerField('phone', 'Số điện thoại', 'text', row?.phone || '', 'SDT')}
+                    ${customerField('email', 'Email', 'email', row?.email || '', '@')}
+                    ${customerField('address', 'Địa chỉ', 'text', row?.address || '', 'DC')}
+                </div>
+            </section>
+            <section class="quick-customer-section">
+                <h4><span aria-hidden="true">02</span>Thông tin xuất hóa đơn</h4>
+                <div class="quick-customer-grid">
+                    ${customerField('tax_code', 'Mã số thuế', 'text', row?.tax_code || '', 'MST')}
+                    ${customerField('name', 'Tên công ty', 'text', row?.name || '', 'CT')}
+                    ${customerField('billing_address', 'Địa chỉ công ty', 'text', row?.billing_address || '', 'DC')}
+                    ${customerField('credit_limit', 'Hạn mức công nợ', 'number', row?.credit_limit || '0', 'VND')}
+                    ${customerSelect('status', 'Trạng thái', [
+                        { value: 'active', label: 'Hoạt động' },
+                        { value: 'inactive', label: 'Không hoạt động' },
+                    ], row?.status || 'active', 'TT')}
+                </div>
+            </section>
         </div>
     `, async (form) => {
         const data = Object.fromEntries(new FormData(form));
+        if (!data.name && data.contact_name) data.name = data.contact_name;
         await VKApi.request(id ? `/customers/${id}` : '/customers', {
             method: id ? 'PUT' : 'POST',
             body: JSON.stringify({ ...data, credit_limit: Number(data.credit_limit || 0) }),
         });
         VKModal.toast(id ? 'Đã cập nhật khách hàng.' : 'Đã tạo khách hàng.');
         VKModal.close();
+        if (id) customerState.detailCache[String(id)] = null;
         loadCustomers();
+    }, {
+        className: 'customer-form-modal',
+        submitText: id ? 'Cập nhật' : 'Lưu khách hàng',
     });
 }
 
-function openCustomerDetail(id) {
-    const row = customerState.rows.find(item => String(item.id) === String(id));
-    VKDetailDrawer.open({ type: 'customer', row: { ...row, timeline: [{ label: 'Tạo khách hàng', status: row.status, at: row.created_at }] } });
+function customerField(name, label, type, value = '', icon = '', full = false) {
+    return `
+        <div class="field customer-field ${full ? 'full' : ''}">
+            <label for="${name}">${VKTable.escapeHtml(label)}</label>
+            <div class="customer-input-wrap">
+                <span aria-hidden="true">${VKTable.escapeHtml(icon)}</span>
+                <input id="${name}" name="${name}" type="${type}" value="${VKTable.escapeHtml(value)}">
+            </div>
+        </div>
+    `;
 }
+
+function customerSelect(name, label, options, selected = '', icon = '') {
+    return `
+        <div class="field customer-field">
+            <label for="${name}">${VKTable.escapeHtml(label)}</label>
+            <div class="customer-input-wrap">
+                <span aria-hidden="true">${VKTable.escapeHtml(icon)}</span>
+                <select id="${name}" name="${name}">
+                    ${options.map(item => `<option value="${VKTable.escapeHtml(item.value)}" ${String(item.value) === String(selected) ? 'selected' : ''}>${VKTable.escapeHtml(item.label)}</option>`).join('')}
+                </select>
+            </div>
+        </div>
+    `;
+}
+
+function openCustomerDetail(id) {
+    customerState.view = 'detail';
+    customerState.currentId = id;
+    VKRecordPage.open({
+        root: '#customersRoot',
+        type: 'customer',
+        id,
+        path: `/customers/${id}`,
+        preview: customerState.rows.find(row => String(row.id) === String(id)),
+        cache: customerState.detailCache,
+        onBack: () => {
+            customerState.view = 'list';
+            customerState.currentId = null;
+            renderCustomers();
+        },
+        actions: row => `<button class="btn small" type="button" data-edit-customer="${row.id}">Sửa khách hàng</button>`,
+    });
+}
+
+window.loadCustomers = loadCustomers;
+})();

@@ -14,5 +14,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/users.js"></script>
+<script src="/assets/js/features/users.js?v=20260615-2"></script>
 @endpush

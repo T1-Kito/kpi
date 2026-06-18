@@ -1,3 +1,4 @@
+(function () {
 let alertState = { rows: [], q: '', status: '' };
 
 document.addEventListener('vk:ready', () => loadAlerts());
@@ -99,5 +100,17 @@ async function updateAlertStatus(id, status) {
 
 function openAlertDetail(id) {
     const row = alertState.rows.find(item => String(item.id) === String(id));
+    if (!row) return;
+    VKRecordPage.open({
+        root: '#alertsRoot',
+        type: 'alert',
+        id,
+        preview: { ...row, timeline: [{ label: 'Tạo cảnh báo', status: row.status, at: row.created_at }] },
+        onBack: () => renderAlerts(),
+    });
+    return;
     VKDetailDrawer.open({ type: 'alert', row: { ...row, timeline: [{ label: 'Tạo cảnh báo', status: row.status, at: row.created_at }] } });
 }
+
+window.loadAlerts = loadAlerts;
+})();

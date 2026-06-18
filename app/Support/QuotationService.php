@@ -27,6 +27,7 @@ class QuotationService
                 'code' => $data['code'] ?? $this->codes->next('quotations', 'code', 'QUO-', fn ($query) => $query->where('tenant_id', $actor->tenant_id)),
                 'customer_id' => $data['customer_id'],
                 'lead_id' => $data['lead_id'] ?? null,
+                'duplicated_from_id' => $data['duplicated_from_id'] ?? null,
                 'sales_owner_id' => $actor->id,
                 'status' => 'draft',
             ]);

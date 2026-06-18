@@ -1,3 +1,4 @@
+(function () {
 document.addEventListener('vk:ready', () => loadKpi());
 document.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-kpi-calculate]');
@@ -16,10 +17,12 @@ document.addEventListener('click', async (event) => {
     }
 });
 
-async function loadKpi() {
+async function loadKpi(options = {}) {
     const root = document.getElementById('kpiRoot');
     if (!root) return;
-    root.innerHTML = renderLoading();
+    if (options.source !== 'pjax') {
+        root.innerHTML = renderLoading();
+    }
 
     const fallback = { data: [], meta: { total: 0 } };
     const [
@@ -521,3 +524,6 @@ function rankTone(value) {
     if (value >= 50) return 'watch';
     return 'risk';
 }
+
+window.loadKpi = loadKpi;
+})();

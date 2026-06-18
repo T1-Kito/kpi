@@ -1,15 +1,9 @@
+(function () {
 document.addEventListener('DOMContentLoaded', () => {
     if (VKApi.token()) {
         window.location.href = '/dashboard';
         return;
     }
-
-    document.querySelectorAll('[data-demo]').forEach((button) => {
-        button.addEventListener('click', () => {
-            document.getElementById('email').value = button.dataset.demo;
-            document.getElementById('password').value = 'Admin@123';
-        });
-    });
 
     document.getElementById('loginForm').addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -27,6 +21,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }),
             });
             VKApi.setToken(body.data.access_token);
+            if (body.data.user) {
+                localStorage.setItem('vk.currentUser.v3', JSON.stringify(body.data.user));
+            }
             window.location.href = '/dashboard';
         } catch (e) {
             error.textContent = e.message;
@@ -36,3 +33,4 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+})();

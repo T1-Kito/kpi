@@ -5,7 +5,7 @@
 @section('page_title', 'Báo giá')
 @section('page_subtitle', 'Tự tính giá vốn, biên lợi nhuận và trạng thái duyệt.')
 @section('page_actions')
-    <button class="btn primary" type="button" data-create-quotation>Tạo báo giá</button>
+    <button class="btn primary" type="button" data-permission="sales.quotation.create" data-create-quotation>Tạo báo giá</button>
 @endsection
 
 @section('content')
@@ -13,5 +13,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/quotations.js"></script>
+<script src="/assets/js/features/quotations.js?v=20260618-15"></script>
 @endpush

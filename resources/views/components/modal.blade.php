@@ -2,7 +2,7 @@
     <div class="modal" role="dialog" aria-modal="true">
         <div class="modal-head">
             <strong id="modalTitle">Tạo mới</strong>
-            <button class="btn" type="button" data-modal-close>Đóng</button>
+            <button class="btn modal-close-button" type="button" data-modal-close aria-label="Đóng">×</button>
         </div>
         <form id="modalForm">
             <div class="modal-body" id="modalBody"></div>

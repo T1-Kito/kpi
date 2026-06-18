@@ -1,4 +1,5 @@
-let grState = { rows: [], q: '', status: '' };
+(function () {
+let grState = { rows: [], q: '', status: '', view: 'list', detailCache: {} };
 
 document.addEventListener('vk:ready', () => loadGoodsReceipts());
 document.addEventListener('vk:flow-updated', () => loadGoodsReceipts());
@@ -28,10 +29,18 @@ document.addEventListener('click', (event) => {
     if (detail) openGoodsReceiptDetail(detail.dataset.goodsReceiptDetail || detail.dataset.rowDetail);
 });
 
-async function loadGoodsReceipts() {
+async function loadGoodsReceipts(options = {}) {
     if (!document.getElementById('goodsReceiptsRoot')) return;
+    if (options.source === 'pjax') {
+        grState.view = 'list';
+        grState.currentId = null;
+    }
     const receipts = await VKApi.request('/goods-receipts');
     grState.rows = receipts.data || [];
+    if (grState.view === 'detail' && grState.currentId) {
+        openGoodsReceiptDetail(grState.currentId);
+        return;
+    }
     renderGoodsReceipts(receipts.meta.total);
 }
 
@@ -112,11 +121,53 @@ function renderItems(items = []) {
 }
 
 async function confirmGoodsReceipt(id) {
-    await VKApi.request(`/goods-receipts/${id}/confirm`, { method: 'POST' });
-    VKModal.toast('Đã xác nhận nhập kho.');
-    loadGoodsReceipts();
+    try {
+        const response = await VKApi.request(`/goods-receipts/${id}/confirm`, { method: 'POST' });
+        const receipt = response.data || {};
+        grState.detailCache[String(id)] = null;
+        grState.rows = grState.rows.map(row => String(row.id) === String(id) ? { ...row, ...receipt } : row);
+
+        VKModal.notice({
+            type: 'success',
+            title: 'Nhập kho thành công',
+            message: 'Đã xác nhận nhập kho và cập nhật tồn kho.',
+            details: [`Phiếu nhập: ${receipt.code || ''}`, receipt.purchase_order?.code ? `Đơn mua: ${receipt.purchase_order.code}` : 'Tồn kho liên quan đã được cập nhật.'],
+        });
+
+        if (grState.view === 'detail' && String(grState.currentId) === String(id)) {
+            openGoodsReceiptDetail(id);
+            return;
+        }
+        loadGoodsReceipts();
+    } catch (error) {
+        VKModal.notice({
+            type: 'danger',
+            title: 'Không thể xác nhận nhập kho',
+            message: error.message || 'Có lỗi xảy ra khi xác nhận phiếu nhập.',
+        });
+    }
 }
 
 function openGoodsReceiptDetail(id) {
-    VKDetailDrawer.open({ type: 'goodsReceipt', path: `/goods-receipts/${id}` });
+    grState.view = 'detail';
+    grState.currentId = id;
+    VKRecordPage.open({
+        root: '#goodsReceiptsRoot',
+        type: 'goodsReceipt',
+        id,
+        path: `/goods-receipts/${id}`,
+        preview: grState.rows.find(row => String(row.id) === String(id)),
+        cache: grState.detailCache,
+        onBack: () => {
+            grState.view = 'list';
+            grState.currentId = null;
+            renderGoodsReceipts();
+        },
+        actions: row => row.status === 'draft'
+            ? `<button class="btn primary small" type="button" data-confirm-goods-receipt="${row.id}">Xác nhận nhập kho</button>`
+            : '',
+    });
 }
+
+window.loadGoodsReceipts = loadGoodsReceipts;
+})();

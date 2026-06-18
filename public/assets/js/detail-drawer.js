@@ -389,6 +389,15 @@
         ];
 
         const byType = {
+            customer: [
+                { label: 'Tên khách hàng', value: row.name || '-' },
+                { label: 'Mã số thuế', value: row.tax_code || 'Chưa khai báo' },
+                { label: 'Địa chỉ hóa đơn', value: row.billing_address || 'Chưa khai báo' },
+                { label: 'Người liên hệ', value: row.contact_name || 'Chưa khai báo' },
+                { label: 'Số điện thoại', value: row.phone || 'Chưa khai báo' },
+                { label: 'Email', value: row.email || 'Chưa khai báo' },
+                { label: 'Địa chỉ', value: row.address || 'Chưa khai báo' },
+            ],
             salesOrder: [
                 { label: 'Khách hàng', value: row.customer?.name || '-' },
                 { label: 'Tình trạng tồn', value: VKTable.statusBadge(row.stock_status), html: true },
@@ -737,9 +746,22 @@
     }
 
     async function confirmGoodsReceipt() {
-        await VKApi.request(`/goods-receipts/${state.row.id}/confirm`, { method: 'POST' });
-        VKModal.toast('Đã xác nhận nhập kho.');
-        await reloadCurrentDetail();
+        try {
+            const response = await VKApi.request(`/goods-receipts/${state.row.id}/confirm`, { method: 'POST' });
+            VKModal.notice({
+                type: 'success',
+                title: 'Nhập kho thành công',
+                message: 'Đã xác nhận nhập kho và cập nhật tồn kho.',
+                details: [`Phiếu nhập: ${response.data?.code || state.row.code || ''}`],
+            });
+            await reloadCurrentDetail();
+        } catch (error) {
+            VKModal.notice({
+                type: 'danger',
+                title: 'Không thể xác nhận nhập kho',
+                message: error.message || 'Có lỗi xảy ra khi xác nhận phiếu nhập.',
+            });
+        }
     }
 
     async function openCreateGoodsIssueModal() {
@@ -767,9 +789,22 @@
     }
 
     async function confirmGoodsIssue() {
-        await VKApi.request(`/goods-issues/${state.row.id}/confirm`, { method: 'POST' });
-        VKModal.toast('Đã xác nhận xuất kho.');
-        await reloadCurrentDetail();
+        try {
+            const response = await VKApi.request(`/goods-issues/${state.row.id}/confirm`, { method: 'POST' });
+            VKModal.notice({
+                type: 'success',
+                title: 'Xuất kho thành công',
+                message: 'Đã xác nhận xuất kho, trừ hàng đã giữ và cập nhật đơn bán liên quan.',
+                details: [`Phiếu xuất: ${response.data?.code || state.row.code || ''}`],
+            });
+            await reloadCurrentDetail();
+        } catch (error) {
+            VKModal.notice({
+                type: 'danger',
+                title: 'Không thể xác nhận xuất kho',
+                message: error.message || 'Có lỗi xảy ra khi xác nhận phiếu xuất.',
+            });
+        }
     }
 
     async function reloadCurrentDetail() {

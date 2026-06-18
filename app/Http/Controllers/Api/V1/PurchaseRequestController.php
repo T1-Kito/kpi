@@ -11,6 +11,7 @@ use App\Models\Task;
 use App\Services\Procurement\ProcurementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class PurchaseRequestController extends Controller
 {
@@ -23,7 +24,7 @@ class PurchaseRequestController extends Controller
         $pageSize = min((int) $request->query('page_size', 20), 100);
         $query = PurchaseRequest::query()
             ->where('tenant_id', $request->user()->tenant_id)
-            ->with('items.sku:id,sku_code,name');
+            ->with(['items.sku:id,sku_code,name,unit', 'requester:id,name']);
 
         if ($status = $request->query('status')) {
             $query->where('status', $status);
@@ -41,7 +42,7 @@ class PurchaseRequestController extends Controller
     {
         abort_if($purchaseRequest->tenant_id !== $request->user()->tenant_id, 404);
 
-        $purchaseRequest->load('items.sku:id,sku_code,name');
+        $purchaseRequest->load(['items.sku:id,sku_code,name,unit', 'requester:id,name']);
         $sourceOrder = $purchaseRequest->source_type === 'SalesOrder' && $purchaseRequest->source_id
             ? SalesOrder::where('tenant_id', $purchaseRequest->tenant_id)->whereKey($purchaseRequest->source_id)->first()
             : null;
@@ -76,6 +77,21 @@ class PurchaseRequestController extends Controller
             'tasks' => Task::where('tenant_id', $purchaseRequest->tenant_id)->where('source_type', 'PurchaseRequest')->where('source_id', $purchaseRequest->id)->latest('id')->get(),
             'alerts' => Alert::where('tenant_id', $purchaseRequest->tenant_id)->where('source_type', 'PurchaseRequest')->where('source_id', $purchaseRequest->id)->latest('id')->get(),
         ]]);
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $tenantId = $request->user()->tenant_id;
+        $data = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.sku_id' => ['required', Rule::exists('skus', 'id')->where('tenant_id', $tenantId)],
+            'items.*.quantity' => ['required', 'numeric', 'min:0.001'],
+        ]);
+
+        return response()->json([
+            'data' => $this->procurement->createManualPr($request->user(), $data['items'], $data['reason'] ?? null),
+        ], 201);
     }
 
     public function approve(Request $request, PurchaseRequest $purchaseRequest): JsonResponse

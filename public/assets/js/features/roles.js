@@ -1,3 +1,4 @@
+(function () {
 document.addEventListener('vk:ready', () => loadRoles());
 document.addEventListener('click', (event) => {
     if (!document.getElementById('rolesRoot')) return;
@@ -131,3 +132,6 @@ function checkedValues(form, name) {
 function summaryCard(label, value, note) {
     return `<section class="summary-card"><span>${label}</span><strong>${value}</strong><small>${note}</small></section>`;
 }
+
+window.loadRoles = loadRoles;
+})();

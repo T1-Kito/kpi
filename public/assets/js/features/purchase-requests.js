@@ -1,4 +1,5 @@
-let prState = { rows: [], q: '', status: '' };
+(function () {
+let prState = { rows: [], q: '', status: '', view: 'list', detailCache: {} };
 
 document.addEventListener('vk:ready', () => loadPurchaseRequests());
 document.addEventListener('vk:flow-updated', () => loadPurchaseRequests());
@@ -18,6 +19,7 @@ document.addEventListener('change', (event) => {
 });
 document.addEventListener('click', (event) => {
     if (!document.getElementById('purchaseRequestsRoot')) return;
+    if (event.target.matches('[data-create-purchase-request]')) openPurchaseRequestModal();
     if (event.target.matches('[data-approve-purchase-request]')) {
         event.stopPropagation();
         approvePurchaseRequest(event.target.dataset.approvePurchaseRequest);
@@ -27,10 +29,23 @@ document.addEventListener('click', (event) => {
     if (detail) openPurchaseRequestDetail(detail.dataset.purchaseRequestDetail || detail.dataset.rowDetail);
 });
 
-async function loadPurchaseRequests() {
-    if (!document.getElementById('purchaseRequestsRoot')) return;
+async function loadPurchaseRequests(options = {}) {
+    const root = document.getElementById('purchaseRequestsRoot');
+    if (!root) return;
+    if (options.source === 'pjax') {
+        prState.view = 'list';
+        prState.currentId = null;
+        if (prState.rows.length) {
+            renderPurchaseRequests();
+        }
+    }
     const requests = await VKApi.request('/purchase-requests');
+    if (document.getElementById('purchaseRequestsRoot') !== root) return;
     prState.rows = requests.data || [];
+    if (prState.view === 'detail' && prState.currentId) {
+        openPurchaseRequestDetail(prState.currentId);
+        return;
+    }
     renderPurchaseRequests(requests.meta.total);
 }
 
@@ -81,10 +96,19 @@ function restoreFilters() {
 }
 
 function renderSource(row) {
-    const source = row.source_type === 'SalesOrder'
-        ? 'Đơn bán thiếu tồn'
-        : VKTable.translateEntity(row.source_type || 'System');
-    return `${VKTable.escapeHtml(source)}<span class="row-note">Tham chiếu: ${VKTable.escapeHtml(row.source_id || '-')}</span>`;
+    const source = translatePurchaseRequestSource(row.source_type);
+    const reference = row.source_id ? row.source_id : 'Không có tham chiếu';
+    return `${VKTable.escapeHtml(source)}<span class="row-note">Tham chiếu: ${VKTable.escapeHtml(reference)}</span>`;
+}
+
+function translatePurchaseRequestSource(source) {
+    const map = {
+        Manual: 'Tạo thủ công',
+        SalesOrder: 'Từ đơn bán thiếu tồn',
+        System: 'Hệ thống',
+    };
+
+    return map[source] || VKTable.translateEntity(source || 'System');
 }
 
 function renderItems(items = []) {
@@ -92,12 +116,101 @@ function renderItems(items = []) {
     return items.slice(0, 2).map(item => `${VKTable.escapeHtml(item.sku?.sku_code || '-')}: ${VKTable.money(item.quantity)}`).join('<br>');
 }
 
+async function openPurchaseRequestModal() {
+    const skus = await VKApi.request('/skus?page_size=100');
+    if (!skus.data?.length) {
+        VKModal.notice({
+            type: 'warning',
+            title: 'Chưa có mã hàng',
+            message: 'Bạn cần tạo mã hàng trước khi lập yêu cầu mua.',
+        });
+        return;
+    }
+
+    VKModal.open('Tạo yêu cầu mua', `
+        <div class="form-grid">
+            ${VKModal.select('sku_id', 'Mã hàng cần mua', skus.data.map(row => ({
+                value: row.id,
+                label: `${row.sku_code} - ${row.name || ''}`,
+            })))}
+            ${VKModal.field('quantity', 'Số lượng cần mua', 'number', '1')}
+            <div class="field full">
+                <label for="reason">Lý do mua</label>
+                <input id="reason" name="reason" type="text" value="Yêu cầu mua bổ sung">
+            </div>
+        </div>
+    `, async (form) => {
+        const data = Object.fromEntries(new FormData(form));
+        const response = await VKApi.request('/purchase-requests', {
+            method: 'POST',
+            body: JSON.stringify({
+                reason: data.reason || 'Yêu cầu mua bổ sung',
+                items: [{
+                    sku_id: Number(data.sku_id),
+                    quantity: Number(data.quantity || 0),
+                }],
+            }),
+        });
+
+        VKModal.close();
+        VKModal.notice({
+            type: 'success',
+            title: 'Đã tạo yêu cầu mua',
+            message: 'Yêu cầu mua đã được tạo ở trạng thái nháp.',
+            details: [`Mã yêu cầu: ${response.data?.code || ''}`, 'Bước tiếp theo: duyệt yêu cầu rồi tạo đơn mua.'],
+        });
+        loadPurchaseRequests();
+    }, {
+        submitText: 'Tạo yêu cầu',
+    });
+}
+
 async function approvePurchaseRequest(id) {
-    await VKApi.request(`/purchase-requests/${id}/approve`, { method: 'POST', body: JSON.stringify({ reason: 'Duyệt từ màn hình mua hàng' }) });
-    VKModal.toast('Đã duyệt yêu cầu mua.');
-    loadPurchaseRequests();
+    try {
+        const response = await VKApi.request(`/purchase-requests/${id}/approve`, { method: 'POST', body: JSON.stringify({ reason: 'Duyệt từ màn hình mua hàng' }) });
+        const request = response.data || {};
+        prState.detailCache[String(id)] = null;
+        prState.rows = prState.rows.map(row => String(row.id) === String(id) ? { ...row, ...request } : row);
+        VKModal.notice({
+            type: 'success',
+            title: 'Đã duyệt yêu cầu mua',
+            message: 'Yêu cầu mua đã sẵn sàng để tạo đơn mua.',
+            details: [`Mã yêu cầu: ${request.code || ''}`, 'Bước tiếp theo: qua tab Đơn mua để tạo PO.'],
+        });
+        if (prState.view === 'detail' && String(prState.currentId) === String(id)) {
+            openPurchaseRequestDetail(id);
+            return;
+        }
+        loadPurchaseRequests();
+    } catch (error) {
+        VKModal.notice({
+            type: 'danger',
+            title: 'Không thể duyệt yêu cầu mua',
+            message: error.message || 'Có lỗi xảy ra khi duyệt yêu cầu mua.',
+        });
+    }
 }
 
 function openPurchaseRequestDetail(id) {
-    VKDetailDrawer.open({ type: 'purchaseRequest', path: `/purchase-requests/${id}` });
+    prState.view = 'detail';
+    prState.currentId = id;
+    VKRecordPage.open({
+        root: '#purchaseRequestsRoot',
+        type: 'purchaseRequest',
+        id,
+        path: `/purchase-requests/${id}`,
+        preview: prState.rows.find(row => String(row.id) === String(id)),
+        cache: prState.detailCache,
+        onBack: () => {
+            prState.view = 'list';
+            prState.currentId = null;
+            renderPurchaseRequests();
+        },
+        actions: row => row.status === 'draft'
+            ? `<button class="btn primary small" type="button" data-approve-purchase-request="${row.id}">Duyệt yêu cầu</button>`
+            : '',
+    });
 }
+
+window.loadPurchaseRequests = loadPurchaseRequests;
+})();

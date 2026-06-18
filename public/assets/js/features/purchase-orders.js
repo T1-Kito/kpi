@@ -1,4 +1,5 @@
-let poState = { rows: [], q: '', status: '' };
+(function () {
+let poState = { rows: [], q: '', status: '', view: 'list', detailCache: {} };
 
 document.addEventListener('vk:ready', () => loadPurchaseOrders());
 document.addEventListener('vk:flow-updated', () => loadPurchaseOrders());
@@ -28,10 +29,23 @@ document.addEventListener('click', (event) => {
     if (detail) openPurchaseOrderDetail(detail.dataset.purchaseOrderDetail || detail.dataset.rowDetail);
 });
 
-async function loadPurchaseOrders() {
-    if (!document.getElementById('purchaseOrdersRoot')) return;
+async function loadPurchaseOrders(options = {}) {
+    const root = document.getElementById('purchaseOrdersRoot');
+    if (!root) return;
+    if (options.source === 'pjax') {
+        poState.view = 'list';
+        poState.currentId = null;
+        if (poState.rows.length) {
+            renderPurchaseOrders();
+        }
+    }
     const orders = await VKApi.request('/purchase-orders');
+    if (document.getElementById('purchaseOrdersRoot') !== root) return;
     poState.rows = orders.data || [];
+    if (poState.view === 'detail' && poState.currentId) {
+        openPurchaseOrderDetail(poState.currentId);
+        return;
+    }
     renderPurchaseOrders(orders.meta.total);
 }
 
@@ -124,9 +138,29 @@ async function approvePurchaseOrder(id) {
 }
 
 function openPurchaseOrderDetail(id) {
-    VKDetailDrawer.open({ type: 'purchaseOrder', path: `/purchase-orders/${id}` });
+    poState.view = 'detail';
+    poState.currentId = id;
+    VKRecordPage.open({
+        root: '#purchaseOrdersRoot',
+        type: 'purchaseOrder',
+        id,
+        path: `/purchase-orders/${id}`,
+        preview: poState.rows.find(row => String(row.id) === String(id)),
+        cache: poState.detailCache,
+        onBack: () => {
+            poState.view = 'list';
+            poState.currentId = null;
+            renderPurchaseOrders();
+        },
+        actions: row => row.status === 'draft'
+            ? `<button class="btn primary small" type="button" data-approve-purchase-order="${row.id}">Duyệt đơn mua</button>`
+            : '',
+    });
 }
+
+window.loadPurchaseOrders = loadPurchaseOrders;
 
 function formatDate(value) {
     return value ? new Date(value).toLocaleDateString('vi-VN') : '-';
 }
+})();

@@ -1,3 +1,4 @@
+(function () {
 let leadState = { rows: [], q: '', status: '' };
 
 document.addEventListener('vk:ready', () => loadLeads());
@@ -101,5 +102,18 @@ async function openLeadModal() {
 }
 
 function openLeadDetail(id) {
+    const row = leadState.rows.find(item => String(item.id) === String(id));
+    VKRecordPage.open({
+        root: '#leadsRoot',
+        type: 'lead',
+        id,
+        path: `/leads/${id}`,
+        preview: row || {},
+        onBack: () => renderLeads(),
+    });
+    return;
     VKDetailDrawer.open({ type: 'lead', path: `/leads/${id}` });
 }
+
+window.loadLeads = loadLeads;
+})();

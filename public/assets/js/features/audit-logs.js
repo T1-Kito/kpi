@@ -1,3 +1,4 @@
+(function () {
 let auditState = {
     rows: [],
     users: [],
@@ -43,10 +44,12 @@ document.addEventListener('click', (event) => {
     if (detail) openAuditDetail(detail.dataset.auditDetail || detail.dataset.rowDetail);
 });
 
-async function loadAuditLogs() {
+async function loadAuditLogs(options = {}) {
     const root = document.getElementById('auditLogsRoot');
     if (!root) return;
-    root.innerHTML = renderLoading();
+    if (options.source !== 'pjax') {
+        root.innerHTML = renderLoading();
+    }
 
     const params = new URLSearchParams({ page_size: '100' });
     if (auditState.userId) params.set('user_id', auditState.userId);
@@ -280,3 +283,4 @@ function renderLoading() {
 }
 
 window.loadAuditLogs = loadAuditLogs;
+})();

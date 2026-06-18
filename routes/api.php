@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\AlertController;
 use App\Http\Controllers\Api\V1\AuditLogController;
 use App\Http\Controllers\Api\V1\CustomerController;
+use App\Http\Controllers\Api\V1\DashboardSummaryController;
 use App\Http\Controllers\Api\V1\DepartmentController;
 use App\Http\Controllers\Api\V1\InventoryBalanceController;
 use App\Http\Controllers\Api\V1\InventoryTransactionController;
@@ -16,12 +17,15 @@ use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\PermissionController;
 use App\Http\Controllers\Api\V1\PositionController;
+use App\Http\Controllers\Api\V1\PrintTemplateController;
 use App\Http\Controllers\Api\V1\PurchaseOrderController;
 use App\Http\Controllers\Api\V1\PurchaseRequestController;
 use App\Http\Controllers\Api\V1\QuotationController;
 use App\Http\Controllers\Api\V1\RoleAdminController;
 use App\Http\Controllers\Api\V1\SalesOrderController;
+use App\Http\Controllers\Api\V1\SalesFulfillmentController;
 use App\Http\Controllers\Api\V1\SkuController;
+use App\Http\Controllers\Api\V1\SlaPolicyController;
 use App\Http\Controllers\Api\V1\SupplierController;
 use App\Http\Controllers\Api\V1\TaskController;
 use App\Http\Controllers\Api\V1\TenantSettingController;
@@ -34,6 +38,7 @@ Route::prefix('v1')->group(function () {
 
     Route::middleware('jwt')->group(function () {
         Route::get('/me', [MeController::class, 'show']);
+        Route::get('/dashboard/summary', DashboardSummaryController::class);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/lookups/users', [LookupController::class, 'users']);
         Route::get('/lookups/departments', [LookupController::class, 'departments']);
@@ -79,6 +84,8 @@ Route::prefix('v1')->group(function () {
 
         Route::get('/notifications', [NotificationController::class, 'index']);
         Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
+        Route::get('/print-templates/active', [PrintTemplateController::class, 'active']);
+        Route::get('/print-templates/choices', [PrintTemplateController::class, 'choices']);
 
         Route::middleware('permission:audit.view')->group(function () {
             Route::get('/audit-logs', [AuditLogController::class, 'index']);
@@ -98,6 +105,11 @@ Route::prefix('v1')->group(function () {
 
         Route::middleware('permission:user.manage')->group(function () {
             Route::post('/tenant/logo', [TenantSettingController::class, 'updateLogo']);
+            Route::post('/tenant/ui-settings', [TenantSettingController::class, 'updateUiSettings']);
+            Route::post('/tenant/sidebar-icons', [TenantSettingController::class, 'uploadSidebarIcon']);
+            Route::get('/sla-policies', [SlaPolicyController::class, 'index']);
+            Route::post('/sla-policies', [SlaPolicyController::class, 'store']);
+            Route::put('/sla-policies/{slaPolicy}', [SlaPolicyController::class, 'update']);
             Route::get('/users', [UserAdminController::class, 'index']);
             Route::post('/users', [UserAdminController::class, 'store']);
             Route::post('/users/{user}/roles', [UserAdminController::class, 'syncRoles']);
@@ -109,6 +121,10 @@ Route::prefix('v1')->group(function () {
             Route::get('/positions', [PositionController::class, 'index']);
             Route::post('/positions', [PositionController::class, 'store']);
             Route::put('/positions/{position}', [PositionController::class, 'update']);
+            Route::get('/print-templates', [PrintTemplateController::class, 'index']);
+            Route::post('/print-templates', [PrintTemplateController::class, 'store']);
+            Route::post('/print-templates/{printTemplate}', [PrintTemplateController::class, 'update']);
+            Route::put('/print-templates/{printTemplate}', [PrintTemplateController::class, 'update']);
         });
 
         Route::middleware('permission:role.manage')->group(function () {
@@ -129,21 +145,57 @@ Route::prefix('v1')->group(function () {
             Route::get('/quotations', [QuotationController::class, 'index']);
             Route::post('/quotations', [QuotationController::class, 'store']);
             Route::get('/quotations/{quotation}', [QuotationController::class, 'show']);
+            Route::get('/quotations/{quotation}/word', [QuotationController::class, 'exportWord']);
+            Route::post('/quotations/{quotation}/duplicate', [QuotationController::class, 'duplicate']);
+            Route::post('/customers/quick', [CustomerController::class, 'quickStore']);
+            Route::get('/customers/tax-lookup/{taxCode}', [CustomerController::class, 'lookupTaxCode']);
         });
 
         Route::middleware('permission:sales.margin.approve')->group(function () {
             Route::post('/quotations/{quotation}/approve', [QuotationController::class, 'approve']);
         });
 
-        Route::middleware('permission:sales.order.create')->group(function () {
+        Route::middleware('permission:sales.order.view')->group(function () {
             Route::get('/sales-orders', [SalesOrderController::class, 'index']);
-            Route::post('/sales-orders', [SalesOrderController::class, 'store']);
             Route::get('/sales-orders/{salesOrder}', [SalesOrderController::class, 'show']);
+        });
+
+        Route::middleware('permission:sales.order.create')->group(function () {
+            Route::post('/sales-orders', [SalesOrderController::class, 'store']);
             Route::post('/sales-orders/{salesOrder}/confirm', [SalesOrderController::class, 'confirm']);
+        });
+
+        Route::middleware('permission:sales.delivery.view')->group(function () {
+            Route::get('/deliveries', [SalesFulfillmentController::class, 'deliveries']);
+            Route::get('/deliveries/{salesOrder}', [SalesFulfillmentController::class, 'delivery']);
+        });
+
+        Route::middleware('permission:sales.delivery.confirm')->group(function () {
+            Route::post('/sales-orders/{salesOrder}/deliveries', [SalesFulfillmentController::class, 'confirmDelivery']);
+        });
+
+        Route::middleware('permission:finance.invoice.view')->group(function () {
+            Route::get('/sales-invoices', [SalesFulfillmentController::class, 'invoices']);
+            Route::get('/sales-invoices/{salesInvoice}', [SalesFulfillmentController::class, 'invoice']);
+        });
+
+        Route::middleware('permission:finance.invoice.manage')->group(function () {
+            Route::post('/sales-orders/{salesOrder}/invoices', [SalesFulfillmentController::class, 'issueInvoice']);
+        });
+
+        Route::middleware('permission:finance.payment.view')->group(function () {
+            Route::get('/customer-receivables', [SalesFulfillmentController::class, 'receivables']);
+            Route::get('/customer-payments', [SalesFulfillmentController::class, 'payments']);
+            Route::get('/customer-payments/{customerPayment}', [SalesFulfillmentController::class, 'payment']);
+        });
+
+        Route::middleware('permission:finance.payment.record')->group(function () {
+            Route::post('/sales-invoices/{salesInvoice}/payments', [SalesFulfillmentController::class, 'recordPayment']);
         });
 
         Route::middleware('permission:procurement.pr.approve')->group(function () {
             Route::get('/purchase-requests', [PurchaseRequestController::class, 'index']);
+            Route::post('/purchase-requests', [PurchaseRequestController::class, 'store']);
             Route::get('/purchase-requests/{purchaseRequest}', [PurchaseRequestController::class, 'show']);
             Route::post('/purchase-requests/{purchaseRequest}/approve', [PurchaseRequestController::class, 'approve']);
         });

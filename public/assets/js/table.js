@@ -21,6 +21,14 @@
             approved: 'Đã duyệt',
             confirmed: 'Đã xác nhận',
             completed: 'Hoàn thành',
+            awaiting_delivery: 'Chờ giao hàng',
+            delivered: 'Đã giao hàng',
+            invoiced: 'Đã xuất hóa đơn',
+            not_ready: 'Chưa sẵn sàng',
+            unpaid: 'Chưa thanh toán',
+            partially_paid: 'Thanh toán một phần',
+            paid: 'Đã thanh toán',
+            failed: 'Thất bại',
             reserved: 'Đã giữ hàng',
             new: 'Mới',
             draft: 'Nháp',
@@ -99,7 +107,14 @@
             'sales.lead.manage': 'Quản lý khách hàng tiềm năng',
             'sales.quotation.create': 'Tạo báo giá',
             'sales.margin.approve': 'Duyệt biên lợi nhuận thấp',
+            'sales.order.view': 'Xem đơn bán',
             'sales.order.create': 'Tạo đơn bán',
+            'sales.delivery.view': 'Xem sổ giao hàng',
+            'sales.delivery.confirm': 'Xác nhận giao hàng',
+            'finance.invoice.view': 'Xem hóa đơn bán hàng',
+            'finance.invoice.manage': 'Phát hành hóa đơn bán hàng',
+            'finance.payment.view': 'Xem phiếu thu khách hàng',
+            'finance.payment.record': 'Ghi nhận thanh toán khách hàng',
             'inventory.receipt.confirm': 'Xác nhận nhập kho',
             'inventory.issue.confirm': 'Xác nhận xuất kho',
             'procurement.pr.approve': 'Duyệt yêu cầu mua',
@@ -130,6 +145,7 @@
             User: 'Người dùng',
             Role: 'Vai trò',
             System: 'Hệ thống',
+            Manual: 'Tạo thủ công',
             auth: 'Đăng nhập',
             tenant: 'Công ty',
             lead: 'Khách hàng tiềm năng',
@@ -216,8 +232,9 @@
     function statusBadge(value) {
         const key = String(value || '').toLowerCase();
         let style = 'inactive';
-        if (['active', 'ready', 'approved', 'confirmed', 'completed', 'reserved', 'received', 'issued', 'closed', 'read', 'resolved'].includes(key)) style = 'success';
-        if (['new', 'draft', 'assigned', 'pending_approval', 'pending', 'open', 'in_progress', 'unchecked', 'ordered', 'partially_received', 'unread'].includes(key)) style = 'info';
+        if (['active', 'ready', 'approved', 'confirmed', 'completed', 'reserved', 'received', 'issued', 'closed', 'read', 'resolved', 'delivered', 'paid'].includes(key)) style = 'success';
+        if (['new', 'draft', 'assigned', 'pending_approval', 'pending', 'open', 'in_progress', 'unchecked', 'ordered', 'partially_received', 'unread', 'awaiting_delivery', 'invoiced', 'unpaid', 'not_ready'].includes(key)) style = 'info';
+        if (['partially_paid'].includes(key)) style = 'warning';
         if (['warning', 'shortage', 'overdue'].includes(key)) style = 'warning';
         if (['rejected', 'cancelled', 'high', 'urgent'].includes(key)) style = 'danger';
         return `<span class="badge ${style}">${translateStatus(value)}</span>`;
@@ -227,15 +244,19 @@
         if (!rows || rows.length === 0) {
             return `<div class="empty"><strong>${emptyText}</strong><span>Dữ liệu mới sẽ hiển thị tại đây.</span></div>`;
         }
+        const resolvedColumns = columns.map((col, index) => ({
+            ...col,
+            className: [col.className || '', index === columns.length - 1 && !col.label ? 'actions-cell' : ''].filter(Boolean).join(' '),
+        }));
 
         return `
             <div class="table-wrap list-table-wrap">
                 <table class="list-table">
-                    <thead><tr>${columns.map((col) => `<th>${escapeHtml(col.label)}</th>`).join('')}</tr></thead>
+                    <thead><tr>${resolvedColumns.map((col) => `<th class="${escapeHtml(col.className || '')}">${escapeHtml(col.label)}</th>`).join('')}</tr></thead>
                     <tbody>
                         ${rows.map((row) => `
                             <tr ${options.rowAttr ? options.rowAttr(row) : ''}>
-                                ${columns.map((col) => `<td>${col.render(row)}</td>`).join('')}
+                                ${resolvedColumns.map((col) => `<td class="${escapeHtml(col.className || '')}">${col.render(row)}</td>`).join('')}
                             </tr>
                         `).join('')}
                     </tbody>

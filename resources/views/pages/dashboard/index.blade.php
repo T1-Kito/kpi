@@ -14,5 +14,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/dashboard.js"></script>
+<script src="/assets/js/features/dashboard.js?v=20260617-3"></script>
 @endpush

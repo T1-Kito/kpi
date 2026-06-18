@@ -22,6 +22,35 @@ class ProcurementService
     ) {
     }
 
+    /** @param array<int, array<string, mixed>> $items */
+    public function createManualPr(User $actor, array $items, ?string $reason = null): PurchaseRequest
+    {
+        return DB::transaction(function () use ($actor, $items, $reason) {
+            $pr = PurchaseRequest::create([
+                'tenant_id' => $actor->tenant_id,
+                'code' => $this->nextPrCode($actor->tenant_id),
+                'source_type' => 'Manual',
+                'source_id' => null,
+                'requested_by' => $actor->id,
+                'reason' => $reason ?: 'Yêu cầu mua thủ công',
+                'status' => 'draft',
+            ]);
+
+            foreach ($items as $line) {
+                $pr->items()->create([
+                    'sku_id' => $line['sku_id'],
+                    'quantity' => (float) $line['quantity'],
+                    'available_qty' => (float) ($line['available_qty'] ?? 0),
+                ]);
+            }
+
+            $this->audit->record('purchase_request', $pr->id, 'create_purchase_request_manual', $actor, null, $pr->toArray());
+            $this->events->publish($actor->tenant_id, 'PurchaseRequestCreated', 'PurchaseRequest', $pr->id, ['source' => 'manual']);
+
+            return $pr->load('items.sku:id,sku_code,name,unit');
+        });
+    }
+
     /** @param array<int, array<string, mixed>> $shortages */
     public function createDraftPrFromSalesOrder(SalesOrder $order, User $actor, array $shortages): PurchaseRequest
     {

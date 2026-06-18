@@ -1,34 +1,109 @@
 (function () {
     const publicPages = ['/'];
     const sidebarStateKey = 'vk.sidebar.groups';
-    const userCacheKey = 'vk.currentUser';
+    const sidebarIconKey = 'vk.sidebar.icons.v1';
+    const userCacheKey = 'vk.currentUser.v3';
+    const defaultSidebarIcons = {
+        dashboard: 'home',
+        tasks: 'tasks',
+        business: 'business',
+        warehouse: 'warehouse',
+        purchase: 'purchase',
+        kpi: 'kpi',
+        alerts: 'alert',
+        admin: 'admin',
+        print: 'print',
+        workflow: 'workflow',
+    };
 
     const features = {
-        dashboard: ['dashboard.js', 'loadDashboard'],
-        leads: ['leads.js', 'loadLeads'],
-        quotations: ['quotations.js', 'loadQuotations'],
-        'sales-orders': ['sales-orders.js', 'loadSalesOrders'],
+        dashboard: ['dashboard.js?v=20260617-3', 'loadDashboard'],
+        leads: ['leads.js?v=20260615-2', 'loadLeads'],
+        quotations: ['quotations.js?v=20260618-15', 'loadQuotations'],
+        'sales-orders': ['sales-orders.js?v=20260617-1', 'loadSalesOrders'],
+        deliveries: ['sales-fulfillment.js?v=20260618-1', 'loadDeliveries'],
+        'sales-invoices': ['sales-fulfillment.js?v=20260618-1', 'loadSalesInvoices'],
+        'customer-receivables': ['customer-receivables.js?v=20260617-1', 'loadCustomerReceivables'],
+        'customer-payments': ['sales-fulfillment.js?v=20260618-1', 'loadCustomerPayments'],
         customers: ['customers.js', 'loadCustomers'],
-        suppliers: ['suppliers.js', 'loadSuppliers'],
-        skus: ['skus.js', 'loadSkus'],
-        inventory: ['inventory.js', 'loadInventory'],
+        suppliers: ['suppliers.js?v=20260615-2', 'loadSuppliers'],
+        skus: ['skus.js?v=20260615-2', 'loadSkus'],
+        inventory: ['inventory.js?v=20260615-3', 'loadInventory'],
         warehouses: ['warehouses.js', 'loadWarehouses'],
         'purchase-requests': ['purchase-requests.js', 'loadPurchaseRequests'],
         'purchase-orders': ['purchase-orders.js', 'loadPurchaseOrders'],
         'goods-receipts': ['goods-receipts.js', 'loadGoodsReceipts'],
         'goods-issues': ['goods-issues.js', 'loadGoodsIssues'],
-        tasks: ['tasks.js', 'loadTasks'],
-        alerts: ['alerts.js', 'loadAlerts'],
+        tasks: ['tasks.js?v=20260617-1', 'loadTasks'],
+        alerts: ['alerts.js?v=20260615-2', 'loadAlerts'],
         kpi: ['kpi.js', 'loadKpi'],
-        users: ['users.js', 'loadUsers'],
+        workflows: ['workflows.js?v=20260618-2', 'loadWorkflows'],
+        users: ['users.js?v=20260615-2', 'loadUsers'],
         roles: ['roles.js', 'loadRoles'],
         organization: ['organization.js', 'loadOrganization'],
+        'print-templates': ['print-templates.js?v=20260618-1', 'loadPrintTemplates'],
         'audit-logs': ['audit-logs.js', 'loadAuditLogs'],
-        settings: ['settings.js', 'loadSettings'],
+        settings: ['settings.js?v=20260618-3', 'loadSettings'],
+    };
+    const routePrefetch = {
+        '/dashboard': ['dashboard', [
+            '/tasks?mine=1&page_size=100',
+            '/alerts?mine=1&status=open&page_size=100',
+            '/leads?page_size=100',
+            '/quotations?page_size=100',
+            '/quotations?status=pending_approval&page_size=100',
+            '/sales-orders?page_size=100',
+            '/inventory-balances?page_size=100',
+            '/purchase-requests?page_size=100',
+            '/purchase-orders?page_size=100',
+            '/goods-receipts?page_size=100',
+            '/goods-issues?page_size=100',
+            '/notifications?page_size=5',
+        ]],
+        '/leads': ['leads', ['/leads']],
+        '/quotations': ['quotations', ['/quotations']],
+        '/sales-orders': ['sales-orders', ['/sales-orders']],
+        '/deliveries': ['deliveries', ['/deliveries?page_size=100']],
+        '/sales-invoices': ['sales-invoices', ['/sales-invoices?page_size=100']],
+        '/customer-receivables': ['customer-receivables', ['/customer-receivables?page_size=100']],
+        '/customer-payments': ['customer-payments', ['/customer-payments?page_size=100']],
+        '/customers': ['customers', ['/customers']],
+        '/inventory': ['inventory', ['/inventory-balances', '/inventory-transactions']],
+        '/warehouses': ['warehouses', ['/warehouses']],
+        '/skus': ['skus', ['/skus']],
+        '/goods-receipts': ['goods-receipts', ['/goods-receipts']],
+        '/goods-issues': ['goods-issues', ['/goods-issues']],
+        '/purchase-requests': ['purchase-requests', ['/purchase-requests']],
+        '/purchase-orders': ['purchase-orders', ['/purchase-orders']],
+        '/suppliers': ['suppliers', ['/suppliers']],
+        '/tasks': ['tasks', ['/tasks?page_size=100']],
+        '/alerts': ['alerts', ['/alerts']],
+        '/workflows': ['workflows', []],
+        '/kpi': ['kpi', [
+            '/kpi/overview',
+            '/leads?page_size=100',
+            '/quotations?page_size=100',
+            '/sales-orders?page_size=100',
+            '/purchase-requests?page_size=100',
+            '/purchase-orders?page_size=100',
+            '/inventory-balances?page_size=100',
+            '/goods-receipts?page_size=100',
+            '/goods-issues?page_size=100',
+            '/tasks?page_size=100',
+            '/alerts?page_size=100',
+        ]],
+        '/users': ['users', ['/users']],
+        '/roles': ['roles', ['/roles']],
+        '/organization': ['organization', ['/departments', '/positions', '/users?page_size=100']],
+        '/print-templates': ['print-templates', ['/print-templates?page_size=100']],
+        '/audit-logs': ['audit-logs', ['/audit-logs?page_size=100', '/lookups/users']],
+        '/settings': ['settings', ['/me', '/users', '/roles', '/customers', '/suppliers', '/skus', '/warehouses']],
     };
 
     let booted = false;
     let pjaxBusy = false;
+    const pageCache = new Map();
+    const prefetchingPages = new Set();
 
     function hasPermission(code) {
         return !code || window.VKUser?.permissions?.includes(code);
@@ -38,8 +113,14 @@
         if (booted || publicPages.includes(window.location.pathname)) return;
         booted = true;
 
-        hydrateUser(readJson(userCacheKey));
+        const cachedUser = readJson(userCacheKey);
+        const canUseCachedUser = cachedUser
+            && Array.isArray(cachedUser.permissions)
+            && cachedUser.permissions.length > 0;
+        if (canUseCachedUser) hydrateUser(cachedUser);
+        resolveCurrentPage();
         applyStoredSidebarState();
+        applySidebarIcons();
         bindSidebar();
         bindPjax();
 
@@ -48,14 +129,23 @@
             return;
         }
 
+        if (canUseCachedUser) {
+            window.VKUser = cachedUser;
+            applyNavigation();
+            document.dispatchEvent(new CustomEvent('vk:ready', { detail: cachedUser }));
+        }
+
         try {
             const me = await VKApi.request('/me');
             window.VKUser = me.data;
             writeJson(userCacheKey, me.data);
             hydrateUser(me.data);
             applyNavigation();
-            loadSidebarBadges();
-            document.dispatchEvent(new CustomEvent('vk:ready', { detail: me.data }));
+            if (!canUseCachedUser) {
+                document.dispatchEvent(new CustomEvent('vk:ready', { detail: me.data }));
+            }
+            window.setTimeout(() => loadSidebarBadges(), 600);
+            warmFeatureScripts();
         } catch (error) {
             clearUserCache();
             VKApi.clearToken();
@@ -100,10 +190,16 @@
     }
 
     function applyNavigation() {
-        document.querySelectorAll('#mainNav a').forEach((link) => {
+        document.querySelectorAll('#mainNav a, [data-module-toolbar] a').forEach((link) => {
             const permission = link.dataset.permission || '';
             if (!hasPermission(permission)) {
                 link.remove();
+            }
+        });
+
+        document.querySelectorAll('button[data-permission]').forEach((button) => {
+            if (!hasPermission(button.dataset.permission || '')) {
+                button.remove();
             }
         });
 
@@ -115,6 +211,7 @@
         });
 
         setActiveUrl(window.location.pathname);
+        applySidebarIcons();
     }
 
     function bindSidebar() {
@@ -151,13 +248,73 @@
         writeJson(sidebarStateKey, state);
     }
 
+    function applySidebarIcons(icons = null) {
+        const config = icons || sidebarIconsFromStorageOrTenant();
+        const customIcons = sidebarCustomIconsFromTenant();
+        document.querySelectorAll('[data-sidebar-icon]').forEach((node) => {
+            const key = node.dataset.sidebarIcon;
+            const icon = config[key] || defaultSidebarIcons[key] || '';
+            const customUrl = customIcons[key] || '';
+            node.className = `nav-icon ${icon}`.trim();
+            if (icon === 'custom' && customUrl) {
+                node.style.setProperty('--nav-custom-icon', `url("${customUrl}")`);
+            } else {
+                node.style.removeProperty('--nav-custom-icon');
+            }
+        });
+    }
+
+    function saveSidebarIcons(icons) {
+        const clean = {};
+        Object.keys(defaultSidebarIcons).forEach((key) => {
+            const value = icons?.[key];
+            if (value && value !== defaultSidebarIcons[key]) {
+                clean[key] = value;
+            }
+        });
+        writeJson(sidebarIconKey, clean);
+        applySidebarIcons(clean);
+    }
+
+    function resetSidebarIcons() {
+        try {
+            localStorage.removeItem(sidebarIconKey);
+        } catch (error) {
+            // Bỏ qua khi trình duyệt không cho ghi localStorage.
+        }
+        applySidebarIcons({});
+    }
+
+    function getSidebarIconConfig() {
+        return {
+            defaults: { ...defaultSidebarIcons },
+            current: { ...sidebarIconsFromStorageOrTenant() },
+            custom: { ...sidebarCustomIconsFromTenant() },
+        };
+    }
+
+    function sidebarIconsFromStorageOrTenant() {
+        return readJson(sidebarIconKey) || window.VKUser?.tenant?.ui_settings?.sidebar_icons || {};
+    }
+
+    function sidebarCustomIconsFromTenant() {
+        return window.VKUser?.tenant?.ui_settings?.custom_sidebar_icons || {};
+    }
+
     function bindPjax() {
         document.addEventListener('click', (event) => {
-            const link = event.target.closest('#mainNav a');
+            const link = event.target.closest('a[href]');
+            if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
             if (!link || !shouldUsePjax(link)) return;
 
             event.preventDefault();
             navigatePjax(link.href);
+        });
+
+        document.addEventListener('mouseover', (event) => {
+            const link = event.target.closest('a[href]');
+            if (!link || !shouldUsePjax(link)) return;
+            prefetchPage(link.href);
         });
 
         window.addEventListener('popstate', () => {
@@ -169,6 +326,7 @@
         const url = new URL(link.href, window.location.origin);
         if (url.origin !== window.location.origin) return false;
         if (link.target || link.hasAttribute('download')) return false;
+        if (link.hasAttribute('data-no-pjax') || url.hash) return false;
         if (url.pathname === '/' || url.pathname.startsWith('/api/')) return false;
         return true;
     }
@@ -181,29 +339,21 @@
 
         pjaxBusy = true;
         document.body.classList.add('pjax-loading');
+        closeTransientUi();
         setActiveUrl(target.pathname);
-        showContentSkeleton();
 
         try {
-            const response = await fetch(target.href, {
-                headers: {
-                    'Accept': 'text/html',
-                    'X-PJAX': 'true',
-                },
-            });
-
-            if (!response.ok) throw new Error('Không tải được trang.');
-            const html = await response.text();
+            const html = await fetchPageHtml(target.href);
             const doc = new DOMParser().parseFromString(html, 'text/html');
-            swapPage(doc);
+            const page = swapPage(doc, target.pathname);
 
             if (push) {
                 history.pushState({}, '', target.href);
             }
 
             setActiveUrl(target.pathname);
-            await bootFeature(document.body.dataset.page);
-            document.dispatchEvent(new CustomEvent('vk:page:changed', { detail: { page: document.body.dataset.page } }));
+            await bootFeature(page);
+            document.dispatchEvent(new CustomEvent('vk:page:changed', { detail: { page } }));
         } catch (error) {
             window.location.href = target.href;
         } finally {
@@ -212,21 +362,93 @@
         }
     }
 
-    function swapPage(doc) {
+    async function fetchPageHtml(href) {
+        if (pageCache.has(href)) return pageCache.get(href);
+
+        const response = await fetch(href, {
+            headers: {
+                'Accept': 'text/html',
+                'X-PJAX': 'true',
+            },
+        });
+
+        if (!response.ok) throw new Error('Không tải được trang.');
+        const html = await response.text();
+        rememberPage(href, html);
+        return html;
+    }
+
+    function rememberPage(href, html) {
+        if (pageCache.size >= 20) {
+            pageCache.delete(pageCache.keys().next().value);
+        }
+        pageCache.set(href, html);
+    }
+
+    function prefetchPage(href) {
+        const target = new URL(href, window.location.origin);
+        if (target.pathname === window.location.pathname && target.search === window.location.search) return;
+        if (prefetchingPages.has(target.href)) return;
+
+        prefetchingPages.add(target.href);
+        Promise.allSettled([
+            fetchPageHtml(target.href),
+            prefetchFeature(target.pathname),
+        ])
+            .catch(() => {})
+            .finally(() => prefetchingPages.delete(target.href));
+    }
+
+    function prefetchFeature(pathname) {
+        const config = routePrefetch[normalizePath(pathname)];
+        if (!config || !window.VKUser) return Promise.resolve();
+
+        const [page] = config;
+        const feature = features[page];
+        const script = feature ? loadScript(`/assets/js/features/${feature[0]}`) : Promise.resolve();
+        return Promise.resolve(script);
+    }
+
+    function swapPage(doc, pathname = window.location.pathname) {
         const title = doc.querySelector('[data-pjax-title]');
         const subtitle = doc.querySelector('[data-pjax-subtitle]');
         const actions = doc.querySelector('[data-pjax-actions]');
+        const moduleNav = doc.querySelector('[data-pjax-module-nav]');
         const content = doc.querySelector('[data-pjax-content]');
-        const page = doc.body?.dataset.page || '';
+        const docPage = doc.body?.dataset.page || '';
+        const page = resolvePageKey(pathname, docPage);
 
         if (!content) throw new Error('Thiếu vùng nội dung.');
 
         document.title = doc.title || document.title;
-        if (page) document.body.dataset.page = page;
+        document.body.dataset.page = page;
         replaceHtml('[data-pjax-title]', title?.innerHTML || '');
         replaceHtml('[data-pjax-subtitle]', subtitle?.innerHTML || '');
         replaceHtml('[data-pjax-actions]', actions?.innerHTML || '');
+        replaceHtml('[data-pjax-module-nav]', moduleNav?.innerHTML || '');
         replaceHtml('[data-pjax-content]', content.innerHTML);
+        applyNavigation();
+        return page;
+    }
+
+    function resolveCurrentPage() {
+        document.body.dataset.page = resolvePageKey(window.location.pathname, document.body.dataset.page || '');
+    }
+
+    function resolvePageKey(pathname, preferred = '') {
+        const fromPath = pageKeyFromPath(pathname);
+        if (!preferred || (preferred === 'dashboard' && fromPath !== 'dashboard')) {
+            return fromPath;
+        }
+        return features[preferred] ? preferred : fromPath;
+    }
+
+    function pageKeyFromPath(pathname) {
+        const current = normalizePath(pathname).replace(/^\//, '');
+        if (!current || current === 'dashboard') return 'dashboard';
+
+        const keys = Object.keys(features).sort((a, b) => b.length - a.length);
+        return keys.find(key => current === key || current.startsWith(`${key}/`)) || current.split('/')[0] || 'dashboard';
     }
 
     function replaceHtml(selector, html) {
@@ -234,31 +456,28 @@
         if (node) node.innerHTML = html;
     }
 
-    function showContentSkeleton() {
-        replaceHtml('[data-pjax-content]', `
-            <section class="pjax-skeleton" aria-label="Đang tải nội dung">
-                <div class="skeleton-line wide"></div>
-                <div class="skeleton-table">
-                    <span></span><span></span><span></span><span></span>
-                    <span></span><span></span><span></span><span></span>
-                </div>
-            </section>
-        `);
+    function closeTransientUi() {
+        if (window.VKModal?.close) window.VKModal.close();
+        if (window.VKDetailDrawer?.close) window.VKDetailDrawer.close();
     }
 
     function setActiveUrl(pathname) {
-        document.querySelectorAll('#mainNav a').forEach((link) => {
+        document.querySelectorAll('#mainNav a, [data-module-toolbar] a').forEach((link) => {
             const href = new URL(link.href, window.location.origin);
-            const active = normalizePath(href.pathname) === normalizePath(pathname);
+            const active = linkMatchesPath(link, href.pathname, pathname);
             link.classList.toggle('active', active);
-            if (active) {
-                const group = link.closest('[data-nav-group]');
-                if (group) {
-                    group.classList.remove('collapsed');
-                }
-            }
         });
         saveSidebarState();
+    }
+
+    function linkMatchesPath(link, hrefPath, currentPath) {
+        const current = normalizePath(currentPath).replace(/^\//, '');
+        const target = normalizePath(hrefPath);
+        const matches = (link.dataset.navMatch || '').split(',').map(item => item.trim()).filter(Boolean);
+        if (matches.length) {
+            return matches.some(prefix => current === prefix || current.startsWith(`${prefix}/`));
+        }
+        return normalizePath(target) === normalizePath(currentPath);
     }
 
     async function bootFeature(page) {
@@ -268,27 +487,53 @@
         const [file, fn] = feature;
         await loadScript(`/assets/js/features/${file}`);
         if (typeof window[fn] === 'function') {
-            await window[fn]();
+            await window[fn]({ source: 'pjax' });
+            return;
         }
+
+        document.dispatchEvent(new CustomEvent('vk:ready', { detail: window.VKUser || null }));
     }
 
-    function loadScript(src) {
-        const current = document.querySelector(`script[src="${src}"]`);
-        if (current?.dataset.loaded === '1') return Promise.resolve();
+    const scriptLoaders = new Map();
 
+    function loadScript(src) {
+        const existing = scriptLoaders.get(src);
+        if (existing) return existing;
+
+        const current = document.querySelector(`script[src="${src}"]`);
+        if (current?.dataset.loaded === '1') {
+            const ready = Promise.resolve();
+            scriptLoaders.set(src, ready);
+            return ready;
+        }
         if (current) {
             current.dataset.loaded = '1';
-            return Promise.resolve();
+            const ready = Promise.resolve();
+            scriptLoaders.set(src, ready);
+            return ready;
         }
 
-        return new Promise((resolve, reject) => {
+        const promise = new Promise((resolve, reject) => {
             const script = document.createElement('script');
             script.src = src;
-            script.dataset.loaded = '1';
-            script.addEventListener('load', resolve, { once: true });
-            script.addEventListener('error', reject, { once: true });
+            script.addEventListener('load', () => {
+                script.dataset.loaded = '1';
+                resolve();
+            }, { once: true });
+            script.addEventListener('error', (event) => {
+                scriptLoaders.delete(src);
+                reject(event);
+            }, { once: true });
             document.body.appendChild(script);
         });
+
+        scriptLoaders.set(src, promise);
+        return promise;
+    }
+
+    function warmFeatureScripts() {
+        // Bỏ warm-load 22 feature script: tốn băng thông và gây race với PJAX.
+        // Feature script giờ chỉ tải khi user thực sự chuyển vào trang đó.
     }
 
     async function loadSidebarBadges() {
@@ -300,7 +545,7 @@
 
     async function fillTaskBadges() {
         if (!hasPermission('task.view')) return;
-        const tasks = await VKApi.request('/tasks?mine=1&page_size=100');
+        const tasks = await VKApi.request('/tasks?mine=1&page_size=25');
         const rows = tasks.data || [];
         setBadge('sidebarTaskCount', rows.filter(row => ['new', 'in_progress', 'overdue'].includes(row.status)).length);
     }
@@ -363,5 +608,5 @@
         window.location.href = '/';
     });
 
-    window.VKLayout = { bootLayout, hasPermission, hydrateLogo, navigatePjax };
+    window.VKLayout = { bootLayout, hasPermission, hydrateLogo, navigatePjax, applySidebarIcons, saveSidebarIcons, resetSidebarIcons, getSidebarIconConfig };
 })();

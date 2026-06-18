@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'tax_lookup' => [
+        'url' => env('TAX_LOOKUP_API_URL'),
+        'key' => env('TAX_LOOKUP_API_KEY'),
+    ],
+
 ];

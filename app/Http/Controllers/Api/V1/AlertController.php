@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Alert;
 use App\Support\AuditLogger;
+use App\Support\DataScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -21,6 +22,7 @@ class AlertController extends Controller
         $query = Alert::query()
             ->where('tenant_id', $request->user()->tenant_id)
             ->with('recipient:id,name,email');
+        DataScope::alert($query, $request->user());
 
         if ($request->boolean('mine')) {
             $query->where('recipient_id', $request->user()->id);
@@ -45,6 +47,7 @@ class AlertController extends Controller
     public function updateStatus(Request $request, Alert $alert): JsonResponse
     {
         abort_if($alert->tenant_id !== $request->user()->tenant_id, 404);
+        abort_if(! DataScope::alert(Alert::whereKey($alert->id), $request->user())->exists(), 404);
 
         $data = $request->validate([
             'status' => ['required', Rule::in(['acknowledged', 'resolved'])],

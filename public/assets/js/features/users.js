@@ -1,3 +1,4 @@
+(function () {
 let userState = { rows: [], departments: [], positions: [], roles: [], q: '', status: '' };
 
 document.addEventListener('vk:ready', () => loadUsers());
@@ -183,6 +184,15 @@ async function updateUserStatus(id, isActive) {
 
 function openUserDetail(id) {
     const row = userState.rows.find(item => String(item.id) === String(id));
+    if (!row) return;
+    VKRecordPage.open({
+        root: '#usersRoot',
+        type: 'user',
+        id,
+        preview: { ...row, status: row.is_active ? 'active' : 'inactive', timeline: [{ label: 'Tạo người dùng', status: row.is_active ? 'active' : 'inactive', at: row.created_at }] },
+        onBack: () => renderUsers(),
+    });
+    return;
     VKDetailDrawer.open({ type: 'user', row: { ...row, status: row.is_active ? 'active' : 'inactive', timeline: [{ label: 'Tạo người dùng', status: row.is_active ? 'active' : 'inactive', at: row.created_at }] } });
 }
 
@@ -202,3 +212,6 @@ function checkedValues(form, name) {
 function blankOption() {
     return [{ value: '', label: 'Chưa chọn' }];
 }
+
+window.loadUsers = loadUsers;
+})();
