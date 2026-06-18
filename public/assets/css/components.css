@@ -786,6 +786,7 @@ tbody tr[data-row-detail] {
     align-items: center;
     justify-content: center;
     padding: 20px;
+    overflow: auto;
     z-index: 20;
 }
 
@@ -2236,6 +2237,12 @@ tbody tr[data-row-detail] {
     box-shadow: 0 24px 60px rgba(15, 23, 42, .18);
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.customer-form-modal #modalForm {
+    min-height: 0;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
 }
 
 .customer-form-modal .modal-head {

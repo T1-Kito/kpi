@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@yield('title', 'VK-KPI')</title>
     <link rel="stylesheet" href="/assets/css/app.css?v=20260618-1">
-    <link rel="stylesheet" href="/assets/css/components.css?v=20260618-10">
+    <link rel="stylesheet" href="/assets/css/components.css?v=20260618-11">
     <link rel="stylesheet" href="/assets/css/pages.css?v=20260618-11">
 </head>
 <body data-page="@yield('page', 'dashboard')">
