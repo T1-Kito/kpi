@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\KpiAdjustment;
 use App\Models\KpiException;
 use App\Models\KpiScoreSnapshot;
 use App\Models\KpiTarget;
+use App\Models\User;
 use App\Services\Kpi\KpiService;
 use App\Support\AuditLogger;
 use Illuminate\Http\JsonResponse;
@@ -95,6 +97,160 @@ class KpiController extends Controller
                 'page_size' => $exceptions->perPage(),
                 'total' => $exceptions->total(),
             ],
+        ]);
+    }
+
+    public function adjustments(Request $request): JsonResponse
+    {
+        $tenantId = $request->user()->tenant_id;
+        $pageSize = min((int) $request->query('page_size', 20), 100);
+        $query = KpiAdjustment::where('tenant_id', $tenantId)
+            ->with([
+                'user:id,name,email,department_id',
+                'user.department:id,name',
+                'definition:id,code,name',
+                'creator:id,name,email',
+                'reviewer:id,name,email',
+            ])
+            ->latest('period_start')
+            ->latest('id');
+
+        if ($status = $request->query('status')) {
+            $query->where('status', $status);
+        }
+
+        if ($userId = $request->query('user_id')) {
+            $query->where('user_id', $userId);
+        }
+
+        if ($periodType = $request->query('period_type')) {
+            $query->where('period_type', $periodType);
+        }
+
+        $adjustments = $query->paginate($pageSize);
+
+        return response()->json([
+            'data' => $adjustments->items(),
+            'meta' => [
+                'page' => $adjustments->currentPage(),
+                'page_size' => $adjustments->perPage(),
+                'total' => $adjustments->total(),
+            ],
+        ]);
+    }
+
+    public function adjustmentSummary(Request $request): JsonResponse
+    {
+        $tenantId = $request->user()->tenant_id;
+        $periodType = $request->query('period_type', 'month');
+        $periodStart = $request->query('period_start');
+
+        $query = KpiAdjustment::query()
+            ->where('tenant_id', $tenantId)
+            ->where('status', 'approved')
+            ->where('period_type', $periodType);
+
+        if ($periodStart) {
+            $query->whereDate('period_start', $periodStart);
+        }
+
+        $rows = $query
+            ->select('user_id')
+            ->selectRaw("SUM(CASE WHEN adjustment_type = 'bonus' THEN points ELSE -points END) as net_points")
+            ->selectRaw("SUM(CASE WHEN adjustment_type = 'bonus' THEN points ELSE 0 END) as bonus_points")
+            ->selectRaw("SUM(CASE WHEN adjustment_type = 'penalty' THEN points ELSE 0 END) as penalty_points")
+            ->selectRaw('COUNT(*) as adjustment_count')
+            ->groupBy('user_id')
+            ->orderByDesc('net_points')
+            ->get();
+
+        $users = User::where('tenant_id', $tenantId)
+            ->whereIn('id', $rows->pluck('user_id'))
+            ->with('department:id,name')
+            ->get(['id', 'name', 'email', 'department_id'])
+            ->keyBy('id');
+
+        return response()->json([
+            'data' => $rows->map(fn ($row) => [
+                'user' => $users->get($row->user_id),
+                'net_points' => (float) $row->net_points,
+                'bonus_points' => (float) $row->bonus_points,
+                'penalty_points' => (float) $row->penalty_points,
+                'adjustment_count' => (int) $row->adjustment_count,
+            ])->values(),
+        ]);
+    }
+
+    public function storeAdjustment(Request $request): JsonResponse
+    {
+        $tenantId = $request->user()->tenant_id;
+        $data = $request->validate([
+            'user_id' => ['required', Rule::exists('users', 'id')->where('tenant_id', $tenantId)],
+            'kpi_definition_id' => ['nullable', Rule::exists('kpi_definitions', 'id')->where('tenant_id', $tenantId)],
+            'adjustment_type' => ['required', Rule::in(['bonus', 'penalty'])],
+            'points' => ['required', 'numeric', 'min:0.01', 'max:100'],
+            'period_type' => ['nullable', Rule::in(['day', 'week', 'month', 'quarter', 'year'])],
+            'period_start' => ['required', 'date'],
+            'period_end' => ['required', 'date', 'after_or_equal:period_start'],
+            'source_type' => ['nullable', 'string', 'max:100'],
+            'source_id' => ['nullable', 'integer', 'min:1'],
+            'reason_code' => ['nullable', 'string', 'max:100'],
+            'reason' => ['required', 'string', 'max:2000'],
+            'evidence_url' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $adjustment = KpiAdjustment::create($data + [
+            'tenant_id' => $tenantId,
+            'created_by' => $request->user()->id,
+            'period_type' => $data['period_type'] ?? 'month',
+            'status' => 'pending',
+        ]);
+
+        $this->audit->record(
+            'kpi_adjustment',
+            $adjustment->id,
+            'create_kpi_adjustment',
+            $request->user(),
+            null,
+            $adjustment->only(['user_id', 'adjustment_type', 'points', 'period_type', 'period_start', 'period_end', 'status', 'reason']),
+            $request,
+        );
+
+        return response()->json([
+            'data' => $adjustment->load(['user:id,name,email', 'definition:id,code,name', 'creator:id,name,email']),
+        ], 201);
+    }
+
+    public function reviewAdjustment(Request $request, KpiAdjustment $kpiAdjustment): JsonResponse
+    {
+        abort_if($kpiAdjustment->tenant_id !== $request->user()->tenant_id, 404);
+
+        $data = $request->validate([
+            'status' => ['required', Rule::in(['approved', 'rejected'])],
+            'review_note' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $old = $kpiAdjustment->only(['status', 'reviewed_by', 'reviewed_at', 'review_note']);
+        $kpiAdjustment->update([
+            'status' => $data['status'],
+            'reviewed_by' => $request->user()->id,
+            'reviewed_at' => now(),
+            'review_note' => $data['review_note'] ?? null,
+        ]);
+
+        $this->audit->record(
+            'kpi_adjustment',
+            $kpiAdjustment->id,
+            'review_kpi_adjustment',
+            $request->user(),
+            $old,
+            $kpiAdjustment->fresh()->only(['status', 'reviewed_by', 'reviewed_at', 'review_note']),
+            $request,
+            $data['review_note'] ?? null,
+        );
+
+        return response()->json([
+            'data' => $kpiAdjustment->refresh()->load(['user:id,name,email', 'definition:id,code,name', 'reviewer:id,name,email']),
         ]);
     }
 

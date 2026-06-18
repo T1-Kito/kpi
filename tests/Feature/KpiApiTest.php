@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\KpiDefinition;
+use App\Models\KpiAdjustment;
 use App\Models\KpiException;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -83,6 +85,59 @@ class KpiApiTest extends TestCase
             'entity_type' => 'kpi_exception',
             'entity_id' => $exceptionId,
             'action' => 'review_kpi_exception',
+        ]);
+    }
+
+    public function test_admin_can_create_review_and_summarize_kpi_adjustment(): void
+    {
+        $this->seed();
+        $token = $this->loginAs('admin@vk-kpi.local');
+        $definition = KpiDefinition::where('code', 'KPI-WORKFLOW')->firstOrFail();
+        $sales = User::where('email', 'sales@vk-kpi.local')->firstOrFail();
+
+        $create = $this->withToken($token)
+            ->postJson('/api/v1/kpi/adjustments', [
+                'user_id' => $sales->id,
+                'kpi_definition_id' => $definition->id,
+                'adjustment_type' => 'penalty',
+                'points' => 5,
+                'period_type' => 'month',
+                'period_start' => now()->startOfMonth()->toDateString(),
+                'period_end' => now()->endOfMonth()->toDateString(),
+                'reason' => 'Trễ SLA xử lý báo giá cần ghi nhận vào sổ điểm.',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'pending');
+
+        $adjustmentId = $create->json('data.id');
+
+        $this->withToken($token)
+            ->postJson("/api/v1/kpi/adjustments/{$adjustmentId}/review", [
+                'status' => 'approved',
+                'review_note' => 'Đã kiểm tra dữ liệu SLA.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved');
+
+        $summary = $this->withToken($token)
+            ->getJson('/api/v1/kpi/adjustments/summary?period_type=month')
+            ->assertOk()
+            ->json('data');
+
+        $salesSummary = collect($summary)->firstWhere('user.email', 'sales@vk-kpi.local');
+        $this->assertNotNull($salesSummary);
+        $this->assertEquals(3, $salesSummary['net_points']);
+
+        $this->assertSame('approved', KpiAdjustment::findOrFail($adjustmentId)->status);
+        $this->assertDatabaseHas('audit_logs', [
+            'entity_type' => 'kpi_adjustment',
+            'entity_id' => $adjustmentId,
+            'action' => 'create_kpi_adjustment',
+        ]);
+        $this->assertDatabaseHas('audit_logs', [
+            'entity_type' => 'kpi_adjustment',
+            'entity_id' => $adjustmentId,
+            'action' => 'review_kpi_adjustment',
         ]);
     }
 

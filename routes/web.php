@@ -11,6 +11,7 @@ use App\Http\Controllers\Web\GoodsIssueController;
 use App\Http\Controllers\Web\GoodsReceiptController;
 use App\Http\Controllers\Web\InventoryController;
 use App\Http\Controllers\Web\KpiController;
+use App\Http\Controllers\Web\KpiAdjustmentController;
 use App\Http\Controllers\Web\LeadController;
 use App\Http\Controllers\Web\OrganizationController;
 use App\Http\Controllers\Web\PrintTemplateController;
@@ -53,6 +54,7 @@ Route::get('/goods-issues', GoodsIssueController::class)->name('goods-issues.ind
 Route::get('/tasks', TaskController::class)->name('tasks.index');
 Route::get('/alerts', AlertController::class)->name('alerts.index');
 Route::get('/kpi', KpiController::class)->name('kpi.index');
+Route::get('/kpi-adjustments', KpiAdjustmentController::class)->name('kpi-adjustments.index');
 Route::view('/workflows', 'pages.workflows.index')->name('workflows.index');
 Route::get('/audit-logs', AuditLogController::class)->name('audit-logs.index');
 Route::get('/settings', SettingController::class)->name('settings.index');

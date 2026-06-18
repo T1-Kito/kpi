@@ -60,7 +60,7 @@
             <span>Mua hàng</span>
         </a>
 
-        <a class="nav-link {{ $currentPath === 'kpi' ? 'active' : '' }}" data-permission="" href="/kpi">
+        <a class="nav-link {{ $currentPath === 'kpi' || $currentPath === 'kpi-adjustments' ? 'active' : '' }}" data-permission="" data-nav-match="kpi,kpi-adjustments" href="/kpi">
             <span class="nav-icon kpi" data-sidebar-icon="kpi" aria-hidden="true"></span>
             <span>KPI</span>
         </a>

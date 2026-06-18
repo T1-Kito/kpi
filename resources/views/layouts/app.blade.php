@@ -6,7 +6,7 @@
     <title>@yield('title', 'VK-KPI')</title>
     <link rel="stylesheet" href="/assets/css/app.css?v=20260618-1">
     <link rel="stylesheet" href="/assets/css/components.css?v=20260618-11">
-    <link rel="stylesheet" href="/assets/css/pages.css?v=20260618-11">
+    <link rel="stylesheet" href="/assets/css/pages.css?v=20260618-12">
 </head>
 <body data-page="@yield('page', 'dashboard')">
     <main class="app-shell">
@@ -44,7 +44,7 @@
     <script src="/assets/js/modal.js?v=20260615-2"></script>
     <script src="/assets/js/record-page.js?v=20260618-1"></script>
     <script src="/assets/js/detail-drawer.js"></script>
-    <script src="/assets/js/layout.js?v=20260618-13"></script>
+    <script src="/assets/js/layout.js?v=20260618-15"></script>
     <script src="/assets/js/notifications.js"></script>
     <script src="/assets/js/app.js"></script>
     @stack('scripts')

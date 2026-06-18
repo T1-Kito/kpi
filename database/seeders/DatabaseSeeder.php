@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Department;
 use App\Models\Customer;
 use App\Models\InventoryBalance;
+use App\Models\KpiAdjustment;
 use App\Models\KpiDefinition;
 use App\Models\Permission;
 use App\Models\Position;
@@ -169,6 +170,8 @@ class DatabaseSeeder extends Seeder
         $directorUser = User::where('email', 'director@vk-kpi.local')->first();
         $salesUser = User::where('email', 'sales@vk-kpi.local')->first();
         $warehouseUser = User::where('email', 'warehouse@vk-kpi.local')->first();
+        $procurementUser = User::where('email', 'procurement@vk-kpi.local')->first();
+        $marketingUser = User::where('email', 'marketing@vk-kpi.local')->first();
 
         $salesUser?->update(['manager_id' => $directorUser?->id]);
 
@@ -481,5 +484,96 @@ class DatabaseSeeder extends Seeder
                 'line_total' => 3500000,
             ],
         );
+
+        $kpiWorkflow = KpiDefinition::where('tenant_id', $tenant->id)->where('code', 'KPI-WORKFLOW')->first();
+        $kpiSales = KpiDefinition::where('tenant_id', $tenant->id)->where('code', 'KPI-SALES')->first();
+        $kpiInventory = KpiDefinition::where('tenant_id', $tenant->id)->where('code', 'KPI-INVENTORY')->first();
+        $kpiProcurement = KpiDefinition::where('tenant_id', $tenant->id)->where('code', 'KPI-PROCUREMENT')->first();
+        $periodStart = now()->startOfMonth()->toDateString();
+        $periodEnd = now()->endOfMonth()->toDateString();
+
+        foreach ([
+            [
+                'user' => $salesUser,
+                'definition' => $kpiSales,
+                'type' => 'bonus',
+                'points' => 8,
+                'code' => 'demo_sales_win',
+                'reason' => 'Chốt báo giá demo đúng giá và chuyển đơn bán không cần nhập lại dữ liệu.',
+                'status' => 'approved',
+                'reviewer' => $directorUser,
+            ],
+            [
+                'user' => $salesUser,
+                'definition' => $kpiWorkflow,
+                'type' => 'penalty',
+                'points' => 3,
+                'code' => 'demo_sla_late',
+                'reason' => 'Trễ SLA follow-up khách hàng tiềm năng trong dữ liệu demo.',
+                'status' => 'pending',
+                'reviewer' => null,
+            ],
+            [
+                'user' => $warehouseUser,
+                'definition' => $kpiInventory,
+                'type' => 'bonus',
+                'points' => 5,
+                'code' => 'demo_issue_on_time',
+                'reason' => 'Xác nhận phiếu xuất kho đúng thời gian, tồn kho được cập nhật đầy đủ.',
+                'status' => 'approved',
+                'reviewer' => $directorUser,
+            ],
+            [
+                'user' => $procurementUser,
+                'definition' => $kpiProcurement,
+                'type' => 'penalty',
+                'points' => 2,
+                'code' => 'demo_po_follow_up',
+                'reason' => 'Chậm cập nhật tiến độ đơn mua mẫu, cần nhắc trong kỳ KPI.',
+                'status' => 'rejected',
+                'reviewer' => $directorUser,
+            ],
+            [
+                'user' => $marketingUser,
+                'definition' => $kpiWorkflow,
+                'type' => 'bonus',
+                'points' => 4,
+                'code' => 'demo_campaign_support',
+                'reason' => 'Hỗ trợ tạo nguồn lead demo cho kinh doanh xử lý đúng luồng.',
+                'status' => 'approved',
+                'reviewer' => $directorUser,
+            ],
+        ] as $adjustment) {
+            if (! $adjustment['user']) {
+                continue;
+            }
+
+            KpiAdjustment::updateOrCreate(
+                [
+                    'tenant_id' => $tenant->id,
+                    'user_id' => $adjustment['user']->id,
+                    'period_type' => 'month',
+                    'period_start' => $periodStart,
+                    'reason_code' => $adjustment['code'],
+                ],
+                [
+                    'kpi_definition_id' => $adjustment['definition']?->id,
+                    'created_by' => $adminUser?->id,
+                    'reviewed_by' => $adjustment['reviewer']?->id,
+                    'adjustment_type' => $adjustment['type'],
+                    'points' => $adjustment['points'],
+                    'period_end' => $periodEnd,
+                    'source_type' => 'seed_demo',
+                    'source_id' => null,
+                    'reason' => $adjustment['reason'],
+                    'evidence_url' => null,
+                    'status' => $adjustment['status'],
+                    'reviewed_at' => $adjustment['reviewer'] ? now() : null,
+                    'review_note' => $adjustment['status'] === 'approved'
+                        ? 'Dữ liệu mẫu đã được duyệt để demo sổ điểm KPI.'
+                        : ($adjustment['status'] === 'rejected' ? 'Dữ liệu mẫu bị từ chối để demo trạng thái.' : null),
+                ],
+            );
+        }
     }
 }

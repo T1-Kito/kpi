@@ -96,11 +96,15 @@ Route::prefix('v1')->group(function () {
         Route::get('/kpi/snapshots', [KpiController::class, 'snapshots']);
         Route::get('/kpi/targets', [KpiController::class, 'targets']);
         Route::get('/kpi/exceptions', [KpiController::class, 'exceptions']);
+        Route::get('/kpi/adjustments', [KpiController::class, 'adjustments']);
+        Route::get('/kpi/adjustments/summary', [KpiController::class, 'adjustmentSummary']);
         Route::post('/kpi/exceptions', [KpiController::class, 'storeException']);
 
         Route::middleware('permission:kpi.lock')->group(function () {
             Route::post('/kpi/snapshots/calculate', [KpiController::class, 'calculate']);
             Route::post('/kpi/exceptions/{kpiException}/review', [KpiController::class, 'reviewException']);
+            Route::post('/kpi/adjustments', [KpiController::class, 'storeAdjustment']);
+            Route::post('/kpi/adjustments/{kpiAdjustment}/review', [KpiController::class, 'reviewAdjustment']);
         });
 
         Route::middleware('permission:user.manage')->group(function () {

@@ -33,6 +33,13 @@
             ],
         ],
         [
+            'match' => ['kpi', 'kpi-adjustments'],
+            'items' => [
+                ['label' => 'Tổng quan KPI', 'href' => '/kpi', 'match' => 'kpi', 'permission' => ''],
+                ['label' => 'Sổ điểm nhân viên', 'href' => '/kpi-adjustments', 'match' => 'kpi-adjustments', 'permission' => ''],
+            ],
+        ],
+        [
             'match' => ['users', 'roles', 'organization', 'print-templates', 'audit-logs', 'settings'],
             'items' => [
                 ['label' => 'Người dùng', 'href' => '/users', 'match' => 'users', 'permission' => 'user.manage'],

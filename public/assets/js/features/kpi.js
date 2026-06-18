@@ -13,7 +13,7 @@ document.addEventListener('click', async (event) => {
     } catch (error) {
         button.disabled = false;
         button.textContent = 'Tính lại KPI';
-        alert('Tài khoản hiện tại chưa có quyền chốt KPI hoặc hệ thống chưa xử lý được yêu cầu.');
+        VKModal.toast(error.message || 'Không thể tính lại KPI.', 'danger');
     }
 });
 
@@ -295,7 +295,10 @@ function renderBackendKpiPanel(backend) {
                     <h2>Điều hành KPI</h2>
                     <span>Dữ liệu chốt từ hệ thống, mục tiêu và ngoại lệ KPI.</span>
                 </div>
-                <button class="btn secondary small" type="button" data-kpi-calculate>Tính lại KPI</button>
+                <div class="panel-actions">
+                    <a class="btn secondary small" href="/kpi-adjustments">Sổ điểm nhân viên</a>
+                    ${canManageKpi() ? '<button class="btn secondary small" type="button" data-kpi-calculate>Tính lại KPI</button>' : ''}
+                </div>
             </div>
             <div class="kpi-system-grid">
                 <div class="kpi-system-box">
@@ -523,6 +526,10 @@ function rankTone(value) {
     if (value >= 70) return 'good';
     if (value >= 50) return 'watch';
     return 'risk';
+}
+
+function canManageKpi() {
+    return Array.isArray(window.VKUser?.permissions) && window.VKUser.permissions.includes('kpi.lock');
 }
 
 window.loadKpi = loadKpi;

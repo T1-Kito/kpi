@@ -1177,6 +1177,133 @@
     padding: 14px;
 }
 
+.section-tabs {
+    min-height: 46px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+    padding: 5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.section-tab {
+    min-height: 34px;
+    border-radius: 7px;
+    color: #374151;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.section-tab:hover,
+.section-tab.active {
+    background: #EFF6FF;
+    color: var(--blue);
+}
+
+.kpi-ledger-page {
+    display: grid;
+    gap: 12px;
+}
+
+.kpi-ledger-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin: 12px 0;
+}
+
+.kpi-ledger-summary.empty {
+    min-height: 72px;
+    border: 1px dashed #BFDBFE;
+    border-radius: 8px;
+    background: #F8FBFF;
+    padding: 12px;
+    display: grid;
+    align-content: center;
+    gap: 4px;
+}
+
+.kpi-ledger-summary.empty strong,
+.kpi-ledger-summary.empty span {
+    font-size: 13px;
+}
+
+.kpi-ledger-score-card {
+    min-height: 92px;
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--success-text);
+    border-radius: 8px;
+    background: #fff;
+    padding: 12px;
+    display: grid;
+    align-content: center;
+    gap: 6px;
+}
+
+.kpi-ledger-score-card.negative {
+    border-left-color: var(--danger-text);
+}
+
+.kpi-ledger-score-card span,
+.kpi-ledger-score-card small {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.kpi-ledger-score-card strong {
+    color: var(--navy);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.kpi-ledger-score-card b {
+    color: var(--success-text);
+    font-weight: 700;
+}
+
+.kpi-ledger-score-card.negative b,
+.text-danger {
+    color: var(--danger-text);
+}
+
+.text-success {
+    color: var(--success-text);
+}
+
+.kpi-ledger-reason {
+    max-width: 420px;
+    color: #374151;
+}
+
+.empty-state {
+    min-height: 92px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    background: #FCFCFD;
+    padding: 16px;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 4px;
+    color: var(--muted);
+    text-align: center;
+}
+
+.empty-state strong {
+    color: var(--navy);
+    font-size: 14px;
+}
+
+.empty-state span {
+    font-size: 12px;
+}
+
 .row-note {
     display: block;
     margin-top: 3px;
