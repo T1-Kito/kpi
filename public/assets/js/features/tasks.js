@@ -14,6 +14,35 @@ let taskState = {
     detailCache: {},
 };
 
+const taskModules = [
+    { value: 'general', label: 'Chung' },
+    { value: 'sales', label: 'Kinh doanh' },
+    { value: 'inventory', label: 'Kho vận' },
+    { value: 'procurement', label: 'Mua hàng' },
+    { value: 'finance', label: 'Tài chính' },
+    { value: 'kpi', label: 'Kiểm soát / KPI' },
+];
+
+const taskTypes = [
+    { value: 'manual', label: 'Việc thủ công', module: 'general', priority: 'normal' },
+    { value: 'lead_follow_up', label: 'Chăm sóc khách hàng tiềm năng', module: 'sales', priority: 'normal' },
+    { value: 'quotation_follow_up', label: 'Theo dõi báo giá', module: 'sales', priority: 'normal' },
+    { value: 'margin_approval', label: 'Duyệt biên lợi nhuận thấp', module: 'sales', priority: 'high' },
+    { value: 'sales_order_confirmation', label: 'Xác nhận đơn bán', module: 'sales', priority: 'normal' },
+    { value: 'delivery_confirmation', label: 'Xác nhận giao hàng', module: 'sales', priority: 'high' },
+    { value: 'inventory_check', label: 'Kiểm tra tồn kho', module: 'inventory', priority: 'normal' },
+    { value: 'warehouse_issue', label: 'Xử lý xuất kho', module: 'inventory', priority: 'high' },
+    { value: 'goods_receipt', label: 'Xử lý nhập kho', module: 'inventory', priority: 'high' },
+    { value: 'purchase_request', label: 'Xử lý yêu cầu mua', module: 'procurement', priority: 'normal' },
+    { value: 'purchase_order_follow_up', label: 'Theo dõi đơn mua', module: 'procurement', priority: 'normal' },
+    { value: 'supplier_follow_up', label: 'Làm việc nhà cung cấp', module: 'procurement', priority: 'normal' },
+    { value: 'invoice_issue', label: 'Xuất hóa đơn', module: 'finance', priority: 'high' },
+    { value: 'payment_follow_up', label: 'Theo dõi thanh toán', module: 'finance', priority: 'normal' },
+    { value: 'receivable_follow_up', label: 'Nhắc công nợ', module: 'finance', priority: 'normal' },
+    { value: 'kpi_review', label: 'Rà soát KPI', module: 'kpi', priority: 'normal' },
+    { value: 'alert_resolution', label: 'Xử lý cảnh báo', module: 'kpi', priority: 'high' },
+];
+
 document.addEventListener('vk:ready', () => loadTasks());
 
 document.addEventListener('input', (event) => {
@@ -26,6 +55,18 @@ document.addEventListener('input', (event) => {
 
 document.addEventListener('change', (event) => {
     if (!document.getElementById('tasksRoot')) return;
+    if (event.target.matches('#module')) {
+        syncTaskTypeOptions(event.target.value);
+        return;
+    }
+    if (event.target.matches('#task_type')) {
+        syncTaskTypeDefaults(event.target.value);
+        return;
+    }
+    if (event.target.matches('#priority')) {
+        event.target.dataset.userChanged = '1';
+        return;
+    }
     if (event.target.matches('[data-task-status]')) taskState.status = event.target.value;
     if (event.target.matches('[data-task-priority]')) taskState.priority = event.target.value;
     if (event.target.matches('[data-task-assignee]')) taskState.assignee = event.target.value;
@@ -256,7 +297,7 @@ function restoreFilters() {
 
 function renderTaskInfo(row) {
     const source = row.source_type ? `${sourceLabel(row.source_type)} #${row.source_id || '-'}` : 'Thủ công';
-    return `<strong>${VKTable.escapeHtml(row.title)}</strong><span class="row-note">${VKTable.translateType(row.task_type)} · ${VKTable.escapeHtml(source)}</span>`;
+    return `<strong>${VKTable.escapeHtml(row.title)}</strong><span class="row-note">${taskTypeLabel(row.task_type)} · ${moduleLabel(row.module)} · ${VKTable.escapeHtml(source)}</span>`;
 }
 
 function renderOwner(row) {
@@ -296,6 +337,7 @@ async function openTaskModal() {
         VKApi.request('/lookups/users'),
         VKApi.request('/lookups/departments'),
     ]);
+    const defaultType = taskTypes[0];
 
     VKModal.open('Tạo công việc', `
         <div class="form-grid">
@@ -313,19 +355,9 @@ async function openTaskModal() {
                 { value: 'normal', label: 'Bình thường' },
                 { value: 'high', label: 'Cao' },
                 { value: 'urgent', label: 'Khẩn cấp' },
-            ])}
-            ${VKModal.select('task_type', 'Loại công việc', [
-                { value: 'manual', label: 'Thủ công' },
-                { value: 'lead_follow_up', label: 'Chăm sóc khách hàng tiềm năng' },
-                { value: 'warehouse_issue', label: 'Xuất kho' },
-                { value: 'purchase_request', label: 'Yêu cầu mua hàng' },
-            ])}
-            ${VKModal.select('module', 'Phân hệ', [
-                { value: 'general', label: 'Chung' },
-                { value: 'sales', label: 'Bán hàng' },
-                { value: 'inventory', label: 'Kho' },
-                { value: 'procurement', label: 'Mua hàng' },
-            ])}
+            ], defaultType.priority)}
+            ${VKModal.select('module', 'Phân hệ xử lý', taskModules, defaultType.module)}
+            ${VKModal.select('task_type', 'Nghiệp vụ công việc', taskTypesForModule(defaultType.module), defaultType.value)}
             ${VKModal.field('due_at', 'Hạn xử lý', 'datetime-local')}
             <div class="field full"><label for="description">Mô tả</label><textarea id="description" name="description"></textarea></div>
         </div>
@@ -469,7 +501,8 @@ function renderTaskDetailContent(row) {
         ['Ưu tiên', VKTable.statusBadge(row.priority || 'normal'), true],
         ['Người phụ trách', row.assignee?.name || 'Chưa phân công'],
         ['Phòng ban', row.department?.name || 'Chưa gắn phòng ban'],
-        ['Loại công việc', VKTable.translateType(row.task_type)],
+        ['Nghiệp vụ công việc', taskTypeLabel(row.task_type)],
+        ['Phân hệ', moduleLabel(row.module)],
         ['Nguồn phát sinh', source],
         ['Ngày tạo', formatTaskDate(row.created_at)],
         ['Hạn xử lý', formatTaskDate(row.due_at)],
@@ -551,6 +584,27 @@ function matchDueFilter(row, due) {
     return true;
 }
 
+function taskTypesForModule(module) {
+    const moduleTypes = taskTypes.filter(item => item.module === module);
+    const generalTypes = taskTypes.filter(item => item.module === 'general' && module !== 'general');
+    return [...moduleTypes, ...generalTypes]
+        .map(item => ({ value: item.value, label: item.label }));
+}
+
+function syncTaskTypeOptions(module) {
+    const select = document.getElementById('task_type');
+    if (!select) return;
+    const choices = taskTypesForModule(module);
+    select.innerHTML = choices.map(item => option(item.value, item.label, choices[0]?.value)).join('');
+    syncTaskTypeDefaults(select.value);
+}
+
+function syncTaskTypeDefaults(taskType) {
+    const item = taskTypes.find(row => row.value === taskType);
+    const priority = document.getElementById('priority');
+    if (item && priority && !priority.dataset.userChanged) priority.value = item.priority;
+}
+
 function isOverdue(row) {
     if (!row.due_at || row.status === 'completed') return false;
     return new Date(row.due_at).getTime() < Date.now() || row.status === 'overdue';
@@ -589,6 +643,14 @@ function uniqueBy(rows, key) {
 
 function getInitials(value) {
     return String(value || 'U').trim().split(/\s+/).slice(-2).map(part => part.charAt(0)).join('').toUpperCase() || 'U';
+}
+
+function taskTypeLabel(value) {
+    return taskTypes.find(item => item.value === value)?.label || VKTable.translateType(value);
+}
+
+function moduleLabel(value) {
+    return taskModules.find(item => item.value === value)?.label || VKTable.escapeHtml(value || 'Chung');
 }
 
 function sourceLabel(value) {

@@ -34,6 +34,7 @@ class TaskService
                 'code' => $data['code'] ?? $this->codes->next('tasks', 'code', 'TASK-', fn ($query) => $query->where('tenant_id', $actor->tenant_id)),
                 'title' => $data['title'],
                 'description' => $data['description'] ?? null,
+                'module' => $data['module'] ?? 'general',
                 'task_type' => $data['task_type'],
                 'priority' => $data['priority'] ?? 'normal',
                 'source_type' => $data['source_type'] ?? null,
@@ -103,6 +104,20 @@ class TaskService
             ->where('module', $module)
             ->where('task_type', $taskType)
             ->where('priority', $priority)
+            ->first();
+
+        $policy ??= SlaPolicy::query()
+            ->where('tenant_id', $tenantId)
+            ->where('module', $module)
+            ->where('task_type', $taskType)
+            ->where('priority', 'normal')
+            ->first();
+
+        $policy ??= SlaPolicy::query()
+            ->where('tenant_id', $tenantId)
+            ->where('module', $module)
+            ->where('task_type', $taskType)
+            ->orderByRaw("case priority when 'urgent' then 0 when 'high' then 1 when 'normal' then 2 else 3 end")
             ->first();
 
         return $policy ? now()->addMinutes($policy->duration_minutes) : null;

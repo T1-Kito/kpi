@@ -549,9 +549,21 @@ function translateTaskType(value) {
     return {
         manual: 'Tạo thủ công',
         lead_follow_up: 'Theo dõi khách hàng tiềm năng',
+        quotation_follow_up: 'Theo dõi báo giá',
+        margin_approval: 'Duyệt biên lợi nhuận thấp',
+        sales_order_confirmation: 'Xác nhận đơn bán',
+        delivery_confirmation: 'Xác nhận giao hàng',
+        inventory_check: 'Kiểm tra tồn kho',
         warehouse_issue: 'Xử lý xuất kho',
+        goods_receipt: 'Xử lý nhập kho',
         purchase_request: 'Xử lý yêu cầu mua',
+        purchase_order_follow_up: 'Theo dõi đơn mua',
+        supplier_follow_up: 'Làm việc nhà cung cấp',
+        invoice_issue: 'Xuất hóa đơn',
         payment_follow_up: 'Theo dõi thanh toán',
+        receivable_follow_up: 'Nhắc công nợ',
+        kpi_review: 'Rà soát KPI',
+        alert_resolution: 'Xử lý cảnh báo',
     }[value] || VKTable.translateType(value || '-');
 }
 

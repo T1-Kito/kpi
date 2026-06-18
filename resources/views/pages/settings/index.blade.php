@@ -10,5 +10,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/settings.js?v=20260618-3"></script>
+<script src="/assets/js/features/settings.js?v=20260618-4"></script>
 @endpush

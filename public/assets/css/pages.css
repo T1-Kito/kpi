@@ -1810,6 +1810,10 @@ small {
     justify-content: flex-end;
 }
 
+.row-action-menu[open] {
+    z-index: 80;
+}
+
 .row-action-menu summary {
     width: 30px;
     height: 30px;
@@ -1831,10 +1835,11 @@ small {
 }
 
 .row-action-menu-list {
-    position: absolute;
-    top: 34px;
-    right: 0;
-    z-index: 40;
+    position: fixed;
+    top: var(--row-menu-top, 34px);
+    left: var(--row-menu-left, auto);
+    right: auto;
+    z-index: 90;
     min-width: 132px;
     border: 1px solid #E5E7EB;
     border-radius: 8px;
@@ -1843,6 +1848,11 @@ small {
     padding: 6px;
     display: grid;
     gap: 4px;
+}
+
+.row-action-menu.drop-up .row-action-menu-list {
+    top: var(--row-menu-top, auto);
+    bottom: auto;
 }
 
 .row-action-menu:not([open]) .row-action-menu-list {

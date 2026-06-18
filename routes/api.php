@@ -145,6 +145,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/quotations', [QuotationController::class, 'index']);
             Route::post('/quotations', [QuotationController::class, 'store']);
             Route::get('/quotations/{quotation}', [QuotationController::class, 'show']);
+            Route::put('/quotations/{quotation}', [QuotationController::class, 'update']);
             Route::get('/quotations/{quotation}/word', [QuotationController::class, 'exportWord']);
             Route::post('/quotations/{quotation}/duplicate', [QuotationController::class, 'duplicate']);
             Route::post('/customers/quick', [CustomerController::class, 'quickStore']);

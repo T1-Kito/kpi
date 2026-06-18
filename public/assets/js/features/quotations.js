@@ -24,6 +24,11 @@ document.addEventListener('change', (event) => {
 document.addEventListener('click', (event) => {
     if (!document.getElementById('quotationsRoot')) return;
     if (event.target.matches('[data-create-quotation]')) openQuotationModal();
+    if (event.target.matches('[data-edit-quotation]')) {
+        event.preventDefault();
+        event.stopPropagation();
+        openQuotationEditor(event.target.dataset.editQuotation);
+    }
     if (event.target.matches('[data-toggle-quick-customer]')) {
         event.preventDefault();
         document.querySelector('[data-quick-customer-panel]')?.classList.toggle('hidden');
@@ -188,6 +193,7 @@ function renderQuotationTable(rows) {
         { label: 'Trạng thái', render: row => VKTable.statusBadge(row.status) },
         { label: '', render: row => VKTable.rowActions([
             VKTable.smallButton('Mở', `data-quotation-detail="${row.id}"`),
+            canEditQuotation(row) ? VKTable.smallButton('Sửa', `data-edit-quotation="${row.id}"`, 'primary') : '',
             window.VKLayout?.hasPermission?.('sales.quotation.create') ? VKTable.smallButton('Nhân bản', `data-duplicate-quotation="${row.id}"`) : '',
             ...quotationActions(row),
         ]) },
@@ -239,10 +245,34 @@ function quotationActions(row) {
     ];
 }
 
-async function openQuotationModal() {
+function canEditQuotation(row) {
+    const canCreate = window.VKLayout?.hasPermission?.('sales.quotation.create');
+    const hasSalesOrder = (row.related_documents || row.sales_orders || []).some?.(item => item.type === 'salesOrder') || Number(row.sales_orders_count || 0) > 0;
+    return Boolean(canCreate) && !hasSalesOrder && ['draft', 'pending_approval', 'ready', 'rejected'].includes(row.status);
+}
+
+async function openQuotationEditor(id) {
+    const cached = quotationState.detail?.id === Number(id)
+        ? quotationState.detail
+        : quotationState.detailCache[id] || quotationState.rows.find(row => String(row.id) === String(id));
+    let row = cached;
+    if (!row?.items?.length || !row.customer) {
+        const response = await VKApi.request(`/quotations/${id}`);
+        row = response.data;
+        quotationState.detailCache[id] = row;
+    }
+    if (!canEditQuotation(row)) {
+        VKModal.toast('Báo giá này đã chốt hoặc đã tạo đơn bán nên không thể sửa.', 'warning');
+        return;
+    }
+    openQuotationModal(row);
+}
+
+async function openQuotationModal(row = null) {
     const [customers, skus] = await Promise.all([VKApi.request('/customers'), VKApi.request('/skus')]);
     const encodedSkus = encodeURIComponent(JSON.stringify(skus.data || []));
-    VKModal.open('Tạo báo giá', `
+    const isEdit = Boolean(row?.id);
+    VKModal.open(isEdit ? `Sửa báo giá ${row.code || ''}` : 'Tạo báo giá', `
         <div class="quotation-create">
             <section class="quotation-create-section quotation-customer-section">
                 <div class="quotation-create-section-head">
@@ -256,6 +286,7 @@ async function openQuotationModal() {
                             ${(customers.data || []).map(customer => `
                                 <option
                                     value="${customer.id}"
+                                    ${String(customer.id) === String(row?.customer_id || row?.customer?.id || '') ? 'selected' : ''}
                                     data-code="${VKTable.escapeHtml(customer.code || '')}"
                                     data-name="${VKTable.escapeHtml(customer.name || '')}"
                                     data-contact="${VKTable.escapeHtml(customer.contact_name || '')}"
@@ -332,7 +363,7 @@ async function openQuotationModal() {
                     <span>Đơn giá</span><span>VAT (%)</span><span>Thành tiền</span><span></span>
                 </div>
                 <div class="quotation-lines quotation-create-lines" data-quotation-lines>
-                    ${quotationLineHtml(skus.data || [], 0)}
+                    ${(row?.items?.length ? row.items : [null]).map((item, index) => quotationLineHtml(skus.data || [], index, item)).join('')}
                 </div>
                 <div class="quotation-create-bottom">
                     <div class="quotation-draft-summary">
@@ -357,19 +388,24 @@ async function openQuotationModal() {
             vat_rate: Number(vatRates[index] || 0),
         })).filter(item => item.sku_id && item.quantity > 0);
 
-        await VKApi.request('/quotations', {
-            method: 'POST',
+        await VKApi.request(isEdit ? `/quotations/${row.id}` : '/quotations', {
+            method: isEdit ? 'PUT' : 'POST',
             body: JSON.stringify({
                 customer_id: Number(data.customer_id),
                 items,
             }),
         });
         VKModal.close();
-        VKModal.toast('Đã tạo báo giá thành công.', 'success');
-        loadQuotations();
+        VKModal.toast(isEdit ? 'Đã cập nhật báo giá.' : 'Đã tạo báo giá thành công.', 'success');
+        quotationState.detailCache = {};
+        if (isEdit) {
+            await openQuotationDetail(row.id);
+        } else {
+            loadQuotations();
+        }
     }, {
         className: 'quotation-create-modal',
-        submitText: 'Lưu báo giá',
+        submitText: isEdit ? 'Lưu thay đổi' : 'Lưu báo giá',
     });
     updateQuotationCustomerSummary();
     updateQuotationDraftTotals();
@@ -513,17 +549,22 @@ function fillQuickCustomerField(selector, value) {
     if (field && value && !field.value.trim()) field.value = value;
 }
 
-function quotationLineHtml(skus, index) {
+function quotationLineHtml(skus, index, item = null) {
+    const selectedSkuId = item?.sku_id || item?.sku?.id || skus[0]?.id;
+    const selectedSku = skus.find(sku => String(sku.id) === String(selectedSkuId)) || skus[0] || {};
     const options = skus.map(sku => `
         <option
             value="${sku.id}"
+            ${String(sku.id) === String(selectedSkuId) ? 'selected' : ''}
             data-price="${Number(sku.sale_price || 0)}"
             data-unit="${VKTable.escapeHtml(sku.unit || '-')}"
             data-name="${VKTable.escapeHtml(sku.name || '')}"
         >${VKTable.escapeHtml(`${sku.sku_code}${sku.name ? ` - ${sku.name}` : ''}`)}</option>
     `).join('');
-    const price = Number(skus[0]?.sale_price || 0);
-    const unit = skus[0]?.unit || '-';
+    const price = Number(item?.unit_price ?? selectedSku.sale_price ?? 0);
+    const quantity = Number(item?.quantity ?? 1);
+    const vatRate = Number(item?.vat_rate ?? 8);
+    const unit = item?.sku?.unit || selectedSku.unit || '-';
 
     return `
         <div class="quotation-line quotation-create-line" data-quotation-line>
@@ -535,14 +576,11 @@ function quotationLineHtml(skus, index) {
                 <span data-quotation-unit>${VKTable.escapeHtml(unit)}</span>
             </div>
             <div class="quotation-quantity-control">
-                <input name="quantity[]" type="number" min="1" step="1" value="1">
+                <input name="quantity[]" type="number" min="1" step="1" value="${quantity}">
             </div>
             <input class="quotation-price-input" name="unit_price[]" type="number" min="0" step="1000" value="${price}">
             <select class="quotation-vat-select" name="vat_rate[]">
-                <option value="0">0%</option>
-                <option value="5">5%</option>
-                <option value="8" selected>8%</option>
-                <option value="10">10%</option>
+                ${[0, 5, 8, 10].map(value => `<option value="${value}" ${value === vatRate ? 'selected' : ''}>${value}%</option>`).join('')}
             </select>
             <strong class="quotation-line-total" data-quotation-line-total>0</strong>
             <button class="quotation-remove-line" type="button" data-remove-quotation-line aria-label="Xóa dòng">×</button>
@@ -797,6 +835,9 @@ function renderQuotationPageActions(row) {
         `<button class="btn primary small" type="button" data-quotation-word>Tải Word mẫu in</button>`,
         `<button class="btn small" type="button" data-quotation-print>In/PDF</button>`,
     ].filter(Boolean);
+    if (canEditQuotation(row)) {
+        actions.unshift(`<button class="btn small" type="button" data-edit-quotation="${row.id}">Sửa</button>`);
+    }
     if (row.status === 'pending_approval' && can('sales.margin.approve')) {
         actions.push(`<button class="btn primary small" type="button" data-page-approve-quotation="${row.id}">Duyệt</button>`);
         actions.push(`<button class="btn danger small" type="button" data-page-reject-quotation="${row.id}">Từ chối</button>`);

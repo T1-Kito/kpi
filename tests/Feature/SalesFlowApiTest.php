@@ -152,6 +152,74 @@ class SalesFlowApiTest extends TestCase
         ]);
     }
 
+    public function test_pending_quotation_can_be_updated_before_sales_order(): void
+    {
+        $this->seed();
+        $token = $this->loginAs('sales@vk-kpi.local');
+        $sku = Sku::where('sku_code', 'SKU-PRN-001')->firstOrFail();
+
+        $created = $this->withToken($token)
+            ->postJson('/api/v1/quotations', [
+                'customer_id' => 1,
+                'items' => [
+                    ['sku_id' => $sku->id, 'quantity' => 1, 'unit_price' => 2700000, 'vat_rate' => 0],
+                ],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'pending_approval');
+
+        $quotationId = $created->json('data.id');
+
+        $this->withToken($token)
+            ->putJson("/api/v1/quotations/{$quotationId}", [
+                'customer_id' => 1,
+                'items' => [
+                    ['sku_id' => $sku->id, 'quantity' => 2, 'unit_price' => 3500000, 'vat_rate' => 8],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'ready');
+
+        $this->assertDatabaseHas('quotations', [
+            'id' => $quotationId,
+            'subtotal_amount' => 7000000,
+            'tax_amount' => 560000,
+            'total_amount' => 7560000,
+            'status' => 'ready',
+        ]);
+        $this->assertSame(1, Quotation::findOrFail($quotationId)->items()->count());
+    }
+
+    public function test_quotation_cannot_be_updated_after_sales_order_created(): void
+    {
+        $this->seed();
+        $token = $this->loginAs('sales@vk-kpi.local');
+        $sku = Sku::where('sku_code', 'SKU-PRN-001')->firstOrFail();
+
+        $quotationId = $this->withToken($token)
+            ->postJson('/api/v1/quotations', [
+                'customer_id' => 1,
+                'items' => [
+                    ['sku_id' => $sku->id, 'quantity' => 1, 'unit_price' => 3500000, 'vat_rate' => 8],
+                ],
+            ])
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->withToken($token)
+            ->postJson('/api/v1/sales-orders', ['quotation_id' => $quotationId])
+            ->assertCreated();
+
+        $this->withToken($token)
+            ->putJson("/api/v1/quotations/{$quotationId}", [
+                'customer_id' => 1,
+                'items' => [
+                    ['sku_id' => $sku->id, 'quantity' => 2, 'unit_price' => 3500000, 'vat_rate' => 8],
+                ],
+            ])
+            ->assertUnprocessable();
+    }
+
     public function test_can_create_multiple_quotations_but_not_duplicate_sales_order_from_same_quotation(): void
     {
         $this->seed();

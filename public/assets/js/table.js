@@ -67,8 +67,21 @@
             margin_low: 'Biên lợi nhuận thấp',
             manual: 'Thủ công',
             lead_follow_up: 'Chăm sóc khách hàng tiềm năng',
+            quotation_follow_up: 'Theo dõi báo giá',
+            margin_approval: 'Duyệt biên lợi nhuận thấp',
+            sales_order_confirmation: 'Xác nhận đơn bán',
+            delivery_confirmation: 'Xác nhận giao hàng',
+            inventory_check: 'Kiểm tra tồn kho',
             warehouse_issue: 'Xuất kho',
+            goods_receipt: 'Nhập kho',
             purchase_request: 'Yêu cầu mua hàng',
+            purchase_order_follow_up: 'Theo dõi đơn mua',
+            supplier_follow_up: 'Làm việc nhà cung cấp',
+            invoice_issue: 'Xuất hóa đơn',
+            payment_follow_up: 'Theo dõi thanh toán',
+            receivable_follow_up: 'Nhắc công nợ',
+            kpi_review: 'Rà soát KPI',
+            alert_resolution: 'Xử lý cảnh báo',
             receipt: 'Nhập kho',
             issue: 'Xuất kho',
             reserve: 'Giữ hàng',
@@ -340,5 +353,40 @@
         if (event.target.closest('.row-action-menu summary')) {
             event.stopPropagation();
         }
+    }, true);
+
+    document.addEventListener('toggle', (event) => {
+        const menu = event.target;
+        if (!menu.matches?.('.row-action-menu')) return;
+        if (!menu.open) {
+            menu.classList.remove('drop-up');
+            menu.style.removeProperty('--row-menu-top');
+            menu.style.removeProperty('--row-menu-left');
+            return;
+        }
+
+        document.querySelectorAll('.row-action-menu[open]').forEach((item) => {
+            if (item !== menu) item.removeAttribute('open');
+        });
+
+        window.requestAnimationFrame(() => {
+            const list = menu.querySelector('.row-action-menu-list');
+            const summary = menu.querySelector('summary');
+            if (!list || !summary) return;
+
+            const summaryRect = summary.getBoundingClientRect();
+            const width = list.offsetWidth || 132;
+            const height = list.offsetHeight || 40;
+            const container = menu.closest('.list-page, .record-panel, .task-board-panel, .table-wrap, .list-table-wrap');
+            const containerBottom = container ? container.getBoundingClientRect().bottom : window.innerHeight;
+            const boundaryBottom = Math.min(window.innerHeight, containerBottom);
+            const shouldDropUp = summaryRect.bottom + height + 8 > boundaryBottom && summaryRect.top > height + 8;
+            const top = shouldDropUp ? summaryRect.top - height - 4 : summaryRect.bottom + 4;
+            const left = Math.max(8, Math.min(summaryRect.right - width, window.innerWidth - width - 8));
+
+            menu.classList.toggle('drop-up', shouldDropUp);
+            menu.style.setProperty('--row-menu-top', `${Math.max(8, top)}px`);
+            menu.style.setProperty('--row-menu-left', `${left}px`);
+        });
     }, true);
 })();

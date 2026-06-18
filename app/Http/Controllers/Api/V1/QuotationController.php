@@ -37,7 +37,8 @@ class QuotationController extends Controller
                 'items.sku:id,sku_code,name,unit',
                 'salesOwner:id,name,email',
                 'duplicatedFrom:id,code,status,created_at',
-            ]);
+            ])
+            ->withCount('salesOrders');
         DataScope::owned($query, $request->user(), 'sales_owner_id', 'salesOwner');
 
         if ($status = $request->query('status')) {
@@ -58,20 +59,22 @@ class QuotationController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $tenantId = $request->user()->tenant_id;
-        $data = $request->validate([
-            'customer_id' => ['required', Rule::exists('customers', 'id')->where('tenant_id', $tenantId)],
-            'lead_id' => ['nullable', Rule::exists('leads', 'id')->where('tenant_id', $tenantId)],
-            'items' => ['required', 'array', 'min:1'],
-            'items.*.sku_id' => ['required', Rule::exists('skus', 'id')->where('tenant_id', $tenantId)],
-            'items.*.quantity' => ['required', 'numeric', 'min:0.001'],
-            'items.*.unit_price' => ['nullable', 'numeric', 'min:0'],
-            'items.*.vat_rate' => ['nullable', 'numeric', Rule::in([0, 5, 8, 10])],
-        ]);
+        $data = $this->validateWritableQuotation($request);
 
         $quotation = $this->quotations->create($request->user(), $data);
 
         return response()->json(['data' => $quotation], 201);
+    }
+
+    public function update(Request $request, Quotation $quotation): JsonResponse
+    {
+        abort_if($quotation->tenant_id !== $request->user()->tenant_id, 404);
+        abort_if(! DataScope::owned(Quotation::whereKey($quotation->id), $request->user(), 'sales_owner_id', 'salesOwner')->exists(), 404);
+
+        $data = $this->validateWritableQuotation($request);
+        $quotation = $this->quotations->update($quotation, $request->user(), $data);
+
+        return response()->json(['data' => $quotation]);
     }
 
     public function show(Request $request, Quotation $quotation): JsonResponse
@@ -216,6 +219,22 @@ class QuotationController extends Controller
         $name = preg_replace('/[^A-Za-z0-9\-_]+/', '-', $value) ?: 'bao-gia';
 
         return trim($name, '-') ?: 'bao-gia';
+    }
+
+    /** @return array<string, mixed> */
+    private function validateWritableQuotation(Request $request): array
+    {
+        $tenantId = $request->user()->tenant_id;
+
+        return $request->validate([
+            'customer_id' => ['required', Rule::exists('customers', 'id')->where('tenant_id', $tenantId)],
+            'lead_id' => ['nullable', Rule::exists('leads', 'id')->where('tenant_id', $tenantId)],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.sku_id' => ['required', Rule::exists('skus', 'id')->where('tenant_id', $tenantId)],
+            'items.*.quantity' => ['required', 'numeric', 'min:0.001'],
+            'items.*.unit_price' => ['nullable', 'numeric', 'min:0'],
+            'items.*.vat_rate' => ['nullable', 'numeric', Rule::in([0, 5, 8, 10])],
+        ]);
     }
 
 }

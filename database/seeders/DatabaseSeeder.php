@@ -285,8 +285,21 @@ class DatabaseSeeder extends Seeder
         foreach ([
             ['general', 'manual', 'normal', 480, 60],
             ['sales', 'lead_follow_up', 'normal', 240, 30],
+            ['sales', 'quotation_follow_up', 'normal', 240, 30],
+            ['sales', 'margin_approval', 'high', 120, 20],
+            ['sales', 'sales_order_confirmation', 'normal', 180, 30],
+            ['sales', 'delivery_confirmation', 'high', 180, 30],
+            ['inventory', 'inventory_check', 'normal', 240, 30],
             ['inventory', 'warehouse_issue', 'high', 180, 30],
+            ['inventory', 'goods_receipt', 'high', 180, 30],
             ['procurement', 'purchase_request', 'normal', 720, 120],
+            ['procurement', 'purchase_order_follow_up', 'normal', 480, 60],
+            ['procurement', 'supplier_follow_up', 'normal', 480, 60],
+            ['finance', 'invoice_issue', 'high', 240, 30],
+            ['finance', 'payment_follow_up', 'normal', 1440, 240],
+            ['finance', 'receivable_follow_up', 'normal', 1440, 240],
+            ['kpi', 'kpi_review', 'normal', 480, 60],
+            ['kpi', 'alert_resolution', 'high', 240, 30],
         ] as [$module, $taskType, $priority, $duration, $warning]) {
             SlaPolicy::updateOrCreate(
                 ['tenant_id' => $tenant->id, 'module' => $module, 'task_type' => $taskType, 'priority' => $priority],
