@@ -33,7 +33,7 @@ class QuotationController extends Controller
         $query = Quotation::query()
             ->where('tenant_id', $request->user()->tenant_id)
             ->with([
-                'customer:id,code,name,contact_name,phone,email,address,billing_address,tax_code,credit_limit',
+                'customer:id,code,name,contact_name,phone,email,address,billing_address,tax_code,credit_limit,legal_representative,representative_position,payment_terms,bank_name,bank_account_no,bank_account_name',
                 'items.sku:id,sku_code,name,unit',
                 'salesOwner:id,name,email',
                 'duplicatedFrom:id,code,status,created_at',
@@ -83,7 +83,7 @@ class QuotationController extends Controller
         abort_if(! DataScope::owned(Quotation::whereKey($quotation->id), $request->user(), 'sales_owner_id', 'salesOwner')->exists(), 404);
 
         $quotation->load([
-            'customer:id,code,name,contact_name,phone,email,address,billing_address,tax_code,credit_limit',
+            'customer:id,code,name,contact_name,phone,email,address,billing_address,tax_code,credit_limit,legal_representative,representative_position,payment_terms,bank_name,bank_account_no,bank_account_name',
             'items.sku:id,sku_code,name,unit',
             'salesOwner:id,name,email',
             'duplicatedFrom:id,code,status,created_at',
@@ -152,6 +152,10 @@ class QuotationController extends Controller
         $copy = $this->quotations->create($request->user(), [
             'customer_id' => $quotation->customer_id,
             'duplicated_from_id' => $quotation->id,
+            'valid_until' => optional($quotation->valid_until)->toDateString(),
+            'payment_terms' => $quotation->payment_terms,
+            'delivery_terms' => $quotation->delivery_terms,
+            'note' => $quotation->note,
             'items' => $quotation->items->map(fn ($item): array => [
                 'sku_id' => $item->sku_id,
                 'quantity' => (float) $item->quantity,
@@ -188,7 +192,7 @@ class QuotationController extends Controller
         }
 
         $quotation->load([
-            'customer:id,code,name,contact_name,phone,email,address,billing_address,tax_code',
+            'customer:id,code,name,contact_name,phone,email,address,billing_address,tax_code,legal_representative,representative_position,payment_terms,bank_name,bank_account_no,bank_account_name',
             'items.sku:id,sku_code,name,unit',
             'salesOwner:id,name,email',
         ]);
@@ -229,6 +233,10 @@ class QuotationController extends Controller
         return $request->validate([
             'customer_id' => ['required', Rule::exists('customers', 'id')->where('tenant_id', $tenantId)],
             'lead_id' => ['nullable', Rule::exists('leads', 'id')->where('tenant_id', $tenantId)],
+            'valid_until' => ['nullable', 'date'],
+            'payment_terms' => ['nullable', 'string', 'max:255'],
+            'delivery_terms' => ['nullable', 'string', 'max:255'],
+            'note' => ['nullable', 'string', 'max:1000'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.sku_id' => ['required', Rule::exists('skus', 'id')->where('tenant_id', $tenantId)],
             'items.*.quantity' => ['required', 'numeric', 'min:0.001'],

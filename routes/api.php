@@ -26,7 +26,9 @@ use App\Http\Controllers\Api\V1\SalesOrderController;
 use App\Http\Controllers\Api\V1\SalesFulfillmentController;
 use App\Http\Controllers\Api\V1\SkuController;
 use App\Http\Controllers\Api\V1\SlaPolicyController;
+use App\Http\Controllers\Api\V1\StockTakeController;
 use App\Http\Controllers\Api\V1\SupplierController;
+use App\Http\Controllers\Api\V1\SupplierQuotationController;
 use App\Http\Controllers\Api\V1\TaskController;
 use App\Http\Controllers\Api\V1\TenantSettingController;
 use App\Http\Controllers\Api\V1\UserAdminController;
@@ -94,6 +96,7 @@ Route::prefix('v1')->group(function () {
 
         Route::get('/kpi/overview', [KpiController::class, 'overview']);
         Route::get('/kpi/snapshots', [KpiController::class, 'snapshots']);
+        Route::get('/kpi/definitions', [KpiController::class, 'definitions']);
         Route::get('/kpi/targets', [KpiController::class, 'targets']);
         Route::get('/kpi/exceptions', [KpiController::class, 'exceptions']);
         Route::get('/kpi/adjustments', [KpiController::class, 'adjustments']);
@@ -102,6 +105,11 @@ Route::prefix('v1')->group(function () {
 
         Route::middleware('permission:kpi.lock')->group(function () {
             Route::post('/kpi/snapshots/calculate', [KpiController::class, 'calculate']);
+            Route::post('/kpi/definitions', [KpiController::class, 'storeDefinition']);
+            Route::put('/kpi/definitions/{kpiDefinition}', [KpiController::class, 'updateDefinition']);
+            Route::post('/kpi/targets', [KpiController::class, 'storeTarget']);
+            Route::put('/kpi/targets/{kpiTarget}', [KpiController::class, 'updateTarget']);
+            Route::post('/kpi/targets/{kpiTarget}/lock', [KpiController::class, 'lockTarget']);
             Route::post('/kpi/exceptions/{kpiException}/review', [KpiController::class, 'reviewException']);
             Route::post('/kpi/adjustments', [KpiController::class, 'storeAdjustment']);
             Route::post('/kpi/adjustments/{kpiAdjustment}/review', [KpiController::class, 'reviewAdjustment']);
@@ -203,13 +211,19 @@ Route::prefix('v1')->group(function () {
             Route::post('/purchase-requests', [PurchaseRequestController::class, 'store']);
             Route::get('/purchase-requests/{purchaseRequest}', [PurchaseRequestController::class, 'show']);
             Route::post('/purchase-requests/{purchaseRequest}/approve', [PurchaseRequestController::class, 'approve']);
+            Route::post('/purchase-requests/{purchaseRequest}/reject', [PurchaseRequestController::class, 'reject']);
         });
 
         Route::middleware('permission:procurement.po.approve')->group(function () {
+            Route::get('/supplier-quotations', [SupplierQuotationController::class, 'index']);
+            Route::post('/supplier-quotations', [SupplierQuotationController::class, 'store']);
+            Route::get('/supplier-quotations/{supplierQuotation}', [SupplierQuotationController::class, 'show']);
+            Route::post('/supplier-quotations/{supplierQuotation}/select', [SupplierQuotationController::class, 'select']);
             Route::get('/purchase-orders', [PurchaseOrderController::class, 'index']);
             Route::post('/purchase-orders', [PurchaseOrderController::class, 'store']);
             Route::get('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'show']);
             Route::post('/purchase-orders/{purchaseOrder}/approve', [PurchaseOrderController::class, 'approve']);
+            Route::post('/purchase-orders/{purchaseOrder}/reject', [PurchaseOrderController::class, 'reject']);
         });
 
         Route::middleware('permission:inventory.receipt.confirm')->group(function () {
@@ -224,6 +238,10 @@ Route::prefix('v1')->group(function () {
             Route::post('/goods-issues', [GoodsIssueController::class, 'store']);
             Route::get('/goods-issues/{goodsIssue}', [GoodsIssueController::class, 'show']);
             Route::post('/goods-issues/{goodsIssue}/confirm', [GoodsIssueController::class, 'confirm']);
+            Route::get('/stock-takes', [StockTakeController::class, 'index']);
+            Route::post('/stock-takes', [StockTakeController::class, 'store']);
+            Route::get('/stock-takes/{stockTake}', [StockTakeController::class, 'show']);
+            Route::post('/stock-takes/{stockTake}/confirm', [StockTakeController::class, 'confirm']);
         });
     });
 });

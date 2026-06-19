@@ -15,28 +15,31 @@
             ],
         ],
         [
-            'match' => ['inventory', 'warehouses', 'goods-receipts', 'goods-issues'],
+            'match' => ['inventory', 'warehouses', 'goods-receipts', 'goods-issues', 'stock-takes'],
             'items' => [
                 ['label' => 'Tồn kho', 'href' => '/inventory', 'match' => 'inventory', 'permission' => 'master.view'],
                 ['label' => 'Kho', 'href' => '/warehouses', 'match' => 'warehouses', 'permission' => 'master.view'],
                 ['label' => 'Nhập kho', 'href' => '/goods-receipts', 'match' => 'goods-receipts', 'permission' => 'inventory.receipt.confirm'],
                 ['label' => 'Xuất kho', 'href' => '/goods-issues', 'match' => 'goods-issues', 'permission' => 'inventory.issue.confirm'],
+                ['label' => 'Kiểm kê', 'href' => '/stock-takes', 'match' => 'stock-takes', 'permission' => 'inventory.issue.confirm'],
             ],
         ],
         [
-            'match' => ['purchase-requests', 'purchase-orders', 'suppliers', 'skus'],
+            'match' => ['purchase-requests', 'supplier-quotations', 'purchase-orders', 'suppliers', 'skus'],
             'items' => [
                 ['label' => 'Yêu cầu mua', 'href' => '/purchase-requests', 'match' => 'purchase-requests', 'permission' => 'procurement.pr.approve'],
+                ['label' => 'Báo giá NCC', 'href' => '/supplier-quotations', 'match' => 'supplier-quotations', 'permission' => 'procurement.po.approve'],
                 ['label' => 'Đơn mua', 'href' => '/purchase-orders', 'match' => 'purchase-orders', 'permission' => 'procurement.po.approve'],
                 ['label' => 'Mã hàng', 'href' => '/skus', 'match' => 'skus', 'permission' => 'master.view'],
                 ['label' => 'Nhà cung cấp', 'href' => '/suppliers', 'match' => 'suppliers', 'permission' => 'master.view'],
             ],
         ],
         [
-            'match' => ['kpi', 'kpi-adjustments'],
+            'match' => ['kpi', 'kpi-adjustments', 'kpi-settings'],
             'items' => [
                 ['label' => 'Tổng quan KPI', 'href' => '/kpi', 'match' => 'kpi', 'permission' => ''],
                 ['label' => 'Sổ điểm nhân viên', 'href' => '/kpi-adjustments', 'match' => 'kpi-adjustments', 'permission' => ''],
+                ['label' => 'Cấu hình KPI', 'href' => '/kpi-settings', 'match' => 'kpi-settings', 'permission' => 'kpi.lock'],
             ],
         ],
         [
@@ -61,7 +64,7 @@
     <nav class="module-toolbar" data-module-toolbar aria-label="Chức năng trong phân hệ">
         @foreach ($activeGroup['items'] as $item)
             <a
-                class="{{ str_starts_with($currentPath, $item['match']) ? 'active' : '' }}"
+                class="{{ $currentPath === $item['match'] || str_starts_with($currentPath, $item['match'].'/') ? 'active' : '' }}"
                 href="{{ $item['href'] }}"
                 data-permission="{{ $item['permission'] }}"
             >

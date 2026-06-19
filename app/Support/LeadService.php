@@ -22,7 +22,7 @@ class LeadService
         return DB::transaction(function () use ($actor, $data) {
             $lead = Lead::create([
                 'tenant_id' => $actor->tenant_id,
-                'code' => $data['code'] ?? $this->codes->next('leads', 'code', 'LEAD-', fn ($query) => $query->where('tenant_id', $actor->tenant_id)),
+                'code' => $this->codes->next('leads', 'code', 'LEAD-', fn ($query) => $query->where('tenant_id', $actor->tenant_id)),
                 'name' => $data['name'],
                 'phone' => $data['phone'],
                 'email' => $data['email'] ?? null,

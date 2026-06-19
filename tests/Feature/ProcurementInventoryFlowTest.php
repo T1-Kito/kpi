@@ -12,6 +12,7 @@ use App\Models\Quotation;
 use App\Models\SalesOrder;
 use App\Models\SalesInvoice;
 use App\Models\Sku;
+use App\Models\SupplierQuotation;
 use App\Models\Warehouse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -311,5 +312,42 @@ class ProcurementInventoryFlowTest extends TestCase
             'email' => $email,
             'password' => 'Admin@123',
         ])->json('data.access_token');
+    }
+    public function test_selected_supplier_quotation_can_create_purchase_order_with_source_price(): void
+    {
+        $this->seed();
+        $procurementToken = $this->loginAs('procurement@vk-kpi.local');
+        $quotation = SupplierQuotation::where('code', 'SQ-DEMO-001')->firstOrFail();
+
+        $poId = $this->withToken($procurementToken)
+            ->postJson('/api/v1/purchase-orders', [
+                'supplier_quotation_id' => $quotation->id,
+                'expected_delivery_date' => now()->addDays(5)->toDateString(),
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.supplier_quotation_id', $quotation->id)
+            ->assertJsonPath('data.total_amount', $quotation->total_amount)
+            ->json('data.id');
+
+        $this->assertDatabaseHas('purchase_orders', [
+            'id' => $poId,
+            'supplier_quotation_id' => $quotation->id,
+            'supplier_id' => $quotation->supplier_id,
+            'total_amount' => $quotation->total_amount,
+            'status' => 'draft',
+        ]);
+
+        $this->assertDatabaseHas('purchase_order_items', [
+            'purchase_order_id' => $poId,
+            'unit_price' => 2600000,
+            'line_total' => 13000000,
+        ]);
+
+        $related = $this->withToken($procurementToken)
+            ->getJson("/api/v1/purchase-orders/{$poId}")
+            ->assertOk()
+            ->json('data.related_documents');
+
+        $this->assertContains('supplierQuotation', collect($related)->pluck('type')->all());
     }
 }

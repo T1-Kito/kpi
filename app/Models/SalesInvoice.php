@@ -11,8 +11,11 @@ class SalesInvoice extends Model
     protected $fillable = [
         'tenant_id',
         'code',
+        'tax_invoice_symbol',
+        'tax_invoice_no',
         'sales_order_id',
         'invoice_date',
+        'issued_at',
         'due_date',
         'subtotal_amount',
         'tax_amount',
@@ -28,6 +31,7 @@ class SalesInvoice extends Model
     {
         return [
             'invoice_date' => 'date',
+            'issued_at' => 'datetime',
             'due_date' => 'date',
         ];
     }

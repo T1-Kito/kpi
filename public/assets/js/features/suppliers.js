@@ -75,7 +75,7 @@ function renderSupplierTable(rows) {
 
 function filterRows() {
     return supplierState.rows.filter(row => {
-        const haystack = `${row.code || ''} ${row.name || ''} ${row.phone || ''} ${row.email || ''}`.toLowerCase();
+        const haystack = `${row.code || ''} ${row.name || ''} ${row.tax_code || ''} ${row.contact_name || ''} ${row.phone || ''} ${row.email || ''} ${row.address || ''} ${row.bank_name || ''} ${row.bank_account_no || ''}`.toLowerCase();
         return (!supplierState.q || haystack.includes(supplierState.q)) && (!supplierState.status || row.status === supplierState.status);
     });
 }
@@ -92,7 +92,7 @@ function renderName(row) {
 }
 
 function renderContact(row) {
-    return `${VKTable.escapeHtml(row.phone || '-')}<span class="row-note">${VKTable.escapeHtml(row.email || 'Chưa có email')}</span>`;
+    return `${VKTable.escapeHtml(row.contact_name || row.phone || '-')}<span class="row-note">${VKTable.escapeHtml([row.phone, row.email].filter(Boolean).join(' · ') || 'Chưa có liên hệ')}</span>`;
 }
 
 function openSupplierModal(id = null) {
@@ -100,15 +100,22 @@ function openSupplierModal(id = null) {
     VKModal.open(id ? 'Sửa nhà cung cấp' : 'Tạo nhà cung cấp', `
         <div class="form-grid">
             ${VKModal.field('name', 'Tên nhà cung cấp', 'text', row?.name || '')}
+            ${VKModal.field('tax_code', 'Mã số thuế', 'text', row?.tax_code || '')}
+            ${VKModal.field('contact_name', 'Người liên hệ', 'text', row?.contact_name || '')}
             ${VKModal.field('phone', 'Số điện thoại', 'text', row?.phone || '')}
             ${VKModal.field('email', 'Email', 'email', row?.email || '')}
+            ${VKModal.field('address', 'Địa chỉ', 'text', row?.address || '')}
+            ${VKModal.field('bank_name', 'Ngân hàng', 'text', row?.bank_name || '')}
+            ${VKModal.field('bank_account_no', 'Số tài khoản', 'text', row?.bank_account_no || '')}
+            ${VKModal.field('bank_account_name', 'Tên tài khoản', 'text', row?.bank_account_name || '')}
             ${VKModal.field('rating', 'Đánh giá', 'number', row?.rating || '4')}
             ${VKModal.select('status', 'Trạng thái', [
                 { value: 'active', label: 'Hoạt động' },
                 { value: 'inactive', label: 'Không hoạt động' },
             ], row?.status || 'active')}
-            <div class="field full"><label for="terms">Điều khoản</label><textarea id="terms" name="terms">${VKTable.escapeHtml(row?.terms || '')}</textarea></div>
-            <div class="field full"><label for="supplied_products">Nhóm hàng cung cấp</label><textarea id="supplied_products" name="supplied_products">${VKTable.escapeHtml(row?.supplied_products || '')}</textarea></div>
+            <div class="field full"><label for="payment_terms">Điều khoản thanh toán</label><textarea id="payment_terms" name="payment_terms" rows="2">${VKTable.escapeHtml(row?.payment_terms || '')}</textarea></div>
+            <div class="field full"><label for="terms">Điều khoản chung</label><textarea id="terms" name="terms" rows="2">${VKTable.escapeHtml(row?.terms || '')}</textarea></div>
+            <div class="field full"><label for="supplied_products">Nhóm hàng cung cấp</label><textarea id="supplied_products" name="supplied_products" rows="2">${VKTable.escapeHtml(row?.supplied_products || '')}</textarea></div>
         </div>
     `, async (form) => {
         const data = Object.fromEntries(new FormData(form));

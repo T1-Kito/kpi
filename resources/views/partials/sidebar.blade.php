@@ -11,8 +11,10 @@
     $isWarehouse = str_starts_with($currentPath, 'inventory')
         || str_starts_with($currentPath, 'goods-receipts')
         || str_starts_with($currentPath, 'goods-issues')
+        || str_starts_with($currentPath, 'stock-takes')
         || str_starts_with($currentPath, 'warehouses');
     $isPurchase = str_starts_with($currentPath, 'purchase-requests')
+        || str_starts_with($currentPath, 'supplier-quotations')
         || str_starts_with($currentPath, 'purchase-orders')
         || str_starts_with($currentPath, 'suppliers')
         || str_starts_with($currentPath, 'skus');
@@ -45,22 +47,27 @@
             <span class="nav-badge" data-sidebar-task-count>0</span>
         </a>
 
+        <a class="nav-link {{ str_starts_with($currentPath, 'approvals') ? 'active' : '' }}" data-permission="task.approve" href="/approvals">
+            <span class="nav-icon approval" data-sidebar-icon="approval" aria-hidden="true"></span>
+            <span>Phê duyệt</span>
+        </a>
+
         <a class="nav-link {{ $isBusiness ? 'active' : '' }}" data-permission="" data-nav-match="leads,quotations,sales-orders,deliveries,sales-invoices,customer-receivables,customer-payments,customers" href="/leads">
             <span class="nav-icon business" data-sidebar-icon="business" aria-hidden="true"></span>
             <span>Kinh doanh</span>
         </a>
 
-        <a class="nav-link {{ $isWarehouse ? 'active' : '' }}" data-permission="" data-nav-match="inventory,warehouses,goods-receipts,goods-issues" href="/inventory">
+        <a class="nav-link {{ $isWarehouse ? 'active' : '' }}" data-permission="" data-nav-match="inventory,warehouses,goods-receipts,goods-issues,stock-takes" href="/inventory">
             <span class="nav-icon warehouse" data-sidebar-icon="warehouse" aria-hidden="true"></span>
             <span>Kho vận</span>
         </a>
 
-        <a class="nav-link {{ $isPurchase ? 'active' : '' }}" data-permission="" data-nav-match="purchase-requests,purchase-orders,suppliers,skus" href="/purchase-requests">
+        <a class="nav-link {{ $isPurchase ? 'active' : '' }}" data-permission="" data-nav-match="purchase-requests,supplier-quotations,purchase-orders,suppliers,skus" href="/purchase-requests">
             <span class="nav-icon purchase" data-sidebar-icon="purchase" aria-hidden="true"></span>
             <span>Mua hàng</span>
         </a>
 
-        <a class="nav-link {{ $currentPath === 'kpi' || $currentPath === 'kpi-adjustments' ? 'active' : '' }}" data-permission="" data-nav-match="kpi,kpi-adjustments" href="/kpi">
+        <a class="nav-link {{ $currentPath === 'kpi' || $currentPath === 'kpi-adjustments' || $currentPath === 'kpi-settings' ? 'active' : '' }}" data-permission="" data-nav-match="kpi,kpi-adjustments,kpi-settings" href="/kpi">
             <span class="nav-icon kpi" data-sidebar-icon="kpi" aria-hidden="true"></span>
             <span>KPI</span>
         </a>

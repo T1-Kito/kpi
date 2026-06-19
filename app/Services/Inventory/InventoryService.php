@@ -13,6 +13,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Support\AuditLogger;
 use App\Support\BusinessEventPublisher;
+use App\Support\CodeGenerator;
 use App\Support\TaskService;
 use Illuminate\Support\Facades\DB;
 
@@ -22,6 +23,7 @@ class InventoryService
         private readonly AuditLogger $audit,
         private readonly BusinessEventPublisher $events,
         private readonly TaskService $tasks,
+        private readonly CodeGenerator $codes,
     ) {
     }
 
@@ -327,11 +329,11 @@ class InventoryService
 
     private function nextReceiptCode(int $tenantId): string
     {
-        return 'GR-'.str_pad((string) (GoodsReceipt::where('tenant_id', $tenantId)->count() + 1), 5, '0', STR_PAD_LEFT);
+        return $this->codes->next('goods_receipts', 'code', 'GR-', fn ($query) => $query->where('tenant_id', $tenantId));
     }
 
     private function nextIssueCode(int $tenantId): string
     {
-        return 'GI-'.str_pad((string) (GoodsIssue::where('tenant_id', $tenantId)->count() + 1), 5, '0', STR_PAD_LEFT);
+        return $this->codes->next('goods_issues', 'code', 'GI-', fn ($query) => $query->where('tenant_id', $tenantId));
     }
 }

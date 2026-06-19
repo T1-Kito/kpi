@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\KpiAdjustment;
+use App\Models\KpiDefinition;
 use App\Models\KpiException;
 use App\Models\KpiScoreSnapshot;
 use App\Models\KpiTarget;
 use App\Models\User;
 use App\Services\Kpi\KpiService;
 use App\Support\AuditLogger;
+use App\Support\CodeGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -19,6 +21,7 @@ class KpiController extends Controller
     public function __construct(
         private readonly KpiService $kpis,
         private readonly AuditLogger $audit,
+        private readonly CodeGenerator $codes,
     ) {
     }
 
@@ -76,6 +79,128 @@ class KpiController extends Controller
             ->get();
 
         return response()->json(['data' => $targets]);
+    }
+
+    public function definitions(Request $request): JsonResponse
+    {
+        $definitions = KpiDefinition::where('tenant_id', $request->user()->tenant_id)
+            ->orderBy('status')
+            ->orderBy('code')
+            ->get();
+
+        return response()->json(['data' => $definitions]);
+    }
+
+    public function storeDefinition(Request $request): JsonResponse
+    {
+        $tenantId = $request->user()->tenant_id;
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'source_type' => ['nullable', 'string', 'max:100'],
+            'formula' => ['nullable', 'string', 'max:255'],
+            'unit' => ['nullable', 'string', 'max:50'],
+            'target_direction' => ['required', Rule::in(['increase', 'decrease'])],
+            'weight' => ['required', 'numeric', 'min:0', 'max:100'],
+            'status' => ['required', Rule::in(['active', 'inactive'])],
+        ]);
+
+        $definition = KpiDefinition::create($data + [
+            'tenant_id' => $tenantId,
+            'code' => $this->codes->next('kpi_definitions', 'code', 'KPI-', fn ($query) => $query->where('tenant_id', $tenantId)),
+        ]);
+        $this->audit->record('kpi_definition', $definition->id, 'create_kpi_definition', $request->user(), null, $definition->toArray(), $request);
+
+        return response()->json(['data' => $definition], 201);
+    }
+
+    public function updateDefinition(Request $request, KpiDefinition $kpiDefinition): JsonResponse
+    {
+        abort_if($kpiDefinition->tenant_id !== $request->user()->tenant_id, 404);
+
+        $tenantId = $request->user()->tenant_id;
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'source_type' => ['nullable', 'string', 'max:100'],
+            'formula' => ['nullable', 'string', 'max:255'],
+            'unit' => ['nullable', 'string', 'max:50'],
+            'target_direction' => ['required', Rule::in(['increase', 'decrease'])],
+            'weight' => ['required', 'numeric', 'min:0', 'max:100'],
+            'status' => ['required', Rule::in(['active', 'inactive'])],
+        ]);
+
+        $old = $kpiDefinition->toArray();
+        $kpiDefinition->update($data);
+        $this->audit->record('kpi_definition', $kpiDefinition->id, 'update_kpi_definition', $request->user(), $old, $kpiDefinition->fresh()->toArray(), $request);
+
+        return response()->json(['data' => $kpiDefinition->refresh()]);
+    }
+
+    public function storeTarget(Request $request): JsonResponse
+    {
+        $tenantId = $request->user()->tenant_id;
+        $data = $request->validate([
+            'kpi_definition_id' => ['required', Rule::exists('kpi_definitions', 'id')->where('tenant_id', $tenantId)],
+            'period_type' => ['required', Rule::in(['day', 'week', 'month', 'quarter', 'year'])],
+            'period_start' => ['required', 'date'],
+            'period_end' => ['required', 'date', 'after_or_equal:period_start'],
+            'target_value' => ['required', 'numeric', 'min:0'],
+            'actual_value' => ['nullable', 'numeric', 'min:0'],
+            'score' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'status' => ['required', Rule::in(['draft', 'active', 'locked'])],
+        ]);
+
+        $target = KpiTarget::create($data + [
+            'tenant_id' => $tenantId,
+            'actual_value' => $data['actual_value'] ?? 0,
+            'score' => $data['score'] ?? 0,
+            'locked_at' => ($data['status'] ?? '') === 'locked' ? now() : null,
+        ]);
+
+        $this->audit->record('kpi_target', $target->id, 'create_kpi_target', $request->user(), null, $target->toArray(), $request);
+
+        return response()->json(['data' => $target->load('definition:id,code,name')], 201);
+    }
+
+    public function updateTarget(Request $request, KpiTarget $kpiTarget): JsonResponse
+    {
+        abort_if($kpiTarget->tenant_id !== $request->user()->tenant_id, 404);
+        abort_if($kpiTarget->locked_at, 422, 'Kỳ KPI đã khóa, không thể sửa mục tiêu.');
+
+        $tenantId = $request->user()->tenant_id;
+        $data = $request->validate([
+            'kpi_definition_id' => ['required', Rule::exists('kpi_definitions', 'id')->where('tenant_id', $tenantId)],
+            'period_type' => ['required', Rule::in(['day', 'week', 'month', 'quarter', 'year'])],
+            'period_start' => ['required', 'date'],
+            'period_end' => ['required', 'date', 'after_or_equal:period_start'],
+            'target_value' => ['required', 'numeric', 'min:0'],
+            'actual_value' => ['nullable', 'numeric', 'min:0'],
+            'score' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'status' => ['required', Rule::in(['draft', 'active'])],
+        ]);
+
+        $old = $kpiTarget->toArray();
+        $kpiTarget->update($data + [
+            'actual_value' => $data['actual_value'] ?? 0,
+            'score' => $data['score'] ?? 0,
+        ]);
+        $this->audit->record('kpi_target', $kpiTarget->id, 'update_kpi_target', $request->user(), $old, $kpiTarget->fresh()->toArray(), $request);
+
+        return response()->json(['data' => $kpiTarget->refresh()->load('definition:id,code,name')]);
+    }
+
+    public function lockTarget(Request $request, KpiTarget $kpiTarget): JsonResponse
+    {
+        abort_if($kpiTarget->tenant_id !== $request->user()->tenant_id, 404);
+
+        $old = $kpiTarget->only(['status', 'locked_at']);
+        $kpiTarget->update([
+            'status' => 'locked',
+            'locked_at' => $kpiTarget->locked_at ?: now(),
+        ]);
+
+        $this->audit->record('kpi_target', $kpiTarget->id, 'lock_kpi_target', $request->user(), $old, $kpiTarget->fresh()->only(['status', 'locked_at']), $request);
+
+        return response()->json(['data' => $kpiTarget->refresh()->load('definition:id,code,name')]);
     }
 
     public function exceptions(Request $request): JsonResponse

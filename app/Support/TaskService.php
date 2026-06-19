@@ -31,7 +31,7 @@ class TaskService
 
             $task = Task::create([
                 'tenant_id' => $actor->tenant_id,
-                'code' => $data['code'] ?? $this->codes->next('tasks', 'code', 'TASK-', fn ($query) => $query->where('tenant_id', $actor->tenant_id)),
+                'code' => $this->codes->next('tasks', 'code', 'TASK-', fn ($query) => $query->where('tenant_id', $actor->tenant_id)),
                 'title' => $data['title'],
                 'description' => $data['description'] ?? null,
                 'module' => $data['module'] ?? 'general',

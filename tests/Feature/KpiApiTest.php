@@ -141,6 +141,29 @@ class KpiApiTest extends TestCase
         ]);
     }
 
+    public function test_kpi_definition_code_is_generated_by_system(): void
+    {
+        $this->seed();
+        $token = $this->loginAs('admin@vk-kpi.local');
+
+        $response = $this->withToken($token)
+            ->postJson('/api/v1/kpi/definitions', [
+                'code' => 'KPI-HACK-001',
+                'name' => 'Chi tieu auto code',
+                'source_type' => 'manual',
+                'formula' => 'manual',
+                'unit' => 'diem',
+                'target_direction' => 'increase',
+                'weight' => 5,
+                'status' => 'active',
+            ])
+            ->assertCreated();
+
+        $code = $response->json('data.code');
+        $this->assertNotSame('KPI-HACK-001', $code);
+        $this->assertMatchesRegularExpression('/^KPI-\d{5}$/', $code);
+        $this->assertDatabaseMissing('kpi_definitions', ['code' => 'KPI-HACK-001']);
+    }
     private function loginAs(string $email): string
     {
         return $this->postJson('/api/v1/auth/login', [

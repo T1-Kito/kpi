@@ -101,4 +101,12 @@ class PurchaseRequestController extends Controller
 
         return response()->json(['data' => $this->procurement->approvePr($purchaseRequest, $request->user(), $data['reason'] ?? null)]);
     }
+
+    public function reject(Request $request, PurchaseRequest $purchaseRequest): JsonResponse
+    {
+        abort_if($purchaseRequest->tenant_id !== $request->user()->tenant_id, 404);
+        $data = $request->validate(['reason' => ['required', 'string', 'max:500']]);
+
+        return response()->json(['data' => $this->procurement->rejectPr($purchaseRequest, $request->user(), $data['reason'])]);
+    }
 }

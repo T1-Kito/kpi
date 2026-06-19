@@ -353,6 +353,17 @@ async function openQuotationModal(row = null) {
                 </div>
             </section>
 
+            <section class="quotation-create-section">
+                <div class="quotation-create-section-head">
+                    <h3>Điều khoản báo giá</h3>
+                </div>
+                <div class="form-grid two">
+                    ${VKModal.field('valid_until', 'Hiệu lực đến', 'date', dateInputValue(row?.valid_until))}
+                    ${VKModal.field('payment_terms', 'Điều khoản thanh toán', 'text', row?.payment_terms || '')}
+                    ${VKModal.field('delivery_terms', 'Điều kiện giao hàng', 'text', row?.delivery_terms || '')}
+                    <div class="field full"><label for="note">Ghi chú báo giá</label><textarea id="note" name="note" rows="3">${VKTable.escapeHtml(row?.note || '')}</textarea></div>
+                </div>
+            </section>
             <section class="quotation-create-section quotation-lines-section">
                 <div class="quotation-create-section-head">
                     <h3>Danh sách hàng hóa</h3>
@@ -392,6 +403,10 @@ async function openQuotationModal(row = null) {
             method: isEdit ? 'PUT' : 'POST',
             body: JSON.stringify({
                 customer_id: Number(data.customer_id),
+                valid_until: data.valid_until || null,
+                payment_terms: data.payment_terms || null,
+                delivery_terms: data.delivery_terms || null,
+                note: data.note || null,
                 items,
             }),
         });
@@ -1726,6 +1741,13 @@ function escapeDoc(value) {
 
 function safeFileName(value) {
     return String(value || 'bao-gia').replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '-');
+}
+
+function dateInputValue(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toISOString().slice(0, 10);
 }
 
 function formatDate(value) {

@@ -51,7 +51,7 @@ async function loadKpi(options = {}) {
         safeRequest('/alerts?page_size=100'),
     ]);
 
-    root.innerHTML = renderKpi({
+    const pageData = {
         kpiOverview: kpiOverview || null,
         leads: leads || fallback,
         quotations: quotations || fallback,
@@ -63,7 +63,9 @@ async function loadKpi(options = {}) {
         issues: issues || fallback,
         tasks: tasks || fallback,
         alerts: alerts || fallback,
-    });
+    };
+    root.innerHTML = renderKpi(pageData);
+    openRequestedKpiException(pageData.kpiOverview?.data?.exceptions || []);
 }
 
 async function safeRequest(path) {
@@ -530,6 +532,67 @@ function rankTone(value) {
 
 function canManageKpi() {
     return Array.isArray(window.VKUser?.permissions) && window.VKUser.permissions.includes('kpi.lock');
+}
+
+function openRequestedKpiException(exceptions) {
+    const id = new URLSearchParams(window.location.search).get('exception');
+    if (!id || !Array.isArray(exceptions)) return;
+
+    const row = exceptions.find(item => String(item.id) === String(id));
+    if (!row) {
+        VKModal.toast('Không tìm thấy ngoại lệ KPI trong dữ liệu hiện tại.', 'warning');
+        return;
+    }
+
+    const statusMap = {
+        pending: ['warning', 'Chờ duyệt'],
+        approved: ['success', 'Đã duyệt'],
+        rejected: ['danger', 'Từ chối'],
+    };
+    const [tone, label] = statusMap[row.status] || ['info', row.status || '-'];
+
+    VKModal.open(`Chi tiết ngoại lệ KPI KPI-EXC-${row.id}`, `
+        <div class="kpi-adjustment-detail">
+            <section class="kpi-adjustment-hero">
+                <div>
+                    <span>${VKTable.escapeHtml(row.definition?.name || 'Ngoại lệ KPI')}</span>
+                    <strong>${VKTable.escapeHtml(row.user?.name || '-')}</strong>
+                    <small>${formatDate(row.period_start)} - ${formatDate(row.period_end)}</small>
+                </div>
+                <span class="badge ${tone}">${VKTable.escapeHtml(label)}</span>
+            </section>
+            <div class="detail-grid two">
+                ${detailItem('Nhân viên', `${row.user?.name || '-'}${row.user?.email ? ` · ${row.user.email}` : ''}`)}
+                ${detailItem('KPI', row.definition?.name || '-')}
+                ${detailItem('Kỳ tính', row.period_type || '-')}
+                ${detailItem('Thời gian duyệt', row.reviewed_at ? formatDate(row.reviewed_at) : '-')}
+            </div>
+            <section class="kpi-adjustment-note">
+                <h3>Lý do giải trình</h3>
+                <p>${VKTable.escapeHtml(row.reason || '-')}</p>
+            </section>
+            ${row.review_note ? `
+                <section class="kpi-adjustment-note">
+                    <h3>Ghi chú duyệt</h3>
+                    <p>${VKTable.escapeHtml(row.review_note)}</p>
+                </section>
+            ` : ''}
+            ${row.evidence_url ? `<a class="text-link" target="_blank" rel="noopener" href="${VKTable.escapeHtml(row.evidence_url)}">Mở bằng chứng</a>` : ''}
+        </div>
+    `, null, {
+        className: 'wide-modal',
+        hideSubmit: true,
+        cancelText: 'Đóng',
+    });
+}
+
+function detailItem(label, value) {
+    return `
+        <div class="detail-item">
+            <span>${VKTable.escapeHtml(label)}</span>
+            <strong>${VKTable.escapeHtml(value || '-')}</strong>
+        </div>
+    `;
 }
 
 window.loadKpi = loadKpi;

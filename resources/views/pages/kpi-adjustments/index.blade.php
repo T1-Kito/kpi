@@ -23,9 +23,33 @@
     $typeLabels = ['bonus' => 'Cộng điểm', 'penalty' => 'Trừ điểm'];
     $statusLabels = ['pending' => 'Chờ duyệt', 'approved' => 'Đã duyệt', 'rejected' => 'Từ chối'];
     $statusTone = ['pending' => 'warning', 'approved' => 'success', 'rejected' => 'danger'];
+    $adjustmentDetails = $adjustments->mapWithKeys(fn ($adjustment) => [
+        $adjustment->id => [
+            'id' => $adjustment->id,
+            'code' => 'KPI-ADJ-'.$adjustment->id,
+            'employee' => $adjustment->user?->name ?? '-',
+            'email' => $adjustment->user?->email ?? '',
+            'department' => $adjustment->user?->department?->name ?? 'Chưa gán phòng ban',
+            'period' => ($periodOptions[$adjustment->period_type] ?? $adjustment->period_type).' · '.$adjustment->period_start?->format('d/m/Y').' - '.$adjustment->period_end?->format('d/m/Y'),
+            'type' => $typeLabels[$adjustment->adjustment_type] ?? $adjustment->adjustment_type,
+            'type_raw' => $adjustment->adjustment_type,
+            'points' => (float) $adjustment->points,
+            'reason' => $adjustment->reason,
+            'reason_code' => $adjustment->reason_code,
+            'evidence_url' => $adjustment->evidence_url,
+            'creator' => $adjustment->creator?->name ?? '-',
+            'reviewer' => $adjustment->reviewer?->name ?? '-',
+            'reviewed_at' => $adjustment->reviewed_at?->format('H:i d/m/Y'),
+            'review_note' => $adjustment->review_note,
+            'status' => $adjustment->status,
+            'status_label' => $statusLabels[$adjustment->status] ?? $adjustment->status,
+        ],
+    ]);
 @endphp
 
 <div id="kpiAdjustmentsRoot" class="kpi-ledger-page" data-server-rendered="1">
+    <script type="application/json" id="kpiAdjustmentRecords">@json($adjustmentDetails)</script>
+
     <section class="module-panel">
         <div class="panel-head">
             <div>
@@ -35,17 +59,23 @@
             <button class="btn primary" type="button" data-create-kpi-adjustment>Tạo phiếu điểm</button>
         </div>
 
-        <form class="toolbar" method="GET" action="{{ route('kpi-adjustments.index') }}">
-            <select name="period_type" onchange="this.form.submit()">
-                @foreach ($periodOptions as $value => $label)
-                    <option value="{{ $value }}" @selected($periodType === $value)>{{ $label }}</option>
-                @endforeach
-            </select>
-            <select name="status" onchange="this.form.submit()">
-                @foreach ($statusOptions as $value => $label)
-                    <option value="{{ $value }}" @selected($status === $value)>{{ $label }}</option>
-                @endforeach
-            </select>
+        <form class="kpi-ledger-toolbar" method="GET" action="{{ route('kpi-adjustments.index') }}">
+            <label>
+                <span>Kỳ tính</span>
+                <select name="period_type" onchange="this.form.submit()">
+                    @foreach ($periodOptions as $value => $label)
+                        <option value="{{ $value }}" @selected($periodType === $value)>{{ $label }}</option>
+                    @endforeach
+                </select>
+            </label>
+            <label>
+                <span>Trạng thái</span>
+                <select name="status" onchange="this.form.submit()">
+                    @foreach ($statusOptions as $value => $label)
+                        <option value="{{ $value }}" @selected($status === $value)>{{ $label }}</option>
+                    @endforeach
+                </select>
+            </label>
         </form>
 
         @if ($summary->isNotEmpty())
@@ -84,12 +114,13 @@
                             <th>Lý do</th>
                             <th>Người tạo</th>
                             <th>Trạng thái</th>
+                            <th>Người duyệt</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach ($adjustments as $adjustment)
-                            <tr>
+                            <tr id="kpi-adjustment-{{ $adjustment->id }}">
                                 <td>
                                     <strong>{{ $adjustment->user?->name ?? '-' }}</strong>
                                     <small>{{ $adjustment->user?->email }}</small>
@@ -115,13 +146,20 @@
                                         {{ $statusLabels[$adjustment->status] ?? $adjustment->status }}
                                     </span>
                                 </td>
-                                <td class="row-actions-cell">
-                                    @if ($adjustment->status === 'pending')
-                                        <button class="btn small primary" type="button" data-review-kpi-adjustment="{{ $adjustment->id }}" data-status="approved">Duyệt</button>
-                                        <button class="btn small danger" type="button" data-review-kpi-adjustment="{{ $adjustment->id }}" data-status="rejected">Từ chối</button>
-                                    @else
-                                        <span class="muted">{{ $adjustment->reviewer?->name }}</span>
-                                    @endif
+                                <td>
+                                    <span class="muted">{{ $adjustment->reviewer?->name ?? '-' }}</span>
+                                </td>
+                                <td class="row-actions-cell actions-cell">
+                                    <details class="row-action-menu">
+                                        <summary aria-label="Thao tác">⋮</summary>
+                                        <div class="row-action-menu-list">
+                                            <button class="btn small" type="button" data-open-kpi-adjustment="{{ $adjustment->id }}">Mở</button>
+                                            @if ($adjustment->status === 'pending')
+                                                <button class="btn small primary" type="button" data-review-kpi-adjustment="{{ $adjustment->id }}" data-status="approved">Duyệt</button>
+                                                <button class="btn small danger" type="button" data-review-kpi-adjustment="{{ $adjustment->id }}" data-status="rejected">Từ chối</button>
+                                            @endif
+                                        </div>
+                                    </details>
                                 </td>
                             </tr>
                         @endforeach
@@ -139,5 +177,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/kpi-adjustments.js?v=20260618-5"></script>
+<script src="/assets/js/features/kpi-adjustments.js?v=20260619-1"></script>
 @endpush

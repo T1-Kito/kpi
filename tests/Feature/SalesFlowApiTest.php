@@ -420,6 +420,41 @@ class SalesFlowApiTest extends TestCase
         return $this->withToken($token)->getJson($uri)->json();
     }
 
+    public function test_system_codes_ignore_user_supplied_values_for_sales_records(): void
+    {
+        $this->seed();
+        $token = $this->loginAs('sales@vk-kpi.local');
+        $sku = Sku::where('sku_code', 'SKU-PRN-001')->firstOrFail();
+
+        $lead = $this->withToken($token)
+            ->postJson('/api/v1/leads', [
+                'code' => 'LEAD-HACK-001',
+                'name' => 'Lead auto code',
+                'phone' => '0903777000',
+                'source' => 'Website',
+            ])
+            ->assertCreated();
+
+        $leadCode = $lead->json('data.code');
+        $this->assertNotSame('LEAD-HACK-001', $leadCode);
+        $this->assertMatchesRegularExpression('/^LEAD-\d{5}$/', $leadCode);
+        $this->assertDatabaseMissing('leads', ['code' => 'LEAD-HACK-001']);
+
+        $quotation = $this->withToken($token)
+            ->postJson('/api/v1/quotations', [
+                'code' => 'QUO-HACK-001',
+                'customer_id' => 1,
+                'items' => [
+                    ['sku_id' => $sku->id, 'quantity' => 1, 'unit_price' => 3500000, 'vat_rate' => 8],
+                ],
+            ])
+            ->assertCreated();
+
+        $quotationCode = $quotation->json('data.code');
+        $this->assertNotSame('QUO-HACK-001', $quotationCode);
+        $this->assertMatchesRegularExpression('/^QUO-\d{5}$/', $quotationCode);
+        $this->assertDatabaseMissing('quotations', ['code' => 'QUO-HACK-001']);
+    }
     private function loginAs(string $email): string
     {
         return $this->postJson('/api/v1/auth/login', [

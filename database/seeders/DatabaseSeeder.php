@@ -10,6 +10,8 @@ use App\Models\KpiDefinition;
 use App\Models\Permission;
 use App\Models\Position;
 use App\Models\Product;
+use App\Models\PurchaseOrder;
+use App\Models\PurchaseRequest;
 use App\Models\Role;
 use App\Models\Sku;
 use App\Models\Alert;
@@ -24,6 +26,8 @@ use App\Models\Warehouse;
 use App\Models\Lead;
 use App\Models\Quotation;
 use App\Models\SalesOrder;
+use App\Models\StockTake;
+use App\Models\SupplierQuotation;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -117,7 +121,7 @@ class DatabaseSeeder extends Seeder
 
         $roleDefinitions = [
             'ROLE-ADMIN' => ['name' => 'Quản trị hệ thống', 'scope' => 'company', 'permissions' => $permissions->keys()->all()],
-            'ROLE-DIR' => ['name' => 'Ban giám đốc', 'scope' => 'company', 'permissions' => ['dashboard.executive.view', 'dashboard.manager.view', 'master.view', 'task.view', 'alert.view', 'audit.view', 'kpi.lock', 'sales.order.view', 'sales.delivery.view', 'finance.invoice.view', 'finance.payment.view']],
+            'ROLE-DIR' => ['name' => 'Ban giám đốc', 'scope' => 'company', 'permissions' => ['dashboard.executive.view', 'dashboard.manager.view', 'master.view', 'task.view', 'task.approve', 'alert.view', 'audit.view', 'kpi.lock', 'sales.margin.approve', 'procurement.pr.approve', 'procurement.po.approve', 'sales.order.view', 'sales.delivery.view', 'finance.invoice.view', 'finance.payment.view']],
             'ROLE-MGR' => ['name' => 'Trưởng phòng', 'scope' => 'department', 'permissions' => ['dashboard.manager.view', 'master.view', 'task.view', 'task.create', 'task.approve', 'alert.view', 'sales.margin.approve', 'procurement.pr.approve', 'sales.order.view']],
             'ROLE-SALES' => ['name' => 'Kinh doanh', 'scope' => 'own', 'permissions' => ['master.view', 'task.view', 'task.create', 'alert.view', 'sales.lead.manage', 'sales.quotation.create', 'sales.order.view', 'sales.order.create', 'sales.delivery.view', 'sales.delivery.confirm', 'finance.invoice.view', 'finance.payment.view']],
             'ROLE-WH' => ['name' => 'Kho', 'scope' => 'warehouse', 'permissions' => ['master.view', 'task.view', 'task.create', 'alert.view', 'inventory.receipt.confirm', 'inventory.issue.confirm']],
@@ -283,6 +287,35 @@ class DatabaseSeeder extends Seeder
                 'lot_no' => 'OPENING',
             ],
             ['on_hand' => 80, 'reserved' => 0, 'available' => 80],
+        );
+
+        $stockTake = StockTake::updateOrCreate(
+            ['tenant_id' => $tenant->id, 'code' => 'ST-DEMO-001'],
+            [
+                'warehouse_id' => $warehouse->id,
+                'counted_at' => now()->toDateString(),
+                'status' => 'draft',
+                'note' => 'Phiếu kiểm kê demo trước khi chốt tồn kho cuối kỳ.',
+                'created_by' => $warehouseUser?->id,
+            ],
+        );
+        $stockTake->lines()->updateOrCreate(
+            ['sku_id' => $skuPrinter->id, 'lot_no' => 'OPENING'],
+            [
+                'system_quantity' => 12,
+                'counted_quantity' => 11,
+                'difference_quantity' => -1,
+                'note' => 'Lệch tồn cần quản lý kho xác minh.',
+            ],
+        );
+        $stockTake->lines()->updateOrCreate(
+            ['sku_id' => $skuRibbon->id, 'lot_no' => 'OPENING'],
+            [
+                'system_quantity' => 80,
+                'counted_quantity' => 80,
+                'difference_quantity' => 0,
+                'note' => 'Khớp tồn.',
+            ],
         );
 
         foreach ([
@@ -485,6 +518,94 @@ class DatabaseSeeder extends Seeder
             ],
         );
 
+        $approvalPr = PurchaseRequest::updateOrCreate(
+            ['tenant_id' => $tenant->id, 'code' => 'PR-DEMO-APPROVAL'],
+            [
+                'source_type' => 'Manual',
+                'source_id' => null,
+                'requested_by' => $procurementUser?->id,
+                'reason' => 'Bổ sung tồn tối thiểu máy in mã vạch cho kế hoạch bán hàng tháng này.',
+                'status' => 'draft',
+            ],
+        );
+        $approvalPr->items()->updateOrCreate(
+            ['sku_id' => $skuPrinter->id],
+            ['quantity' => 5, 'available_qty' => 12],
+        );
+
+        $supplierQuotationPr = PurchaseRequest::updateOrCreate(
+            ['tenant_id' => $tenant->id, 'code' => 'PR-DEMO-SQ-APPROVED'],
+            [
+                'source_type' => 'Manual',
+                'source_id' => null,
+                'requested_by' => $procurementUser?->id,
+                'reason' => 'Yêu cầu mua đã duyệt để lấy báo giá NCC và tạo đơn mua.',
+                'status' => 'approved',
+            ],
+        );
+        $supplierQuotationPr->items()->updateOrCreate(
+            ['sku_id' => $skuPrinter->id],
+            ['quantity' => 5, 'available_qty' => 12],
+        );
+        $supplier = Supplier::where('tenant_id', $tenant->id)->where('code', 'SUP-001')->first();
+        $supplierQuotation = SupplierQuotation::updateOrCreate(
+            ['tenant_id' => $tenant->id, 'code' => 'SQ-DEMO-001'],
+            [
+                'purchase_request_id' => $supplierQuotationPr->id,
+                'supplier_id' => $supplier?->id,
+                'created_by' => $procurementUser?->id,
+                'quoted_at' => now()->toDateString(),
+                'valid_until' => now()->addDays(15)->toDateString(),
+                'total_amount' => 13000000,
+                'status' => 'selected',
+                'note' => 'Báo giá demo đã chọn làm căn cứ tạo PO.',
+                'selected_by' => $directorUser?->id,
+                'selected_at' => now(),
+            ],
+        );
+        $supplierQuotation->lines()->updateOrCreate(
+            ['sku_id' => $skuPrinter->id],
+            ['quantity' => 5, 'unit_price' => 2600000, 'line_total' => 13000000, 'note' => 'Giao trong 7 ngày.'],
+        );
+
+        $supplierQuotationAlt = SupplierQuotation::updateOrCreate(
+            ['tenant_id' => $tenant->id, 'code' => 'SQ-DEMO-002'],
+            [
+                'purchase_request_id' => $supplierQuotationPr->id,
+                'supplier_id' => $supplier?->id,
+                'created_by' => $procurementUser?->id,
+                'quoted_at' => now()->subDay()->toDateString(),
+                'valid_until' => now()->addDays(10)->toDateString(),
+                'total_amount' => 13750000,
+                'status' => 'draft',
+                'note' => 'Báo giá dự phòng để so sánh.',
+            ],
+        );
+        $supplierQuotationAlt->lines()->updateOrCreate(
+            ['sku_id' => $skuPrinter->id],
+            ['quantity' => 5, 'unit_price' => 2750000, 'line_total' => 13750000, 'note' => 'Giá cao hơn, giao nhanh hơn.'],
+        );
+
+        $approvalPo = PurchaseOrder::updateOrCreate(
+            ['tenant_id' => $tenant->id, 'code' => 'PO-DEMO-APPROVAL'],
+            [
+                'purchase_request_id' => $approvalPr->id,
+                'supplier_id' => Supplier::where('tenant_id', $tenant->id)->where('code', 'SUP-001')->value('id'),
+                'created_by' => $procurementUser?->id,
+                'expected_delivery_date' => now()->addDays(7)->toDateString(),
+                'total_amount' => 13000000,
+                'status' => 'draft',
+            ],
+        );
+        $approvalPo->items()->updateOrCreate(
+            ['sku_id' => $skuPrinter->id],
+            ['quantity' => 5, 'unit_price' => 2600000, 'line_total' => 13000000],
+        );
+        Approval::updateOrCreate(
+            ['tenant_id' => $tenant->id, 'source_type' => 'PurchaseOrder', 'source_id' => $approvalPo->id],
+            ['approver_id' => $directorUser?->id, 'status' => 'pending', 'reason' => 'Duyệt đơn mua mẫu', 'decided_at' => null],
+        );
+
         $kpiWorkflow = KpiDefinition::where('tenant_id', $tenant->id)->where('code', 'KPI-WORKFLOW')->first();
         $kpiSales = KpiDefinition::where('tenant_id', $tenant->id)->where('code', 'KPI-SALES')->first();
         $kpiInventory = KpiDefinition::where('tenant_id', $tenant->id)->where('code', 'KPI-INVENTORY')->first();
@@ -577,3 +698,4 @@ class DatabaseSeeder extends Seeder
         }
     }
 }
+

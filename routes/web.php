@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Web\AlertController;
+use App\Http\Controllers\Web\ApprovalCenterController;
 use App\Http\Controllers\Web\AuditLogController;
 use App\Http\Controllers\Web\CustomerController;
 use App\Http\Controllers\Web\CustomerPaymentController;
@@ -12,6 +13,7 @@ use App\Http\Controllers\Web\GoodsReceiptController;
 use App\Http\Controllers\Web\InventoryController;
 use App\Http\Controllers\Web\KpiController;
 use App\Http\Controllers\Web\KpiAdjustmentController;
+use App\Http\Controllers\Web\KpiSettingController;
 use App\Http\Controllers\Web\LeadController;
 use App\Http\Controllers\Web\OrganizationController;
 use App\Http\Controllers\Web\PrintTemplateController;
@@ -23,7 +25,9 @@ use App\Http\Controllers\Web\SalesOrderController;
 use App\Http\Controllers\Web\SalesInvoiceController;
 use App\Http\Controllers\Web\SettingController;
 use App\Http\Controllers\Web\SkuController;
+use App\Http\Controllers\Web\StockTakeController;
 use App\Http\Controllers\Web\SupplierController;
+use App\Http\Controllers\Web\SupplierQuotationController;
 use App\Http\Controllers\Web\TaskController;
 use App\Http\Controllers\Web\UserController;
 use App\Http\Controllers\Web\WarehouseController;
@@ -48,13 +52,17 @@ Route::get('/print-templates', PrintTemplateController::class)->name('print-temp
 Route::get('/roles', RoleController::class)->name('roles.index');
 Route::get('/inventory', InventoryController::class)->name('inventory.index');
 Route::get('/purchase-requests', PurchaseRequestController::class)->name('purchase-requests.index');
+Route::get('/supplier-quotations', SupplierQuotationController::class)->name('supplier-quotations.index');
 Route::get('/purchase-orders', PurchaseOrderController::class)->name('purchase-orders.index');
 Route::get('/goods-receipts', GoodsReceiptController::class)->name('goods-receipts.index');
 Route::get('/goods-issues', GoodsIssueController::class)->name('goods-issues.index');
+Route::get('/stock-takes', StockTakeController::class)->name('stock-takes.index');
 Route::get('/tasks', TaskController::class)->name('tasks.index');
 Route::get('/alerts', AlertController::class)->name('alerts.index');
+Route::get('/approvals', ApprovalCenterController::class)->name('approvals.index');
 Route::get('/kpi', KpiController::class)->name('kpi.index');
 Route::get('/kpi-adjustments', KpiAdjustmentController::class)->name('kpi-adjustments.index');
+Route::get('/kpi-settings', KpiSettingController::class)->name('kpi-settings.index');
 Route::view('/workflows', 'pages.workflows.index')->name('workflows.index');
 Route::get('/audit-logs', AuditLogController::class)->name('audit-logs.index');
 Route::get('/settings', SettingController::class)->name('settings.index');

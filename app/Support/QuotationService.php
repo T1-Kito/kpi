@@ -24,11 +24,15 @@ class QuotationService
         return DB::transaction(function () use ($actor, $data) {
             $quotation = Quotation::create([
                 'tenant_id' => $actor->tenant_id,
-                'code' => $data['code'] ?? $this->codes->next('quotations', 'code', 'QUO-', fn ($query) => $query->where('tenant_id', $actor->tenant_id)),
+                'code' => $this->codes->next('quotations', 'code', 'QUO-', fn ($query) => $query->where('tenant_id', $actor->tenant_id)),
                 'customer_id' => $data['customer_id'],
                 'lead_id' => $data['lead_id'] ?? null,
                 'duplicated_from_id' => $data['duplicated_from_id'] ?? null,
                 'sales_owner_id' => $actor->id,
+                'valid_until' => $data['valid_until'] ?? null,
+                'payment_terms' => $data['payment_terms'] ?? null,
+                'delivery_terms' => $data['delivery_terms'] ?? null,
+                'note' => $data['note'] ?? null,
                 'status' => 'draft',
             ]);
 
@@ -56,6 +60,10 @@ class QuotationService
             $quotation->update([
                 'customer_id' => $data['customer_id'],
                 'lead_id' => $data['lead_id'] ?? $quotation->lead_id,
+                'valid_until' => $data['valid_until'] ?? null,
+                'payment_terms' => $data['payment_terms'] ?? null,
+                'delivery_terms' => $data['delivery_terms'] ?? null,
+                'note' => $data['note'] ?? null,
             ]);
 
             $summary = $this->replaceItemsAndRecalculate($quotation, $actor, $data['items']);

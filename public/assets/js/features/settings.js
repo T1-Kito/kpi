@@ -196,6 +196,7 @@ function renderLogoSetting(me) {
 const sidebarIconTargets = [
     ['dashboard', 'Dashboard'],
     ['tasks', 'Công việc'],
+    ['approval', 'Phê duyệt'],
     ['business', 'Kinh doanh'],
     ['warehouse', 'Kho vận'],
     ['purchase', 'Mua hàng'],
@@ -209,6 +210,7 @@ const sidebarIconTargets = [
 const sidebarIconOptions = [
     ['home', 'Nhà'],
     ['tasks', 'Công việc'],
+    ['approval', 'Phê duyệt'],
     ['business', 'Tòa nhà'],
     ['warehouse', 'Kho'],
     ['purchase', 'Giỏ hàng'],

@@ -7,9 +7,11 @@ use App\Models\PurchaseOrder;
 use App\Models\PurchaseRequest;
 use App\Models\SalesOrder;
 use App\Models\Supplier;
+use App\Models\SupplierQuotation;
 use App\Models\User;
 use App\Support\AuditLogger;
 use App\Support\BusinessEventPublisher;
+use App\Support\CodeGenerator;
 use App\Support\TaskService;
 use Illuminate\Support\Facades\DB;
 
@@ -19,6 +21,7 @@ class ProcurementService
         private readonly AuditLogger $audit,
         private readonly BusinessEventPublisher $events,
         private readonly TaskService $tasks,
+        private readonly CodeGenerator $codes,
     ) {
     }
 
@@ -112,9 +115,22 @@ class ProcurementService
         });
     }
 
-    public function createPoFromPr(PurchaseRequest $pr, User $actor, int $supplierId, ?string $expectedDeliveryDate = null): PurchaseOrder
+    public function rejectPr(PurchaseRequest $pr, User $actor, ?string $reason = null): PurchaseRequest
     {
-        return DB::transaction(function () use ($pr, $actor, $supplierId, $expectedDeliveryDate) {
+        return DB::transaction(function () use ($pr, $actor, $reason) {
+            abort_if(! in_array($pr->status, ['draft', 'pending'], true), 422, 'Yêu cầu mua không còn ở trạng thái chờ duyệt.');
+            $old = $pr->status;
+            $pr->update(['status' => 'rejected']);
+            $this->audit->record('purchase_request', $pr->id, 'reject_purchase_request', $actor, ['status' => $old], ['status' => 'rejected'], null, $reason);
+            $this->events->publish($pr->tenant_id, 'PurchaseRequestRejected', 'PurchaseRequest', $pr->id, ['reason' => $reason]);
+
+            return $pr->refresh()->load('items.sku:id,sku_code,name');
+        });
+    }
+
+    public function createPoFromPr(PurchaseRequest $pr, User $actor, int $supplierId, ?string $expectedDeliveryDate = null, array $terms = []): PurchaseOrder
+    {
+        return DB::transaction(function () use ($pr, $actor, $supplierId, $expectedDeliveryDate, $terms) {
             abort_if($pr->status !== 'approved', 422, 'Yêu cầu mua chưa được duyệt.');
             Supplier::where('tenant_id', $pr->tenant_id)->findOrFail($supplierId);
 
@@ -125,6 +141,10 @@ class ProcurementService
                 'supplier_id' => $supplierId,
                 'created_by' => $actor->id,
                 'expected_delivery_date' => $expectedDeliveryDate,
+                'payment_terms' => $terms['payment_terms'] ?? null,
+                'delivery_terms' => $terms['delivery_terms'] ?? null,
+                'warranty_terms' => $terms['warranty_terms'] ?? null,
+                'shipping_fee' => (float) ($terms['shipping_fee'] ?? 0),
                 'status' => 'draft',
             ]);
 
@@ -158,6 +178,58 @@ class ProcurementService
         });
     }
 
+    public function createPoFromSupplierQuotation(SupplierQuotation $quotation, User $actor, ?string $expectedDeliveryDate = null, array $terms = []): PurchaseOrder
+    {
+        return DB::transaction(function () use ($quotation, $actor, $expectedDeliveryDate, $terms) {
+            abort_if($quotation->tenant_id !== $actor->tenant_id, 404);
+            abort_if($quotation->status !== 'selected', 422, 'Chỉ báo giá nhà cung cấp đã chọn mới được tạo đơn mua.');
+            abort_if(! $quotation->purchase_request_id, 422, 'Báo giá chưa gắn yêu cầu mua.');
+
+            $quotation->load(['purchaseRequest.items', 'lines.sku']);
+            $pr = $quotation->purchaseRequest;
+            abort_if(! $pr || $pr->status !== 'approved', 422, 'Yêu cầu mua của báo giá chưa được duyệt.');
+
+            $po = PurchaseOrder::create([
+                'tenant_id' => $quotation->tenant_id,
+                'code' => $this->nextPoCode($quotation->tenant_id),
+                'purchase_request_id' => $quotation->purchase_request_id,
+                'supplier_quotation_id' => $quotation->id,
+                'supplier_id' => $quotation->supplier_id,
+                'created_by' => $actor->id,
+                'expected_delivery_date' => $expectedDeliveryDate,
+                'payment_terms' => $terms['payment_terms'] ?? null,
+                'delivery_terms' => $terms['delivery_terms'] ?? null,
+                'warranty_terms' => $terms['warranty_terms'] ?? null,
+                'shipping_fee' => (float) ($terms['shipping_fee'] ?? 0),
+                'total_amount' => $quotation->total_amount,
+                'status' => 'draft',
+            ]);
+
+            foreach ($quotation->lines as $line) {
+                $po->items()->create([
+                    'sku_id' => $line->sku_id,
+                    'quantity' => $line->quantity,
+                    'unit_price' => $line->unit_price,
+                    'line_total' => $line->line_total,
+                ]);
+            }
+
+            Approval::create([
+                'tenant_id' => $po->tenant_id,
+                'source_type' => 'PurchaseOrder',
+                'source_id' => $po->id,
+                'approver_id' => $actor->manager_id,
+                'status' => 'pending',
+                'reason' => 'Duyệt đơn mua từ báo giá nhà cung cấp '.$quotation->code,
+            ]);
+
+            $this->audit->record('purchase_order', $po->id, 'create_purchase_order_from_supplier_quotation', $actor, null, $po->toArray());
+            $this->events->publish($po->tenant_id, 'PurchaseOrderCreated', 'PurchaseOrder', $po->id, ['code' => $po->code, 'supplier_quotation' => $quotation->code]);
+
+            return $po->load(['supplier:id,code,name', 'supplierQuotation:id,code,total_amount,status', 'items.sku:id,sku_code,name']);
+        });
+    }
+
     public function approvePo(PurchaseOrder $po, User $actor, ?string $reason = null): PurchaseOrder
     {
         return DB::transaction(function () use ($po, $actor, $reason) {
@@ -176,13 +248,32 @@ class ProcurementService
         });
     }
 
+    public function rejectPo(PurchaseOrder $po, User $actor, ?string $reason = null): PurchaseOrder
+    {
+        return DB::transaction(function () use ($po, $actor, $reason) {
+            abort_if($po->status !== 'draft', 422, 'Đơn mua không còn ở trạng thái chờ duyệt.');
+            $old = $po->status;
+            $po->update(['status' => 'rejected']);
+            Approval::where('tenant_id', $po->tenant_id)
+                ->where('source_type', 'PurchaseOrder')
+                ->where('source_id', $po->id)
+                ->where('status', 'pending')
+                ->update(['status' => 'rejected', 'approver_id' => $actor->id, 'reason' => $reason, 'decided_at' => now()]);
+
+            $this->audit->record('purchase_order', $po->id, 'reject_purchase_order', $actor, ['status' => $old], ['status' => 'rejected'], null, $reason);
+            $this->events->publish($po->tenant_id, 'PurchaseOrderRejected', 'PurchaseOrder', $po->id, ['reason' => $reason]);
+
+            return $po->refresh()->load(['supplier:id,code,name', 'items.sku:id,sku_code,name']);
+        });
+    }
+
     private function nextPrCode(int $tenantId): string
     {
-        return 'PR-'.str_pad((string) (PurchaseRequest::where('tenant_id', $tenantId)->count() + 1), 5, '0', STR_PAD_LEFT);
+        return $this->codes->next('purchase_requests', 'code', 'PR-', fn ($query) => $query->where('tenant_id', $tenantId));
     }
 
     private function nextPoCode(int $tenantId): string
     {
-        return 'PO-'.str_pad((string) (PurchaseOrder::where('tenant_id', $tenantId)->count() + 1), 5, '0', STR_PAD_LEFT);
+        return $this->codes->next('purchase_orders', 'code', 'PO-', fn ($query) => $query->where('tenant_id', $tenantId));
     }
 }

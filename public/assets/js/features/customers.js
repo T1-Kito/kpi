@@ -117,7 +117,13 @@ function openCustomerModal(id = null) {
                     ${customerField('tax_code', 'Mã số thuế', 'text', row?.tax_code || '', 'MST')}
                     ${customerField('name', 'Tên công ty', 'text', row?.name || '', 'CT')}
                     ${customerField('billing_address', 'Địa chỉ công ty', 'text', row?.billing_address || '', 'DC')}
+                    ${customerField('legal_representative', 'Người đại diện pháp luật', 'text', row?.legal_representative || '', 'ĐD')}
+                    ${customerField('representative_position', 'Chức vụ đại diện', 'text', row?.representative_position || '', 'CV')}
                     ${customerField('credit_limit', 'Hạn mức công nợ', 'number', row?.credit_limit || '0', 'VND')}
+                    ${customerField('payment_terms', 'Điều khoản thanh toán', 'text', row?.payment_terms || '', 'TT')}
+                    ${customerField('bank_name', 'Ngân hàng', 'text', row?.bank_name || '', 'NH')}
+                    ${customerField('bank_account_no', 'Số tài khoản', 'text', row?.bank_account_no || '', 'STK')}
+                    ${customerField('bank_account_name', 'Tên tài khoản', 'text', row?.bank_account_name || '', 'TK')}
                     ${customerSelect('status', 'Trạng thái', [
                         { value: 'active', label: 'Hoạt động' },
                         { value: 'inactive', label: 'Không hoạt động' },

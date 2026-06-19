@@ -263,6 +263,8 @@ function openInvoiceModal(id) {
         <div class="form-grid">
             ${VKModal.field('invoice_date', 'Ngày hóa đơn', 'date', dateValue(today))}
             ${VKModal.field('due_date', 'Hạn thanh toán', 'date', dateValue(due))}
+            ${VKModal.field('tax_invoice_symbol', 'Ký hiệu hóa đơn thuế', 'text')}
+            ${VKModal.field('tax_invoice_no', 'Số hóa đơn thuế', 'text')}
             <div class="field full"><label for="note">Ghi chú</label><textarea id="note" name="note" rows="3"></textarea></div>
         </div>
     `, async (form) => {

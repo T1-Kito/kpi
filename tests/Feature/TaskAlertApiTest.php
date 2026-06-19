@@ -82,6 +82,26 @@ class TaskAlertApiTest extends TestCase
             ->assertJsonStructure(['data' => [['id', 'code', 'name']]]);
     }
 
+    public function test_task_code_is_generated_by_system_even_when_payload_contains_code(): void
+    {
+        $this->seed();
+        $token = $this->loginAs('admin@vk-kpi.local');
+
+        $response = $this->withToken($token)
+            ->postJson('/api/v1/tasks', [
+                'code' => 'TASK-HACK-001',
+                'title' => 'Task auto code test',
+                'module' => 'general',
+                'task_type' => 'manual',
+                'priority' => 'normal',
+            ])
+            ->assertCreated();
+
+        $code = $response->json('data.code');
+        $this->assertNotSame('TASK-HACK-001', $code);
+        $this->assertMatchesRegularExpression('/^TASK-\d{5}$/', $code);
+        $this->assertDatabaseMissing('tasks', ['code' => 'TASK-HACK-001']);
+    }
     private function loginAs(string $email): string
     {
         return $this->postJson('/api/v1/auth/login', [

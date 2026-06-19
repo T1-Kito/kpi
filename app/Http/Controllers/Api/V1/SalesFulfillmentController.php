@@ -254,6 +254,8 @@ class SalesFulfillmentController extends Controller
         abort_if($salesOrder->tenant_id !== $request->user()->tenant_id, 404);
         $data = $request->validate([
             'invoice_date' => ['nullable', 'date'],
+            'tax_invoice_symbol' => ['nullable', 'string', 'max:50'],
+            'tax_invoice_no' => ['nullable', 'string', 'max:50'],
             'due_date' => ['nullable', 'date', 'after_or_equal:invoice_date'],
             'note' => ['nullable', 'string', 'max:1000'],
         ]);

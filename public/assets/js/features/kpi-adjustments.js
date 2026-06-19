@@ -9,6 +9,8 @@ let state = {
 
 window.loadKpiAdjustments = loadKpiAdjustments;
 
+document.addEventListener('vk:ready', openRequestedAdjustment);
+
 document.addEventListener('change', (event) => {
     if (!document.getElementById('kpiAdjustmentsRoot')) return;
     if (event.target.matches('[data-kpi-adjustment-status]')) {
@@ -29,11 +31,100 @@ document.addEventListener('click', (event) => {
         return;
     }
 
+    const openButton = event.target.closest('[data-open-kpi-adjustment]');
+    if (openButton) {
+        openAdjustmentDetail(openButton.dataset.openKpiAdjustment);
+        return;
+    }
+
     const reviewButton = event.target.closest('[data-review-kpi-adjustment]');
     if (reviewButton) {
         reviewAdjustment(reviewButton.dataset.reviewKpiAdjustment, reviewButton.dataset.status);
     }
 });
+
+if (document.readyState !== 'loading') {
+    window.setTimeout(openRequestedAdjustment, 0);
+}
+
+function getServerAdjustmentRows() {
+    const node = document.getElementById('kpiAdjustmentRecords');
+    if (!node) return {};
+    try {
+        return JSON.parse(node.textContent || '{}');
+    } catch (error) {
+        return {};
+    }
+}
+
+function getAdjustmentRow(id) {
+    const rows = getServerAdjustmentRows();
+    return rows[id] || state.rows.find(row => String(row.id) === String(id)) || null;
+}
+
+function openRequestedAdjustment() {
+    if (!document.getElementById('kpiAdjustmentsRoot')) return;
+    const id = new URLSearchParams(window.location.search).get('record');
+    if (id) openAdjustmentDetail(id);
+}
+
+function openAdjustmentDetail(id) {
+    const row = getAdjustmentRow(id);
+    if (!row) {
+        VKModal.toast('Không tìm thấy phiếu điểm trong bộ lọc hiện tại.', 'warning');
+        return;
+    }
+
+    const signedPoint = `${row.type_raw === 'penalty' || row.adjustment_type === 'penalty' ? '-' : '+'}${formatPoint(row.points)} điểm`;
+    const status = row.status || '-';
+    const statusLabel = row.status_label || statusBadgeText(status);
+    const typeLabel = row.type || (row.adjustment_type === 'bonus' ? 'Cộng điểm' : 'Trừ điểm');
+    const pendingActions = status === 'pending' ? `
+        <div class="kpi-adjustment-detail-actions">
+            <button class="btn primary" type="button" data-review-kpi-adjustment="${row.id}" data-status="approved">Duyệt phiếu</button>
+            <button class="btn danger" type="button" data-review-kpi-adjustment="${row.id}" data-status="rejected">Từ chối</button>
+        </div>
+    ` : '';
+
+    VKModal.open(`Chi tiết phiếu điểm ${row.code || `KPI-ADJ-${row.id}`}`, `
+        <div class="kpi-adjustment-detail">
+            <section class="kpi-adjustment-hero ${row.type_raw || row.adjustment_type || ''}">
+                <div>
+                    <span>${escape(typeLabel)}</span>
+                    <strong>${escape(signedPoint)}</strong>
+                    <small>${escape(row.employee || row.user?.name || '-')} · ${escape(row.department || row.user?.department?.name || 'Chưa gán phòng ban')}</small>
+                </div>
+                <span class="badge ${statusTone(status)}">${escape(statusLabel)}</span>
+            </section>
+
+            <div class="detail-grid two">
+                ${detailItem('Nhân viên', `${row.employee || row.user?.name || '-'}${row.email || row.user?.email ? ` · ${row.email || row.user?.email}` : ''}`)}
+                ${detailItem('Kỳ tính', row.period || periodLabelPlain(row))}
+                ${detailItem('Người tạo', row.creator || row.creator?.name || '-')}
+                ${detailItem('Người duyệt', row.reviewer || row.reviewer?.name || '-')}
+                ${detailItem('Thời điểm duyệt', row.reviewed_at || '-')}
+                ${detailItem('Mã lý do', row.reason_code || '-')}
+            </div>
+
+            <section class="kpi-adjustment-note">
+                <h3>Lý do điều chỉnh</h3>
+                <p>${escape(row.reason || '-')}</p>
+            </section>
+            ${row.review_note ? `
+                <section class="kpi-adjustment-note">
+                    <h3>Ghi chú duyệt</h3>
+                    <p>${escape(row.review_note)}</p>
+                </section>
+            ` : ''}
+            ${row.evidence_url ? `<a class="text-link" target="_blank" rel="noopener" href="${escape(row.evidence_url)}">Mở bằng chứng</a>` : ''}
+            ${pendingActions}
+        </div>
+    `, null, {
+        className: 'wide-modal',
+        hideSubmit: true,
+        cancelText: 'Đóng',
+    });
+}
 
 async function loadKpiAdjustments(options = {}) {
     const root = document.getElementById('kpiAdjustmentsRoot');
@@ -282,6 +373,36 @@ function statusBadge(value) {
     };
     const [tone, label] = map[value] || ['info', value || '-'];
     return `<span class="badge ${tone}">${escape(label)}</span>`;
+}
+
+function statusBadgeText(value) {
+    return {
+        pending: 'Chờ duyệt',
+        approved: 'Đã duyệt',
+        rejected: 'Từ chối',
+    }[value] || value || '-';
+}
+
+function statusTone(value) {
+    return {
+        pending: 'warning',
+        approved: 'success',
+        rejected: 'danger',
+    }[value] || 'info';
+}
+
+function detailItem(label, value) {
+    return `
+        <div class="detail-item">
+            <span>${escape(label)}</span>
+            <strong>${escape(value || '-')}</strong>
+        </div>
+    `;
+}
+
+function periodLabelPlain(row) {
+    if (!row) return '-';
+    return `${periodTypeLabel(row.period_type)} · ${formatDate(row.period_start)} - ${formatDate(row.period_end)}`;
 }
 
 function formatDate(value) {
