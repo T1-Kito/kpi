@@ -17,6 +17,7 @@ class SalesOrder extends Model
         'subtotal_amount',
         'tax_amount',
         'total_amount',
+        'payment_terms',
         'stock_status',
         'delivery_status',
         'payment_status',
@@ -41,6 +42,11 @@ class SalesOrder extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function quotation(): BelongsTo
+    {
+        return $this->belongsTo(Quotation::class);
     }
 
     public function salesOwner(): BelongsTo

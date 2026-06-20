@@ -20,8 +20,8 @@
     const features = {
         dashboard: ['dashboard.js?v=20260617-3', 'loadDashboard'],
         leads: ['leads.js?v=20260615-2', 'loadLeads'],
-        quotations: ['quotations.js?v=20260619-5', 'loadQuotations'],
-        'sales-orders': ['sales-orders.js?v=20260619-2', 'loadSalesOrders'],
+        quotations: ['quotations.js?v=20260620-3', 'loadQuotations'],
+        'sales-orders': ['sales-orders.js?v=20260620-1', 'loadSalesOrders'],
         deliveries: ['sales-fulfillment.js?v=20260618-1', 'loadDeliveries'],
         'sales-invoices': ['sales-fulfillment.js?v=20260618-1', 'loadSalesInvoices'],
         'customer-receivables': ['customer-receivables.js?v=20260617-1', 'loadCustomerReceivables'],

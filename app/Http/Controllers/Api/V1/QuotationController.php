@@ -158,6 +158,8 @@ class QuotationController extends Controller
             'note' => $quotation->note,
             'items' => $quotation->items->map(fn ($item): array => [
                 'sku_id' => $item->sku_id,
+                'name' => $item->name,
+                'unit' => $item->unit,
                 'quantity' => (float) $item->quantity,
                 'unit_price' => (float) $item->unit_price,
                 'vat_rate' => (float) ($item->vat_rate ?? 0),

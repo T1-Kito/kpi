@@ -2149,7 +2149,9 @@ tbody tr[data-row-detail] {
 }
 
 .quotation-create-modal .quotation-product-field {
+    display: grid;
     min-width: 0;
+    gap: 6px;
 }
 
 .quotation-create-modal .quotation-unit-field > span {

@@ -358,9 +358,13 @@ async function openQuotationModal(row = null) {
                     <h3>Điều khoản báo giá</h3>
                 </div>
                 <div class="form-grid two">
-                    ${VKModal.field('valid_until', 'Hiệu lực đến', 'date', dateInputValue(row?.valid_until))}
-                    ${VKModal.field('payment_terms', 'Điều khoản thanh toán', 'text', row?.payment_terms || '')}
-                    ${VKModal.field('delivery_terms', 'Điều kiện giao hàng', 'text', row?.delivery_terms || '')}
+                    ${VKModal.field('valid_until', 'Hiệu lực đến', 'date', defaultQuotationValidUntil(row))}
+                    ${VKModal.select('payment_terms', 'Phương thức thanh toán', [
+                        { value: 'Chuyển khoản', label: 'Chuyển khoản' },
+                        { value: 'Tiền mặt', label: 'Tiền mặt' },
+                        { value: 'Thanh toán trước 100%', label: 'Thanh toán trước 100%' },
+                        { value: 'Công nợ 30 ngày', label: 'Công nợ 30 ngày' },
+                    ], row?.payment_terms || 'Chuyển khoản')}
                     <div class="field full"><label for="note">Ghi chú báo giá</label><textarea id="note" name="note" rows="3">${VKTable.escapeHtml(row?.note || '')}</textarea></div>
                 </div>
             </section>
@@ -389,6 +393,7 @@ async function openQuotationModal(row = null) {
         const data = Object.fromEntries(new FormData(form));
         const formData = new FormData(form);
         const skuIds = formData.getAll('sku_id[]');
+
         const quantities = formData.getAll('quantity[]');
         const prices = formData.getAll('unit_price[]');
         const vatRates = formData.getAll('vat_rate[]');
@@ -405,7 +410,7 @@ async function openQuotationModal(row = null) {
                 customer_id: Number(data.customer_id),
                 valid_until: data.valid_until || null,
                 payment_terms: data.payment_terms || null,
-                delivery_terms: data.delivery_terms || null,
+                delivery_terms: null,
                 note: data.note || null,
                 items,
             }),
@@ -579,7 +584,8 @@ function quotationLineHtml(skus, index, item = null) {
     const price = Number(item?.unit_price ?? selectedSku.sale_price ?? 0);
     const quantity = Number(item?.quantity ?? 1);
     const vatRate = Number(item?.vat_rate ?? 8);
-    const unit = item?.sku?.unit || selectedSku.unit || '-';
+
+    const unit = item?.unit || item?.sku?.unit || selectedSku.unit || '-';
 
     return `
         <div class="quotation-line quotation-create-line" data-quotation-line>
@@ -906,7 +912,7 @@ function renderQuotationApprovalPayment(row) {
         : (Number(row.margin_percent || 0) < 15 ? 'Cần duyệt biên lợi nhuận' : 'Không cần duyệt thêm');
     const fields = [
         ['Hạn mức công nợ', VKTable.money(customer.credit_limit || 0)],
-        ['Phương thức thanh toán', row.payment_method || 'Chưa khai báo'],
+        ['Phương thức thanh toán', row.payment_terms || 'Chưa khai báo'],
         ['Người phụ trách', row.sales_owner?.name || row.salesOwner?.name || '-'],
         ['Biên lợi nhuận', `${Number(row.margin_percent || 0).toFixed(2)}%`],
         ['Duyệt lợi nhuận', approvalText],
@@ -1082,8 +1088,8 @@ function renderQuotationPageItems(items, compact = false, quotation = null) {
     const columns = [
         ...(compact ? [{ label: '#', render: item => String(item._index) }] : []),
         { label: 'Mã hàng', render: item => `<span class="mono">${VKTable.escapeHtml(item.sku?.sku_code || '-')}</span>` },
-        { label: 'Tên hàng', render: item => VKTable.escapeHtml(item.sku?.name || '-') },
-        { label: 'ĐVT', render: item => VKTable.escapeHtml(item.sku?.unit || '-') },
+        { label: 'Tên hàng', render: item => VKTable.escapeHtml(item.name || item.sku?.name || '-') },
+        { label: 'ĐVT', render: item => VKTable.escapeHtml(item.unit || item.sku?.unit || '-') },
         { label: 'Số lượng', render: item => VKTable.money(item.quantity) },
         { label: 'Đơn giá', render: item => VKTable.money(item.unit_price) },
         { label: 'VAT', render: item => `${Number(item.vat_rate || 0).toFixed(0)}%` },
@@ -1572,8 +1578,8 @@ function renderQuotationTemplateLineTable(row) {
             <tr>
                 <td>${index + 1}</td>
                 <td>${escapeDoc(sku.sku_code || item.sku_code || '-')}</td>
-                <td>${escapeDoc(sku.name || item.name || '-')}</td>
-                <td>${escapeDoc(sku.unit || item.unit || '-')}</td>
+                <td>${escapeDoc(item.name || sku.name || '-')}</td>
+                <td>${escapeDoc(item.unit || sku.unit || '-')}</td>
                 <td class="num">${VKTable.money(quantity)}</td>
                 <td class="num">${VKTable.money(unitPrice)}</td>
                 <td class="num">${VKTable.money(vatRate)}%</td>
@@ -1699,8 +1705,8 @@ function quotationDocumentHtml(row, { autoPrint = false, template = null } = {})
                     <tr>
                         <td>${index + 1}</td>
                         <td>${escapeDoc(item.sku?.sku_code || '-')}</td>
-                        <td>${escapeDoc(item.sku?.name || '-')}</td>
-                        <td>${escapeDoc(item.sku?.unit || '-')}</td>
+                        <td>${escapeDoc(item.name || item.sku?.name || '-')}</td>
+                        <td>${escapeDoc(item.unit || item.sku?.unit || '-')}</td>
                         <td class="num">${escapeDoc(VKTable.money(item.quantity || 0))}</td>
                         <td class="num">${escapeDoc(VKTable.money(item.unit_price || 0))}</td>
                         <td class="num">${Number(item.vat_rate || 0).toFixed(0)}%</td>
@@ -1743,6 +1749,12 @@ function safeFileName(value) {
     return String(value || 'bao-gia').replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '-');
 }
 
+function defaultQuotationValidUntil(row = null) {
+    if (row?.valid_until) return dateInputValue(row.valid_until);
+    const date = new Date();
+    date.setDate(date.getDate() + 15);
+    return dateInputValue(date);
+}
 function dateInputValue(value) {
     if (!value) return '';
     const date = new Date(value);

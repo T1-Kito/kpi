@@ -13,5 +13,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/sales-orders.js?v=20260618-1"></script>
+<script src="/assets/js/features/sales-orders.js?v=20260620-1"></script>
 @endpush

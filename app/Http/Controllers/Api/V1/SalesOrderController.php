@@ -30,6 +30,7 @@ class SalesOrderController extends Controller
             ->where('tenant_id', $request->user()->tenant_id)
             ->with([
                 'customer:id,code,name,contact_name,phone,email,address,billing_address,credit_limit',
+                'quotation:id,code,payment_terms,status',
                 'items.sku:id,sku_code,name,unit',
                 'deliveries:id,sales_order_id,code,status,delivered_at',
                 'invoices:id,sales_order_id,code,status,total_amount,paid_amount,balance_amount,due_date',
@@ -72,6 +73,7 @@ class SalesOrderController extends Controller
         return response()->json(['data' => $this->withDetailContext(
             $salesOrder->load([
                 'customer:id,code,name,contact_name,phone,email,address,billing_address,credit_limit',
+                'quotation:id,code,payment_terms,status',
                 'items.sku:id,sku_code,name,unit',
                 'deliveries',
                 'invoices.payments',
@@ -123,6 +125,13 @@ class SalesOrderController extends Controller
 
         return [
             ...$order->toArray(),
+            'payment_terms' => $order->payment_terms ?: $quotation?->payment_terms,
+            'quotation' => $quotation ? [
+                'id' => $quotation->id,
+                'code' => $quotation->code,
+                'status' => $quotation->status,
+                'payment_terms' => $quotation->payment_terms,
+            ] : null,
             'related_documents' => array_merge(
                 $quotation ? [[
                     'type' => 'quotation',

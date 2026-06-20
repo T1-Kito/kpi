@@ -152,6 +152,37 @@ class SalesFlowApiTest extends TestCase
         ]);
     }
 
+    public function test_quotation_item_name_and_unit_follow_selected_sku(): void
+    {
+        $this->seed();
+        $token = $this->loginAs('sales@vk-kpi.local');
+        $sku = Sku::where('sku_code', 'SKU-PRN-001')->firstOrFail();
+
+        $response = $this->withToken($token)
+            ->postJson('/api/v1/quotations', [
+                'customer_id' => 1,
+                'items' => [
+                    [
+                        'sku_id' => $sku->id,
+                        'name' => 'May in ma vach VK-100 kem cai dat',
+                        'unit' => 'bo',
+                        'quantity' => 1,
+                        'unit_price' => 3500000,
+                        'vat_rate' => 8,
+                    ],
+                ],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.items.0.name', $sku->name)
+            ->assertJsonPath('data.items.0.unit', $sku->unit);
+
+        $this->assertDatabaseHas('quotation_items', [
+            'quotation_id' => $response->json('data.id'),
+            'sku_id' => $sku->id,
+            'name' => $sku->name,
+            'unit' => $sku->unit,
+        ]);
+    }
     public function test_pending_quotation_can_be_updated_before_sales_order(): void
     {
         $this->seed();

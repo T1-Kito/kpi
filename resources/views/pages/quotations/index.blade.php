@@ -13,5 +13,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/quotations.js?v=20260618-16"></script>
+<script src="/assets/js/features/quotations.js?v=20260620-3"></script>
 @endpush

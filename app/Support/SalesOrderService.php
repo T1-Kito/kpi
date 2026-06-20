@@ -44,6 +44,7 @@ class SalesOrderService
                 'subtotal_amount' => $quotation->subtotal_amount ?: ($quotation->total_amount - $quotation->tax_amount),
                 'tax_amount' => $quotation->tax_amount ?: 0,
                 'total_amount' => $quotation->total_amount,
+                'payment_terms' => $quotation->payment_terms,
                 'stock_status' => 'unchecked',
                 'status' => 'draft',
             ]);

@@ -110,6 +110,8 @@ class QuotationService
             $sku = Sku::where('tenant_id', $actor->tenant_id)->findOrFail($line['sku_id']);
             $quantity = (float) $line['quantity'];
             $unitPrice = (float) ($line['unit_price'] ?? $sku->sale_price);
+            $lineName = $sku->name;
+            $lineUnit = $sku->unit ?: '-';
             $unitCost = (float) $sku->cost_price;
             $vatRate = (float) ($line['vat_rate'] ?? 0);
             $lineSubtotal = $quantity * $unitPrice;
@@ -119,6 +121,8 @@ class QuotationService
 
             $quotation->items()->create([
                 'sku_id' => $sku->id,
+                'name' => $lineName,
+                'unit' => $lineUnit,
                 'quantity' => $quantity,
                 'unit_price' => $unitPrice,
                 'unit_cost' => $unitCost,

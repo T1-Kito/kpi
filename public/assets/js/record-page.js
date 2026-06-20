@@ -659,6 +659,7 @@
         const customer = row.customer || {};
         const contact = [customer.contact_name, customer.phone].filter(Boolean).join(' - ') || customer.email || 'Chưa khai báo';
         const owner = row.sales_owner?.name || row.salesOwner?.name || 'Chưa phân công';
+        const paymentTerms = row.payment_terms || row.quotation?.payment_terms || 'Chưa khai báo';
         const orderFields = [
             ['Mã đơn hàng', row.code || '-'],
             ['Trạng thái', VKTable.statusBadge(row.status || 'draft'), true],
@@ -671,7 +672,7 @@
             ['Mã khách hàng', customer.code || '-'],
             ['Người liên hệ', contact],
             ['Người phụ trách', owner],
-            ['Phương thức TT', row.payment_method || 'Chưa khai báo'],
+            ['Phương thức TT', paymentTerms],
             ['Ghi chú', row.note || '-'],
         ];
 
@@ -716,6 +717,7 @@
         const customer = row.customer || {};
         const contact = [customer.contact_name, customer.phone].filter(Boolean).join(' - ') || customer.email || 'Chưa khai báo';
         const owner = row.sales_owner?.name || row.salesOwner?.name || 'Chưa phân công';
+        const paymentTerms = row.payment_terms || row.quotation?.payment_terms || 'Chưa khai báo';
         const fields = [
             ['Mã đơn hàng', row.code || '-'],
             ['Ngày tạo', formatDateTime(row.created_at)],
@@ -724,7 +726,7 @@
             ['Khách hàng', customer.name || '-'],
             ['Tình trạng tồn', VKTable.statusBadge(row.stock_status || 'unchecked'), true],
             ['Mã khách hàng', customer.code || '-'],
-            ['Phương thức TT', row.payment_method || 'Chưa khai báo'],
+            ['Phương thức TT', paymentTerms],
             ['Người liên hệ', contact],
             ['Ghi chú', row.note || '-'],
             ['Người phụ trách', owner],
