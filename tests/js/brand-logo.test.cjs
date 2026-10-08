@@ -69,3 +69,33 @@ test('outdated load and error callbacks cannot overwrite the latest logo', () =>
     assert.equal(s.image.hidden, true);
     assert.equal(s.fallback.hidden, false);
 });
+
+function restoreEarly(values) {
+    const s = setup();
+    const blade = fs.readFileSync(path.join(root, 'resources/views/partials/sidebar.blade.php'), 'utf8');
+    const script = blade.match(/<script>([\s\S]*?)<\/script>/)[1];
+    vm.runInNewContext(script, {
+        localStorage: { getItem: key => values[key] || null },
+        document: { querySelector: selector => selector === '[data-brand-logo]' ? s.image : s.fallback },
+    });
+    return s;
+}
+
+test('cached branding is attached during HTML parsing, without async app bootstrap', () => {
+    const s = restoreEarly({ vk_token: 'test-token', 'vk.currentUser.v3': JSON.stringify({
+        permissions: ['dashboard.view'], data_scope: 'all', tenant: { logo_url: '/saved.png' },
+    }) });
+    assert.equal(s.image.src, '/saved.png');
+    assert.equal(s.image.hidden, false);
+    assert.equal(s.fallback.hidden, true);
+    s.hydrate('/saved.png');
+    assert.equal(s.pending.length, 0);
+});
+
+test('early branding ignores logged-out and malformed cache', () => {
+    for (const values of [{}, { vk_token: 'test-token', 'vk.currentUser.v3': '{broken' }]) {
+        const s = restoreEarly(values);
+        assert.equal(s.image.hidden, true);
+        assert.equal(s.image.src, undefined);
+    }
+});

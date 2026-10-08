@@ -1,6 +1,34 @@
 <aside class="sidebar">
     <div class="side-brand">
         <a class="brand" href="/dashboard" aria-label="Trang tổng quan"><span class="brand-logo hidden" aria-hidden="true"></span><img class="brand-image hidden" alt="Logo hệ thống" data-brand-logo></a>
+        <script>
+            // Restore branding before the first paint, without waiting for app scripts or /me.
+            (function () {
+                try {
+                    if (!localStorage.getItem('vk_token')) return;
+                    const user = JSON.parse(localStorage.getItem('vk.currentUser.v3') || 'null');
+                    if (!user || !Array.isArray(user.permissions) || !user.permissions.length || typeof user.data_scope !== 'string') return;
+                    const image = document.querySelector('[data-brand-logo]');
+                    const fallback = document.querySelector('.brand-logo');
+                    const url = String(user.tenant?.logo_url || '').trim();
+                    if (!url) {
+                        fallback.classList.remove('hidden');
+                        return;
+                    }
+                    image.dataset.requestedLogo = url;
+                    image.onerror = function () {
+                        if (image.dataset.requestedLogo !== url) return;
+                        delete image.dataset.requestedLogo;
+                        image.classList.add('hidden');
+                        fallback.classList.remove('hidden');
+                    };
+                    image.src = url;
+                    image.classList.remove('hidden');
+                } catch (error) {
+                    // The normal layout bootstrap handles unavailable browser storage.
+                }
+            })();
+        </script>
     </div>
 
     <nav class="nav grouped-nav" id="mainNav">

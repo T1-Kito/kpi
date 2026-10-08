@@ -230,6 +230,7 @@
         const url = String(logoUrl || '').trim();
         if (image.dataset.requestedLogo === url) return;
         image.dataset.requestedLogo = url;
+        image.onerror = null;
 
         if (!url) {
             image.removeAttribute('src');
