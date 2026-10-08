@@ -45,7 +45,7 @@
     <script src="/assets/js/modal.js?v=20260615-2"></script>
     <script src="/assets/js/record-page.js?v=20261008-8"></script>
     <script src="/assets/js/detail-drawer.js"></script>
-    <script src="/assets/js/layout.js?v=20261008-17"></script>
+    <script src="/assets/js/layout.js?v=20261008-18"></script>
     <script src="/assets/js/notifications.js"></script>
     <script src="/assets/js/app.js"></script>
     @stack('scripts')

@@ -227,16 +227,34 @@
         const fallback = document.querySelector('.brand-logo');
         if (!image || !fallback) return;
 
-        if (logoUrl) {
-            image.src = logoUrl;
-            image.classList.remove('hidden');
-            fallback.classList.add('hidden');
+        const url = String(logoUrl || '').trim();
+        if (image.dataset.requestedLogo === url) return;
+        image.dataset.requestedLogo = url;
+
+        if (!url) {
+            image.removeAttribute('src');
+            image.classList.add('hidden');
+            fallback.classList.remove('hidden');
             return;
         }
 
-        image.removeAttribute('src');
-        image.classList.add('hidden');
-        fallback.classList.remove('hidden');
+        // Keep the reserved brand area quiet until the saved image is ready.
+        fallback.classList.add('hidden');
+        const pending = new Image();
+        pending.onload = () => {
+            if (image.dataset.requestedLogo !== url) return;
+            image.src = url;
+            image.classList.remove('hidden');
+            fallback.classList.add('hidden');
+        };
+        pending.onerror = () => {
+            if (image.dataset.requestedLogo !== url) return;
+            delete image.dataset.requestedLogo;
+            image.removeAttribute('src');
+            image.classList.add('hidden');
+            fallback.classList.remove('hidden');
+        };
+        pending.src = url;
     }
 
     function applyNavigation() {

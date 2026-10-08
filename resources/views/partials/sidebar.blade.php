@@ -1,6 +1,6 @@
 <aside class="sidebar">
     <div class="side-brand">
-        <a class="brand" href="/dashboard"><span class="brand-logo" aria-hidden="true"></span><img class="brand-image hidden" alt="Logo hệ thống" data-brand-logo></a>
+        <a class="brand" href="/dashboard" aria-label="Trang tổng quan"><span class="brand-logo hidden" aria-hidden="true"></span><img class="brand-image hidden" alt="Logo hệ thống" data-brand-logo></a>
     </div>
 
     <nav class="nav grouped-nav" id="mainNav">
