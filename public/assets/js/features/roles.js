@@ -5,8 +5,45 @@ document.addEventListener('click', (event) => {
     if (event.target.matches('[data-create-role]')) openRoleModal();
     if (event.target.matches('[data-sync-role-permissions]')) openPermissionModal(Number(event.target.dataset.syncRolePermissions));
 });
+document.addEventListener('change', (event) => {
+    const modal = event.target.closest('.role-permission-modal');
+    if (!modal || !event.target.matches('[data-role-select-all], [data-role-group-all], input[name="permission_ids"]')) return;
+    if (event.target.matches('[data-role-select-all]')) {
+        modal.querySelectorAll('input[name="permission_ids"]').forEach(input => { input.checked = event.target.checked; });
+    } else if (event.target.matches('[data-role-group-all]')) {
+        event.target.closest('.role-permission-group').querySelectorAll('input[name="permission_ids"]').forEach(input => { input.checked = event.target.checked; });
+    }
+    updatePermissionSelection(modal);
+});
 
 let roleState = { rows: [], permissions: [] };
+document.addEventListener('input', event => {
+    if (!event.target.matches('[data-role-search]')) return;
+    const term = event.target.value.trim().toLocaleLowerCase('vi');
+    event.target.closest('.role-permission-modal').querySelectorAll('.role-permission-group').forEach(group => {
+        group.hidden = Boolean(term && !group.textContent.toLocaleLowerCase('vi').includes(term));
+        if (term && !group.hidden) group.open = true;
+    });
+});
+const rolePermissionGroups = [
+    { title: 'Báo giá', prefix: 'sales.quotation.', actions: ['view', 'create', 'edit', 'delete'] },
+    { title: 'Đơn hàng', prefix: 'sales.order.', actions: ['view', 'create', 'edit', 'delete'] },
+    { title: 'Cơ hội bán hàng', prefix: 'sales.deal.' },
+    { title: 'Hợp đồng', prefix: 'sales.contract.' },
+    { title: 'Khách hàng tiềm năng', prefix: 'sales.lead.' },
+    { title: 'Giao hàng', prefix: 'sales.delivery.' },
+    { title: 'Khách hàng & dữ liệu nền', prefix: 'master.' },
+    { title: 'Công việc', prefix: 'task.' },
+    { title: 'Cảnh báo', prefix: 'alert.' },
+    { title: 'Hóa đơn', prefix: 'finance.invoice.' },
+    { title: 'Thu tiền', prefix: 'finance.payment.' },
+    { title: 'Kho vận', prefix: 'inventory.' },
+    { title: 'Yêu cầu mua', prefix: 'procurement.pr.' },
+    { title: 'Đơn mua', prefix: 'procurement.po.' },
+    { title: 'Dịch vụ & bảo hành', prefix: 'service.ticket.' },
+    { title: 'KPI', prefix: 'kpi.' },
+    { title: 'Quản trị', codes: ['user.manage', 'role.manage', 'audit.view'] },
+];
 
 async function loadRoles() {
     if (!document.getElementById('rolesRoot')) return;
@@ -76,7 +113,7 @@ function openRoleModal() {
             ])}
             <div class="field full">
                 <label>Quyền truy cập</label>
-                ${renderCheckboxList('permission_ids', roleState.permissions, [])}
+                ${renderPermissionTree([])}
             </div>
         </div>
     `, async (form) => {
@@ -92,7 +129,8 @@ function openRoleModal() {
         VKModal.toast('Đã tạo vai trò.');
         VKModal.close();
         loadRoles();
-    });
+    }, { className: 'role-permission-modal' });
+    updatePermissionSelection(document.querySelector('.role-permission-modal'));
 }
 
 function openPermissionModal(roleId) {
@@ -103,7 +141,7 @@ function openPermissionModal(roleId) {
     VKModal.open(`Gán quyền cho ${role.name}`, `
         <div class="field">
             <label>Quyền truy cập</label>
-            ${renderCheckboxList('permission_ids', roleState.permissions, selected)}
+            ${renderPermissionTree(selected)}
         </div>
     `, async (form) => {
         await VKApi.request(`/roles/${roleId}/permissions`, {
@@ -113,16 +151,46 @@ function openPermissionModal(roleId) {
         VKModal.toast('Đã cập nhật quyền cho vai trò.');
         VKModal.close();
         loadRoles();
-    });
+    }, { className: 'role-permission-modal' });
+    updatePermissionSelection(document.querySelector('.role-permission-modal'));
 }
 
-function renderCheckboxList(name, items, selectedIds) {
-    return `<div class="checkbox-grid">${items.map(item => `
-        <label>
-            <input type="checkbox" name="${name}" value="${item.id}" ${selectedIds.includes(item.id) ? 'checked' : ''}>
-            <span>${VKTable.escapeHtml(VKTable.translatePermission(item.code) || item.name)}</span>
-        </label>
-    `).join('')}</div>`;
+function renderPermissionTree(selectedIds) {
+    const used = new Set();
+    const groups = rolePermissionGroups.map(group => {
+        const items = roleState.permissions.filter(item => group.codes ? group.codes.includes(item.code) : item.code.startsWith(group.prefix));
+        items.forEach(item => used.add(item.code));
+        return { ...group, items };
+    }).filter(group => group.items.length);
+    const others = roleState.permissions.filter(item => !used.has(item.code));
+    if (others.length) groups.push({ title: 'Quyền khác', items: others });
+    return `<div class="role-permission-search"><input type="search" data-role-search aria-label="Tìm nhóm quyền" placeholder="Tìm chức năng hoặc quyền…"></div><div class="role-permission-toolbar"><label><input type="checkbox" data-role-select-all><span>Chọn tất cả quyền</span></label><small data-role-total-count></small></div><p class="role-permission-help">Phạm vi dữ liệu quyết định được xem hồ sơ nào; quyền quyết định được làm gì. Chọn tất cả áp dụng cả nhóm đang ẩn khi tìm kiếm, bao gồm quyền Xóa và Quản trị. Chỉ cấp quyền cần thiết.</p><div class="role-permission-tree">${groups.map(group => {
+        const count = group.items.filter(item => selectedIds.includes(item.id)).length;
+        const items = group.actions ? [...group.actions.map(action => group.items.find(item => item.code === `${group.prefix}${action}`)).filter(Boolean), ...group.items.filter(item => !group.actions.some(action => item.code === `${group.prefix}${action}`))] : group.items;
+        return `<details class="role-permission-group" ${count ? 'open' : ''}><summary><span class="role-permission-plus" aria-hidden="true">+</span><strong>${VKTable.escapeHtml(group.title)}</strong><small data-role-group-count>${count}/${group.items.length} quyền</small></summary><div class="role-permission-options"><div class="role-permission-group-select"><label><input type="checkbox" data-role-group-all><span>Chọn tất cả trong nhóm</span></label></div>${items.map(item => {
+            const action = item.code.split('.').pop();
+            const label = ({ view: 'Xem', create: 'Tạo', edit: 'Sửa', delete: 'Xóa' })[action] || VKTable.translatePermission(item.code) || item.name;
+            return `<label class="${action === 'delete' || ['role.manage','user.manage'].includes(item.code) ? 'role-sensitive-permission' : ''}" title="${VKTable.escapeHtml(item.code)}"><input type="checkbox" name="permission_ids" value="${item.id}" ${selectedIds.includes(item.id) ? 'checked' : ''}><span>${VKTable.escapeHtml(label)}</span>${['view', 'create', 'edit', 'delete'].includes(action) ? '' : `<small>${VKTable.escapeHtml(item.name)}</small>`}</label>`;
+        }).join('')}</div></details>`;
+    }).join('')}</div>`;
+}
+
+function updatePermissionSelection(modal) {
+    if (!modal) return;
+    const permissions = [...modal.querySelectorAll('input[name="permission_ids"]')];
+    const selected = permissions.filter(input => input.checked).length;
+    const selectAll = modal.querySelector('[data-role-select-all]');
+    selectAll.checked = permissions.length > 0 && selected === permissions.length;
+    selectAll.indeterminate = selected > 0 && selected < permissions.length;
+    modal.querySelector('[data-role-total-count]').textContent = `${selected}/${permissions.length} quyền`;
+    modal.querySelectorAll('.role-permission-group').forEach(group => {
+        const inputs = [...group.querySelectorAll('input[name="permission_ids"]')];
+        const count = inputs.filter(input => input.checked).length;
+        const groupSelect = group.querySelector('[data-role-group-all]');
+        groupSelect.checked = inputs.length > 0 && count === inputs.length;
+        groupSelect.indeterminate = count > 0 && count < inputs.length;
+        group.querySelector('[data-role-group-count]').textContent = `${count}/${inputs.length} quyền`;
+    });
 }
 
 function checkedValues(form, name) {

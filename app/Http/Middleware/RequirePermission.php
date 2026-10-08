@@ -13,7 +13,7 @@ class RequirePermission
     {
         $user = $request->user();
 
-        if (! $user || ! $user->hasPermission($permission)) {
+        if (! $user || ! collect(explode('|', $permission))->contains(fn ($code) => $user->hasPermission($code))) {
             return response()->json(['error_code' => 'FORBIDDEN', 'message' => 'Permission denied.'], 403);
         }
 

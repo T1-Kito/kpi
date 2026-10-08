@@ -48,6 +48,30 @@ class KpiApiTest extends TestCase
         ]);
     }
 
+    public function test_recalculation_preserves_locked_kpi_target(): void
+    {
+        $this->seed();
+        $token = $this->loginAs('admin@vk-kpi.local');
+        $this->withToken($token)
+            ->postJson('/api/v1/kpi/snapshots/calculate', ['period_type' => 'day'])
+            ->assertCreated();
+
+        $target = \App\Models\KpiTarget::query()->firstOrFail();
+        $this->withToken($token)
+            ->postJson("/api/v1/kpi/targets/{$target->id}/lock")
+            ->assertOk();
+        $lockedAt = $target->fresh()->locked_at;
+        $score = $target->fresh()->score;
+
+        $this->withToken($token)
+            ->postJson('/api/v1/kpi/snapshots/calculate', ['period_type' => 'day'])
+            ->assertCreated();
+
+        $this->assertSame('locked', $target->fresh()->status);
+        $this->assertEquals($lockedAt, $target->fresh()->locked_at);
+        $this->assertEquals($score, $target->fresh()->score);
+    }
+
     public function test_admin_can_create_and_review_kpi_exception(): void
     {
         $this->seed();

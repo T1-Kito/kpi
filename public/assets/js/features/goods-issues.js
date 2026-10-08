@@ -20,6 +20,10 @@ document.addEventListener('change', (event) => {
 document.addEventListener('click', (event) => {
     if (!document.getElementById('goodsIssuesRoot')) return;
     if (event.target.matches('[data-create-goods-issue]')) openGoodsIssueModal();
+    if (event.target.matches('[data-goods-issue-word]')) {
+        event.stopPropagation();
+        downloadGoodsIssueWord(event.target.dataset.goodsIssueWord);
+    }
     if (event.target.matches('[data-confirm-goods-issue]')) {
         event.stopPropagation();
         confirmGoodsIssue(event.target.dataset.confirmGoodsIssue);
@@ -53,7 +57,7 @@ function renderGoodsIssues(total = giState.rows.length) {
         filters: VKTable.filterBar({
             searchPlaceholder: 'Tìm mã phiếu, đơn bán hoặc kho...',
             status: [
-                { value: 'draft', label: 'Nháp' },
+                { value: 'draft', label: 'Chờ xuất kho' },
                 { value: 'confirmed', label: 'Đã xác nhận' },
             ],
         }),
@@ -68,8 +72,8 @@ function renderIssueTable(rows) {
         { label: 'Đơn bán', render: row => `<span class="mono">${VKTable.escapeHtml(row.sales_order?.code || '-')}</span>` },
         { label: 'Đơn tạo lúc', render: row => formatDateTime(row.sales_order?.created_at) },
         { label: 'Kho xuất', render: row => VKTable.escapeHtml(row.warehouse?.name || '-') },
-        { label: 'Hàng xuất', render: row => renderItems(row.items) },
-        { label: 'Trạng thái', render: row => VKTable.statusBadge(row.status) },
+        { label: 'Hàng xuất', render: row => `${row.affects_stock === false ? '<span class="badge info">Không trừ tồn</span><br>' : ''}${renderItems(row.items)}` },
+        { label: 'Trạng thái', render: row => row.status === 'draft' ? '<span class="badge info">Chờ xuất kho</span>' : VKTable.statusBadge(row.status) },
         { label: '', render: row => VKTable.rowActions([
             VKTable.smallButton('Mở', `data-goods-issue-detail="${row.id}"`),
             row.status === 'draft' ? VKTable.smallButton('Xác nhận', `data-confirm-goods-issue="${row.id}"`, 'primary') : '',
@@ -100,27 +104,80 @@ async function openGoodsIssueModal() {
         .filter(issue => ['draft', 'confirmed'].includes(issue.status))
         .map(issue => String(issue.sales_order_id)));
     const reservedOrders = orders.data
-        .filter(row => row.stock_status === 'reserved' && !activeIssueOrderIds.has(String(row.id)))
+        .filter(row => ['reserved', 'not_required'].includes(row.stock_status) && !activeIssueOrderIds.has(String(row.id)))
         .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-    if (!reservedOrders.length) return VKModal.toast('Chưa có đơn bán đã giữ hàng để xuất kho.');
+    if (!reservedOrders.length) return VKModal.toast('Chưa có đơn bán cần lập phiếu xuất.');
     if (!warehouses.data.length) return VKModal.toast('Chưa có kho xuất hàng.');
 
     const newestOrderId = reservedOrders[0]?.id;
     VKModal.open('Tạo phiếu xuất kho', `
         <div class="form-grid goods-issue-create-grid">
-            ${VKModal.select('sales_order_id', 'Đơn bán đã giữ hàng', reservedOrders.map(row => ({ value: row.id, label: goodsIssueOrderLabel(row, row.id === newestOrderId) })))}
+            ${VKModal.select('sales_order_id', 'Đơn bán cần lập phiếu xuất', reservedOrders.map(row => ({ value: row.id, label: goodsIssueOrderLabel(row, row.id === newestOrderId) })))}
             ${VKModal.select('warehouse_id', 'Kho xuất', warehouses.data.map(row => ({ value: row.id, label: `${row.code} - ${row.name}` })))}
         </div>
+        <div class="goods-issue-document" data-goods-issue-document></div>
     `, async (form) => {
         const data = Object.fromEntries(new FormData(form));
         await VKApi.request('/goods-issues', {
             method: 'POST',
-            body: JSON.stringify({ sales_order_id: Number(data.sales_order_id), warehouse_id: Number(data.warehouse_id) }),
+            body: JSON.stringify({
+                sales_order_id: Number(data.sales_order_id),
+                warehouse_id: Number(data.warehouse_id),
+                recipient_name: data.recipient_name,
+                recipient_phone: data.recipient_phone,
+                recipient_address: data.recipient_address,
+                delivery_location: data.delivery_location,
+                issue_reason: data.issue_reason,
+                source_document: data.source_document,
+            }),
         });
-        VKModal.toast('Đã tạo phiếu xuất.');
+        VKModal.toast('Đã tạo phiếu xuất, kho có thể kiểm tra và xác nhận.');
         VKModal.close();
         loadGoodsIssues();
-    }, { className: 'goods-issue-create-modal' });
+    }, { className: 'goods-issue-create-modal', submitText: 'Lưu phiếu xuất kho' });
+
+    const orderSelect = document.querySelector('#modalBody [name="sales_order_id"]');
+    const documentRoot = document.querySelector('#modalBody [data-goods-issue-document]');
+    const showDocument = () => {
+        const order = reservedOrders.find(row => String(row.id) === String(orderSelect.value));
+        if (order && documentRoot) documentRoot.innerHTML = renderGoodsIssueDocument(order);
+    };
+    orderSelect?.addEventListener('change', showDocument);
+    showDocument();
+}
+
+function renderGoodsIssueDocument(order) {
+    const customer = order.customer || {};
+    const recipient = customer.contact_name || customer.name || '';
+    const address = customer.address || customer.billing_address || '';
+    const source = order.quotation?.code || order.code;
+    const isDirectDelivery = order.fulfillment_type === 'supplier_direct';
+    return `
+        <div class="goods-issue-document-heading">
+            <div><strong>Thông tin giao / xuất kho</strong><span>${isDirectDelivery ? 'Nhà cung cấp giao thẳng khách. Kho kiểm tra chứng từ, phiếu này không trừ tồn.' : 'Kho kiểm tra thông tin này trước khi xác nhận xuất hàng.'}</span></div>
+            <span class="goods-issue-order-code">Đơn: ${VKTable.escapeHtml(order.code || '')}</span>
+        </div>
+        <div class="form-grid goods-issue-document-grid">
+            ${VKModal.field('recipient_name', 'Họ và tên người nhận', 'text', recipient)}
+            ${VKModal.field('recipient_phone', 'Số điện thoại', 'text', customer.phone || '')}
+            ${VKModal.field('recipient_address', 'Địa chỉ', 'text', address)}
+            ${VKModal.field('delivery_location', 'Địa điểm giao hàng', 'text', address)}
+            ${VKModal.field('issue_reason', 'Lý do xuất', 'text', isDirectDelivery ? `NCC giao thẳng khách cho đơn ${order.code || ''} (không trừ tồn)` : `Xuất kho bán hàng cho ${customer.name || 'khách hàng'} (${order.code || ''})`)}
+            ${VKModal.field('source_document', 'Số chứng từ gốc kèm theo', 'text', source)}
+        </div>
+        <div class="goods-issue-items-wrap">
+            <div class="goods-issue-items-title">Hàng cần xuất</div>
+            <table class="goods-issue-items-table">
+                <thead><tr><th>Sản phẩm</th><th>ĐVT</th><th>SL đặt</th><th>Đã xuất</th><th>Còn lại</th><th>SL xuất lần này</th></tr></thead>
+                <tbody>${(order.items || []).map(item => `
+                    <tr>
+                        <td><strong>${VKTable.escapeHtml(item.sku?.name || '-')}</strong><small>${VKTable.escapeHtml(item.sku?.sku_code || '')}</small></td>
+                        <td>${VKTable.escapeHtml(item.sku?.unit || '-')}</td>
+                        <td>${VKTable.money(item.quantity || 0)}</td><td>0</td><td>${VKTable.money(item.quantity || 0)}</td>
+                        <td><span class="goods-issue-quantity">${VKTable.money(item.quantity || 0)}</span></td>
+                    </tr>`).join('') || '<tr><td colspan="6">Đơn bán chưa có hàng hóa.</td></tr>'}</tbody>
+            </table>
+        </div>`;
 }
 
 function renderItems(items = []) {
@@ -133,7 +190,8 @@ function goodsIssueOrderLabel(row, newest = false) {
     const createdAt = formatDateTime(row.created_at);
     const items = renderOrderItemsText(row.items || []);
     const amount = VKTable.money(row.total_amount || 0);
-    return `${newest ? '[Mới nhất] ' : ''}${row.code} - ${customer} - Tạo ${createdAt} - ${amount}${items ? ` - ${items}` : ''}`;
+    const direct = row.fulfillment_type === 'supplier_direct' ? ' - [Giao thẳng, không trừ tồn]' : '';
+    return `${newest ? '[Mới nhất] ' : ''}${row.code} - ${customer}${direct} - Tạo ${createdAt} - ${amount}${items ? ` - ${items}` : ''}`;
 }
 
 function renderOrderItemsText(items = []) {
@@ -177,6 +235,23 @@ async function confirmGoodsIssue(id) {
     }
 }
 
+async function downloadGoodsIssueWord(id) {
+    const row = giState.detailCache[String(id)] || giState.rows.find(item => String(item.id) === String(id)) || {};
+    const response = await fetch(`/api/v1/goods-issues/${encodeURIComponent(id)}/word`, {
+        headers: { Accept: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', Authorization: `Bearer ${VKApi.token()}` },
+    });
+    if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        VKModal.notice({ type: 'warning', title: 'Chưa thể xuất file', message: body.message || 'Không thể tải file Phiếu xuất kho.' });
+        return;
+    }
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement('a');
+    link.href = url; link.download = `${row.code || 'phieu-xuat-kho'}.docx`; document.body.appendChild(link); link.click(); link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    VKModal.toast('Đã tải file Phiếu xuất kho.', 'success');
+}
+
 function openGoodsIssueDetail(id) {
     giState.view = 'detail';
     giState.currentId = id;
@@ -192,9 +267,7 @@ function openGoodsIssueDetail(id) {
             giState.currentId = null;
             renderGoodsIssues();
         },
-        actions: row => row.status === 'draft'
-            ? `<button class="btn primary small" type="button" data-confirm-goods-issue="${row.id}">Xác nhận xuất kho</button>`
-            : '',
+        actions: row => `<button class="btn small" type="button" data-goods-issue-word="${row.id}">Phiếu xuất kho</button>${row.status === 'draft' ? `<button class="btn primary small" type="button" data-confirm-goods-issue="${row.id}">Xác nhận xuất kho</button>` : ''}`,
     });
 }
 

@@ -13,6 +13,7 @@ class Sku extends Model
         'sku_code',
         'name',
         'barcode',
+        'serial_number',
         'unit',
         'min_stock',
         'max_stock',

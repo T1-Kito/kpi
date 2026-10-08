@@ -27,6 +27,7 @@ async function loadKpi(options = {}) {
     const fallback = { data: [], meta: { total: 0 } };
     const [
         kpiOverview,
+        snapshots,
         leads,
         quotations,
         salesOrders,
@@ -39,6 +40,7 @@ async function loadKpi(options = {}) {
         alerts,
     ] = await Promise.all([
         safeRequest('/kpi/overview'),
+        safeRequest('/kpi/snapshots?period_type=day&page_size=30'),
         safeRequest('/leads?page_size=100'),
         safeRequest('/quotations?page_size=100'),
         safeRequest('/sales-orders?page_size=100'),
@@ -53,6 +55,7 @@ async function loadKpi(options = {}) {
 
     const pageData = {
         kpiOverview: kpiOverview || null,
+        snapshots: snapshots?.data || [],
         leads: leads || fallback,
         quotations: quotations || fallback,
         salesOrders: salesOrders || fallback,
@@ -156,15 +159,11 @@ function renderKpi(data) {
                 <section class="kpi-card kpi-trend-card">
                     <div class="kpi-card-head">
                         <div>
-                            <h2>Xu hướng KPI 30 ngày</h2>
-                            <span>Mô phỏng xu hướng từ điểm vận hành hiện tại.</span>
+                            <h2>Lịch sử điểm KPI</h2>
+                            <span>Chỉ hiển thị các lần tính KPI đã lưu; không dùng dữ liệu mô phỏng.</span>
                         </div>
-                        <select aria-label="Khoảng thời gian KPI">
-                            <option>30 ngày qua</option>
-                            <option>7 ngày qua</option>
-                        </select>
                     </div>
-                    ${trendChart(metrics)}
+                    ${trendChart(data.snapshots)}
                 </section>
 
                 ${rankPanel('KPI tốt nhất', bestRows.slice(0, 4), 'success')}
@@ -263,9 +262,9 @@ function renderOverview(metrics) {
     return `
         <section class="kpi-overview">
             <div class="kpi-total-score">
-                <span>Điểm KPI tổng công ty</span>
+                <span>Điểm vận hành tổng công ty (lũy kế)</span>
                 <strong><b>${metrics.totalScore}</b>/100</strong>
-                <small class="${metrics.totalScore >= 65 ? 'up' : 'down'}">${delta(metrics.totalScore, 70)} so với mốc tham chiếu</small>
+                <small>Trung bình bốn nhóm nghiệp vụ, thang 100 điểm</small>
             </div>
             <div class="kpi-donut" style="--score:${metrics.totalScore}">
                 <div>${metrics.totalScore}%</div>
@@ -273,12 +272,10 @@ function renderOverview(metrics) {
             <div class="kpi-rank-box">
                 <span>Xếp hạng hiệu suất</span>
                 <strong class="${rankTone(metrics.totalScore)}">${rankText(metrics.totalScore)}</strong>
-                <small>Mục tiêu tháng: 85/100</small>
+                <small>Xếp hạng tham khảo theo điểm hiện tại</small>
                 <div class="score-bar"><span style="width:${Math.min(metrics.totalScore, 100)}%"></span></div>
             </div>
-            <div class="kpi-mini-chart">
-                ${sparkline(makeSeries(metrics.totalScore, 8, 9), '#2563EB')}
-            </div>
+            <div class="kpi-mini-chart"><small>Điểm hiện tại được tổng hợp từ bốn nhóm: bán hàng, kho vận, mua hàng và công việc.</small></div>
         </section>
     `;
 }
@@ -328,6 +325,7 @@ function renderBackendKpiPanel(backend) {
                     </div>
                 `).join('') || '<p class="muted">Chưa có mục tiêu KPI.</p>'}
             </div>
+            <p class="role-permission-help" style="padding:0 16px 14px">Cách tính hiện tại: Bán hàng = chuyển đổi đơn/báo giá (45đ) + báo giá/lead (25đ) + giá trị đơn/báo giá (20đ) + không thiếu hàng (10đ). Kho = tồn khả dụng (45đ) + không dưới tồn tối thiểu (30đ) + xử lý nhập/xuất (25đ). Mua hàng = duyệt yêu cầu (35đ) + duyệt đơn mua (35đ) + nhận hàng (20đ) + có giá trị mua (10đ). Công việc = hoàn thành (45đ) + không quá hạn (25đ) + giải quyết cảnh báo (20đ) + không còn cảnh báo mở (10đ). Các tỷ lệ được giới hạn 0–100%; tổng điểm là trung bình bốn nhóm. Hiện dữ liệu tính lũy kế, chưa tách đúng từng kỳ hoặc từng nhân viên.</p>
         </section>
     `;
 }
@@ -393,14 +391,10 @@ function importantAlert(title, value, note, tone, href) {
     `;
 }
 
-function trendChart(metrics) {
-    const lines = [
-        ['Tổng KPI', makeSeries(metrics.totalScore, 30, 11), '#2563EB'],
-        ['Kinh doanh', makeSeries(metrics.salesScore, 30, 7), '#10B981'],
-        ['Kho vận', makeSeries(metrics.inventoryScore, 30, 13), '#F59E0B'],
-        ['Mua hàng', makeSeries(metrics.procurementScore, 30, 5), '#8B5CF6'],
-        ['Workflow', makeSeries(metrics.workflowScore, 30, 17), '#EF4444'],
-    ];
+function trendChart(snapshots) {
+    const rows = [...snapshots].reverse();
+    if (!rows.length) return '<p class="muted" style="padding:24px">Chưa có lịch sử KPI. Hãy tính KPI để bắt đầu lưu điểm theo ngày.</p>';
+    if (rows.length === 1) return `<p class="muted" style="padding:24px">Đã có một lần tính ngày ${formatDate(rows[0].snapshot_date)}: ${Number(rows[0].overall_score || 0).toFixed(0)}/100. Cần ít nhất hai ngày để vẽ xu hướng.</p>`;
     const width = 560;
     const height = 210;
     const plot = { left: 36, right: 12, top: 16, bottom: 32 };
@@ -408,58 +402,30 @@ function trendChart(metrics) {
     const chartH = height - plot.top - plot.bottom;
     const pathFor = values => values.map((value, index) => {
         const x = plot.left + (index / (values.length - 1)) * chartW;
-        const y = plot.top + (1 - value / 100) * chartH;
+        const y = plot.top + (1 - Math.max(0, Math.min(100, Number(value || 0))) / 100) * chartH;
         return `${index ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`;
     }).join(' ');
+    const values = rows.map(row => row.overall_score);
 
     return `
         <div class="kpi-trend">
-            <div class="kpi-legend">${lines.map(([label,, color]) => `<span><i style="background:${color}"></i>${label}</span>`).join('')}</div>
-            <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Xu hướng KPI">
+            <div class="kpi-legend"><span><i style="background:#2563eb"></i>Điểm KPI đã lưu (${rows.length} ngày)</span></div>
+            <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Xu hướng điểm KPI thực tế">
                 ${[0, 25, 50, 75, 100].map(value => {
                     const y = plot.top + (1 - value / 100) * chartH;
                     return `<g><line x1="${plot.left}" y1="${y}" x2="${width - plot.right}" y2="${y}"></line><text x="4" y="${y + 4}">${value}</text></g>`;
                 }).join('')}
-                ${lines.map(([, values, color]) => `<path d="${pathFor(values)}" stroke="${color}"></path>`).join('')}
-                ${lines.map(([, values, color]) => values.filter((_, i) => i % 6 === 0 || i === values.length - 1).map((value, i) => {
-                    const index = i === 5 ? values.length - 1 : i * 6;
+                <path d="${pathFor(values)}" stroke="#2563eb"></path>
+                ${values.map((value, index) => {
                     const x = plot.left + (index / (values.length - 1)) * chartW;
-                    const y = plot.top + (1 - values[index] / 100) * chartH;
-                    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${color}"></circle>`;
-                }).join('')).join('')}
-                <text x="${plot.left}" y="${height - 8}">30 ngày trước</text>
-                <text x="${width - 86}" y="${height - 8}">Hôm nay</text>
+                    const y = plot.top + (1 - Number(value || 0) / 100) * chartH;
+                    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="#2563eb"><title>${formatDate(rows[index].snapshot_date)}: ${Number(value || 0).toFixed(0)}/100</title></circle>`;
+                }).join('')}
+                <text x="${plot.left}" y="${height - 8}">${formatDate(rows[0].snapshot_date)}</text>
+                <text x="${width - 86}" y="${height - 8}">${formatDate(rows[rows.length - 1].snapshot_date)}</text>
             </svg>
         </div>
     `;
-}
-
-function sparkline(values, color) {
-    const width = 260;
-    const height = 96;
-    const path = values.map((value, index) => {
-        const x = (index / (values.length - 1)) * (width - 10) + 5;
-        const y = 10 + (1 - value / 100) * (height - 20);
-        return `${index ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`;
-    }).join(' ');
-    return `
-        <svg viewBox="0 0 ${width} ${height}" aria-hidden="true">
-            <path d="${path}" stroke="${color}"></path>
-            ${values.map((value, index) => {
-                const x = (index / (values.length - 1)) * (width - 10) + 5;
-                const y = 10 + (1 - value / 100) * (height - 20);
-                return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${color}"></circle>`;
-            }).join('')}
-        </svg>
-    `;
-}
-
-function makeSeries(current, length, seed) {
-    return Array.from({ length }, (_, index) => {
-        const wave = Math.sin((index + seed) * 0.75) * 8;
-        const slope = (index - length + 1) * 0.35;
-        return clamp(Math.round(current + wave + slope), 12, 96);
-    });
 }
 
 function renderLoading() {

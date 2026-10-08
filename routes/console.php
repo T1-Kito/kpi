@@ -134,26 +134,10 @@ Artisan::command('procurement:check-late-po', function (BusinessEventPublisher $
 })->purpose('Create alerts for late purchase orders');
 
 Artisan::command('events:retry-failed', function () {
-    $count = 0;
-
-    BusinessEvent::query()
-        ->whereIn('status', ['pending', 'failed'])
-        ->where('retry_count', '<', 3)
-        ->orderBy('id')
-        ->chunkById(100, function ($events) use (&$count) {
-            foreach ($events as $event) {
-                $event->update([
-                    'status' => 'processed',
-                    'retry_count' => $event->status === 'failed' ? $event->retry_count + 1 : $event->retry_count,
-                    'error_message' => null,
-                    'processed_at' => now(),
-                ]);
-                $count++;
-            }
-        });
-
-    $this->info("Processed {$count} business event(s).");
-})->purpose('Retry or process pending business events');
+    $count = BusinessEvent::whereIn('status', ['pending', 'failed'])->count();
+    $this->error("Retry dispatcher is not configured. Preserved {$count} pending/failed event(s); no business action was replayed.");
+    return 1;
+})->purpose('Report unavailable event retry without falsely marking events processed');
 
 Artisan::command('kpi:calculate-snapshots', function (KpiService $kpis) {
     $count = 0;
@@ -170,5 +154,5 @@ Artisan::command('kpi:calculate-snapshots', function (KpiService $kpis) {
 
 Schedule::command('tasks:check-overdue')->everyFiveMinutes();
 Schedule::command('procurement:check-late-po')->hourly();
-Schedule::command('events:retry-failed')->everyTenMinutes();
+// Enable event retry only after a real, idempotent dispatcher is implemented.
 Schedule::command('kpi:calculate-snapshots')->dailyAt('23:55');

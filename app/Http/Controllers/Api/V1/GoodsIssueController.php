@@ -5,18 +5,24 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Alert;
 use App\Models\GoodsIssue;
+use App\Models\PrintTemplate;
 use App\Models\Quotation;
 use App\Models\SalesOrder;
 use App\Models\Task;
 use App\Services\Inventory\InventoryService;
+use App\Services\Print\QuotationDocxMergeService;
 use App\Support\DataScope;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class GoodsIssueController extends Controller
 {
-    public function __construct(private readonly InventoryService $inventory)
+    public function __construct(
+        private readonly InventoryService $inventory,
+        private readonly QuotationDocxMergeService $docxMerge,
+    )
     {
     }
 
@@ -47,11 +53,17 @@ class GoodsIssueController extends Controller
             'sales_order_id' => ['required', Rule::exists('sales_orders', 'id')->where('tenant_id', $tenantId)],
             'warehouse_id' => ['required', Rule::exists('warehouses', 'id')->where('tenant_id', $tenantId)],
             'warehouse_location_id' => ['nullable', 'integer'],
+            'recipient_name' => ['nullable', 'string', 'max:255'],
+            'recipient_phone' => ['nullable', 'string', 'max:50'],
+            'recipient_address' => ['nullable', 'string', 'max:2000'],
+            'delivery_location' => ['nullable', 'string', 'max:255'],
+            'issue_reason' => ['nullable', 'string', 'max:500'],
+            'source_document' => ['nullable', 'string', 'max:255'],
         ]);
-        $order = SalesOrder::with('items')->findOrFail($data['sales_order_id']);
+        $order = SalesOrder::with(['items', 'customer', 'quotation'])->findOrFail($data['sales_order_id']);
 
         return response()->json([
-            'data' => $this->inventory->createIssueFromSalesOrder($order, $request->user(), (int) $data['warehouse_id'], $data['warehouse_location_id'] ?? null),
+            'data' => $this->inventory->createIssueFromSalesOrder($order, $request->user(), (int) $data['warehouse_id'], $data['warehouse_location_id'] ?? null, $data),
         ], 201);
     }
 
@@ -104,5 +116,34 @@ class GoodsIssueController extends Controller
         abort_if($goodsIssue->tenant_id !== $request->user()->tenant_id, 404);
 
         return response()->json(['data' => $this->inventory->confirmIssue($goodsIssue->load('items'), $request->user())]);
+    }
+
+    public function exportWord(Request $request, GoodsIssue $goodsIssue): BinaryFileResponse|JsonResponse
+    {
+        abort_if($goodsIssue->tenant_id !== $request->user()->tenant_id, 404);
+        abort_if(! DataScope::warehouseScope(GoodsIssue::whereKey($goodsIssue->id), $request->user())->exists(), 404);
+
+        $template = PrintTemplate::where('tenant_id', $request->user()->tenant_id)
+            ->where('module', 'goods_issue')
+            ->where('status', 'active')
+            ->orderByDesc('is_default')
+            ->latest('id')
+            ->first();
+
+        if (! $template || ! $template->file_path) {
+            return response()->json(['message' => 'Chưa có file Word cho mẫu Phiếu xuất kho. Vào Mẫu in để tải mẫu Phiếu xuất kho lên và đặt làm mặc định.'], 422);
+        }
+
+        $goodsIssue->load([
+            'salesOrder.customer:id,code,name,contact_name,phone,address',
+            'warehouse:id,code,name',
+            'items.sku:id,sku_code,name,unit',
+        ]);
+        $path = $this->docxMerge->merge($goodsIssue, $template);
+        $fileName = trim(preg_replace('/[^A-Za-z0-9\-_]+/', '-', $goodsIssue->code ?: 'phieu-xuat-kho'), '-') ?: 'phieu-xuat-kho';
+
+        return response()->download($path, $fileName.'.docx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ])->deleteFileAfterSend(true);
     }
 }

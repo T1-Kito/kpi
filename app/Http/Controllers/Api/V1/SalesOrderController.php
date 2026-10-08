@@ -10,16 +10,24 @@ use App\Models\PurchaseRequest;
 use App\Models\Quotation;
 use App\Models\SalesInvoice;
 use App\Models\SalesOrder;
+use App\Models\PrintTemplate;
 use App\Models\Task;
+use App\Services\Print\QuotationDocxMergeService;
 use App\Support\DataScope;
 use App\Support\SalesOrderService;
+use App\Support\AuditLogger;
+use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class SalesOrderController extends Controller
 {
-    public function __construct(private readonly SalesOrderService $orders)
+    public function __construct(
+        private readonly SalesOrderService $orders,
+        private readonly QuotationDocxMergeService $docxMerge,
+    )
     {
     }
 
@@ -65,6 +73,42 @@ class SalesOrderController extends Controller
         return response()->json(['data' => $order], 201);
     }
 
+    public function update(Request $request, SalesOrder $salesOrder, AuditLogger $audit): JsonResponse
+    {
+        abort_if($salesOrder->tenant_id !== $request->user()->tenant_id, 404);
+        abort_if(! DataScope::owned(SalesOrder::whereKey($salesOrder->id), $request->user(), 'sales_owner_id', 'salesOwner')->exists(), 404);
+        abort_unless($salesOrder->status === 'draft', 422, 'Chỉ được sửa đơn hàng nháp.');
+        $data = $request->validate([
+            'payment_terms' => ['nullable', 'string', 'max:500'],
+            'supplier_delivery_note' => ['nullable', 'string', 'max:500'],
+        ]);
+        $old = $salesOrder->only(['payment_terms', 'supplier_delivery_note']);
+        $salesOrder->update($data);
+        $audit->record('sales_order', $salesOrder->id, 'update_draft_sales_order', $request->user(), $old, $salesOrder->only(['payment_terms', 'supplier_delivery_note']), $request);
+
+        return response()->json(['data' => $salesOrder->refresh()]);
+    }
+
+    public function destroy(Request $request, SalesOrder $salesOrder, AuditLogger $audit): JsonResponse
+    {
+        abort_if($salesOrder->tenant_id !== $request->user()->tenant_id, 404);
+        abort_if(! DataScope::owned(SalesOrder::whereKey($salesOrder->id), $request->user(), 'sales_owner_id', 'salesOwner')->exists(), 404);
+        abort_unless($salesOrder->status === 'draft', 422, 'Chỉ được xóa đơn hàng nháp.');
+        abort_if($salesOrder->deliveries()->exists() || $salesOrder->invoices()->exists(), 422, 'Đơn hàng đã có chứng từ liên quan.');
+        abort_if(GoodsIssue::where('tenant_id', $salesOrder->tenant_id)->where('sales_order_id', $salesOrder->id)->exists(), 422, 'Đơn hàng đã có phiếu xuất kho.');
+        abort_if(\App\Models\Contract::where('tenant_id', $salesOrder->tenant_id)->where('sales_order_id', $salesOrder->id)->exists(), 422, 'Đơn hàng đã có hợp đồng.');
+        abort_if(Task::where('tenant_id', $salesOrder->tenant_id)->where('source_type', 'SalesOrder')->where('source_id', $salesOrder->id)->exists(), 422, 'Đơn hàng đã có công việc liên quan.');
+        abort_if(Alert::where('tenant_id', $salesOrder->tenant_id)->where('source_type', 'SalesOrder')->where('source_id', $salesOrder->id)->exists(), 422, 'Đơn hàng đã có cảnh báo liên quan.');
+
+        DB::transaction(function () use ($salesOrder, $request, $audit) {
+            $audit->record('sales_order', $salesOrder->id, 'delete_draft_sales_order', $request->user(), $salesOrder->toArray(), null, $request);
+            $salesOrder->items()->delete();
+            $salesOrder->delete();
+        });
+
+        return response()->json(['message' => 'Đã xóa đơn hàng nháp.']);
+    }
+
     public function show(Request $request, SalesOrder $salesOrder): JsonResponse
     {
         abort_if($salesOrder->tenant_id !== $request->user()->tenant_id, 404);
@@ -81,11 +125,41 @@ class SalesOrderController extends Controller
         )]);
     }
 
+    public function exportWord(Request $request, SalesOrder $salesOrder): BinaryFileResponse|JsonResponse
+    {
+        abort_if($salesOrder->tenant_id !== $request->user()->tenant_id, 404);
+        abort_if(! DataScope::owned(SalesOrder::whereKey($salesOrder->id), $request->user(), 'sales_owner_id', 'salesOwner')->exists(), 404);
+
+        $template = PrintTemplate::where('tenant_id', $request->user()->tenant_id)
+            ->where('module', 'sales_order')
+            ->where('status', 'active')
+            ->orderByDesc('is_default')
+            ->latest('id')
+            ->first();
+        if (! $template || ! $template->file_path) {
+            return response()->json(['message' => 'Chưa có file Word cho mẫu Đơn hàng. Vào Mẫu in để tải mẫu Đơn hàng lên và đặt làm mặc định.'], 422);
+        }
+
+        $salesOrder->load([
+            'customer:id,code,name,contact_name,phone,email,address,billing_address,tax_code',
+            'quotation:id,code', 'items.sku:id,sku_code,name,unit', 'salesOwner:id,name,email',
+        ]);
+        $path = $this->docxMerge->merge($salesOrder, $template);
+        $fileName = trim(preg_replace('/[^A-Za-z0-9\-_]+/', '-', $salesOrder->code ?: 'don-hang'), '-') ?: 'don-hang';
+
+        return response()->download($path, $fileName.'.docx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ])->deleteFileAfterSend(true);
+    }
+
     public function confirm(Request $request, SalesOrder $salesOrder): JsonResponse
     {
         abort_if($salesOrder->tenant_id !== $request->user()->tenant_id, 404);
+        abort_unless(DataScope::owned(SalesOrder::whereKey($salesOrder->id), $request->user(), 'sales_owner_id', 'salesOwner')->exists(), 404);
 
-        $order = $this->orders->confirm($salesOrder->load(['items', 'customer']), $request->user())
+        $data = $request->validate(['fulfillment_type' => ['nullable', Rule::in(['from_stock', 'supplier_direct'])], 'supplier_delivery_note' => ['nullable', 'string', 'max:500']]);
+        $data['fulfillment_type'] ??= 'from_stock';
+        $order = $this->orders->confirm($salesOrder->load(['items', 'customer']), $request->user(), $data)
             ->load('customer:id,code,name,contact_name,phone,email,credit_limit');
         $creditWarning = $this->buildCreditWarning($order);
 

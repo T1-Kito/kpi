@@ -18,6 +18,8 @@ class SalesOrder extends Model
         'tax_amount',
         'total_amount',
         'payment_terms',
+        'fulfillment_type',
+        'supplier_delivery_note',
         'stock_status',
         'delivery_status',
         'payment_status',

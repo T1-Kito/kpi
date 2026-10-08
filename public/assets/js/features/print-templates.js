@@ -1,5 +1,5 @@
 (function () {
-let templateState = { rows: [], q: '', status: '', fields: [] };
+let templateState = { rows: [], q: '', status: '', fields: [], fieldSets: {}, modules: {} };
 
 document.addEventListener('vk:ready', () => loadPrintTemplates());
 document.addEventListener('input', (event) => {
@@ -19,7 +19,7 @@ document.addEventListener('change', (event) => {
 document.addEventListener('click', (event) => {
     if (!document.getElementById('printTemplatesRoot')) return;
     if (event.target.matches('[data-create-print-template]')) openPrintTemplateModal();
-    if (event.target.matches('[data-download-merge-template]')) downloadMergeTemplate();
+    if (event.target.matches('[data-download-merge-template]')) downloadMergeTemplate(event.target.dataset.downloadMergeTemplate || 'quotation');
     if (event.target.matches('[data-edit-print-template]')) {
         event.stopPropagation();
         openPrintTemplateModal(Number(event.target.dataset.editPrintTemplate));
@@ -41,6 +41,8 @@ async function loadPrintTemplates(options = {}) {
     if (document.getElementById('printTemplatesRoot') !== root) return;
     templateState.rows = response.data || [];
     templateState.fields = response.meta?.fields || defaultFields();
+    templateState.fieldSets = response.meta?.field_sets || { quotation: templateState.fields };
+    templateState.modules = response.meta?.modules || { quotation: 'Báo giá', sales_order: 'Đơn bán hàng', goods_issue: 'Phiếu xuất kho', contract: 'Hợp đồng' };
     renderPrintTemplates(response.meta?.total ?? templateState.rows.length);
 }
 
@@ -102,8 +104,8 @@ function openPrintTemplateModal(id = null) {
     VKModal.open(id ? 'Sửa mẫu in' : 'Tạo mẫu in', `
         <div class="template-form">
             <div class="form-grid">
-                ${VKModal.field('name', 'Tên mẫu', 'text', row?.name || 'Mẫu báo giá khách hàng')}
-                ${VKModal.select('module', 'Phân hệ', [{ value: 'quotation', label: 'Báo giá' }], row?.module || 'quotation')}
+                ${VKModal.field('name', 'Tên mẫu', 'text', row?.name || 'Mẫu chứng từ khách hàng')}
+                ${VKModal.select('module', 'Loại chứng từ', moduleOptions(), row?.module || 'quotation')}
                 ${VKModal.select('status', 'Trạng thái', [
                     { value: 'active', label: 'Đang dùng' },
                     { value: 'inactive', label: 'Tạm ngưng' },
@@ -114,11 +116,17 @@ function openPrintTemplateModal(id = null) {
                     <small>${row?.file_name ? `Đang lưu: ${VKTable.escapeHtml(row.file_name)}` : 'Chọn file Word mẫu đã soạn sẵn.'}</small>
                 </div>
             </div>
+            <div class="template-merge-guide">
+                <strong>Trường trộn mẫu Word</strong>
+                <ol><li>Chọn loại chứng từ, tải file mẫu tương ứng hoặc soạn file Word của bạn.</li><li>Chèn các trường bên dưới vào đúng vị trí trong Word.</li><li>Tải file Word lên và đặt làm mẫu mặc định cho loại chứng từ đó.</li></ol>
+                <div class="template-field-list" data-template-modal-fields>${renderFieldChips(null, row?.module || 'quotation')}</div>
+                <small>Đặt các trường dòng hàng trong cùng một hàng bảng Word để hệ thống tự tạo dòng theo chứng từ.</small>
+            </div>
         </div>
     `, async (form) => {
         const data = new FormData(form);
         data.set('is_default', row?.is_default || !id ? '1' : '0');
-        data.set('content_html', row?.content_html || defaultTemplateContent());
+        data.set('content_html', row?.content_html || defaultTemplateContent(data.get('module')));
         await VKApi.request(id ? `/print-templates/${id}` : '/print-templates', {
             method: 'POST',
             body: data,
@@ -128,6 +136,11 @@ function openPrintTemplateModal(id = null) {
         VKModal.close();
         loadPrintTemplates();
     }, { submitText: 'Lưu mẫu', className: 'modal-wide' });
+
+    document.querySelector('#modalBody [name="module"]')?.addEventListener('change', (event) => {
+        const fieldRoot = document.querySelector('#modalBody [data-template-modal-fields]');
+        if (fieldRoot) fieldRoot.innerHTML = renderFieldChips(null, event.target.value);
+    });
 }
 
 async function setDefaultTemplate(id) {
@@ -146,18 +159,20 @@ async function setDefaultTemplate(id) {
     loadPrintTemplates();
 }
 
-function renderFieldChips() {
-    return (templateState.fields.length ? templateState.fields : defaultFields()).map(field => (
+function renderFieldChips(keys = null, module = 'quotation') {
+    const fields = templateState.fieldSets[module] || templateState.fields || defaultFields();
+    return fields.filter(field => !keys || keys.includes(field.key)).map(field => (
         `<button class="field-chip" type="button" onclick="navigator.clipboard?.writeText('{{${field.key}}}')">{{${field.key}}}</button>`
     )).join('');
 }
 
-function downloadMergeTemplate() {
-    const fields = templateState.fields.length ? templateState.fields : defaultFields();
+function downloadMergeTemplate(module = 'quotation') {
+    const fields = templateState.fieldSets[module] || templateState.fields || defaultFields();
+    const label = templateState.modules[module] || moduleLabel(module);
     const fieldRows = fields.map((field, index) => `
         <tr>
             <td>${index + 1}</td>
-            <td><strong>{{${VKTable.escapeHtml(field.key)}}}</strong></td>
+            <td>{{${VKTable.escapeHtml(field.key)}}}</td>
             <td>${VKTable.escapeHtml(field.label || field.key)}</td>
             <td>Chèn đúng cú pháp vào vị trí cần trộn dữ liệu.</td>
         </tr>
@@ -191,11 +206,11 @@ function downloadMergeTemplate() {
 </head>
 <body>
     <div class="Section1">
-        <h1>Mẫu trường trộn báo giá</h1>
-        <p class="muted">Dùng file này để soạn mẫu Word, sau đó upload lại ở màn Tạo mẫu in.</p>
+        <h1>Mẫu trường trộn ${VKTable.escapeHtml(label)}</h1>
+        <p class="muted">Dùng file này để soạn mẫu Word ${VKTable.escapeHtml(label)}, sau đó upload lại ở màn Tạo mẫu in.</p>
         <div class="note">
             <strong>Cách dùng:</strong> copy trường ở cột "Trường trộn" và đặt vào vị trí cần hiển thị dữ liệu trong mẫu Word.
-            Giữ nguyên hai dấu ngoặc nhọn, ví dụ <strong>{{ma_bao_gia}}</strong>.
+            Giữ nguyên hai dấu ngoặc nhọn, ví dụ {{ma_bao_gia}}.
         </div>
 
         <h2>Danh sách trường trộn</h2>
@@ -211,12 +226,12 @@ function downloadMergeTemplate() {
             <tbody>${fieldRows}</tbody>
         </table>
 
-        <h2>Mẫu báo giá tham khảo</h2>
-        ${wordTemplateContent()}
+        <h2>Mẫu ${VKTable.escapeHtml(label)} tham khảo</h2>
+        ${wordTemplateContent(module)}
     </div>
 </body>
 </html>`;
-    downloadTextFile('mau-truong-tron-bao-gia.doc', `\ufeff${html}`, 'application/msword;charset=utf-8');
+    downloadTextFile(`mau-${module.replace('_', '-')}.doc`, `\ufeff${html}`, 'application/msword;charset=utf-8');
 }
 
 function downloadTextFile(fileName, content, type) {
@@ -231,8 +246,18 @@ function downloadTextFile(fileName, content, type) {
     URL.revokeObjectURL(url);
 }
 
+function downloadQuotationExample() {
+    const html = `<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>Mẫu báo giá ví dụ</title><style>@page Section1 { size:21cm 29.7cm; margin:1.8cm 1.6cm; } div.Section1 { page:Section1; } body{font-family:Arial,sans-serif;color:#1f2937;font-size:11pt;line-height:1.45} table{width:100%;border-collapse:collapse;margin:12pt 0} th,td{border:1px solid #b8c4d5;padding:7pt;text-align:left;vertical-align:top} th{background:#eaf2ff;color:#153d79}.head td{border:0;padding:0 0 12pt}.title{font-size:23pt;font-weight:700;color:#124ca0}.right{text-align:right}.total td{font-weight:700;background:#f2f7ff}.note{margin-top:14pt;padding:8pt;background:#fff7e6;border:1px solid #f0c36c;font-size:9.5pt}</style></head><body><div class="Section1">${wordTemplateContent()}<div class="note"><strong>Lưu ý:</strong> Đây là file ví dụ có sẵn trường trộn. Giữ nguyên cú pháp {{ten_khach_hang}}. Với bảng hàng, để các trường {{stt}}, {{ma_hang}}, {{ten_hang}}... trên cùng một hàng bảng để hệ thống tự tạo dòng theo báo giá.</div></div></body></html>`;
+    downloadTextFile('mau-bao-gia-vi-du.doc', `\ufeff${html}`, 'application/msword;charset=utf-8');
+}
+
 function moduleLabel(module) {
-    return module === 'quotation' ? 'Báo giá' : VKTable.escapeHtml(module || '-');
+    return templateState.modules[module] || ({ quotation: 'Báo giá', sales_order: 'Đơn bán hàng', goods_issue: 'Phiếu xuất kho', contract: 'Hợp đồng' }[module] || VKTable.escapeHtml(module || '-'));
+}
+
+function moduleOptions() {
+    return Object.entries(templateState.modules || { quotation: 'Báo giá', sales_order: 'Đơn bán hàng', goods_issue: 'Phiếu xuất kho', contract: 'Hợp đồng' })
+        .map(([value, label]) => ({ value, label }));
 }
 
 function formatDateTime(value) {
@@ -271,7 +296,14 @@ function defaultFields() {
     ];
 }
 
-function wordTemplateContent() {
+function wordTemplateContent(module = 'quotation') {
+    if (module === 'contract') {
+        return `<table class="sample-header">
+    <tr><td><div class="sample-title">HỢP ĐỒNG</div><p><strong>Số hợp đồng:</strong> {{ma_hop_dong}}</p><p><strong>Tên hợp đồng:</strong> {{ten_hop_dong}}</p></td><td class="sample-meta"><p><strong>Ngày lập</strong></p><p>{{ngay_hop_dong}}</p></td></tr>
+</table>
+<table><tr><th>Bên A</th><th>Bên B</th></tr><tr><td><strong>{{ten_cong_ty}}</strong><br>MST: {{ma_so_thue}}<br>Địa chỉ: {{dia_chi_cong_ty}}</td><td><strong>{{ten_khach_hang}}</strong><br>Liên hệ: {{nguoi_lien_he}}<br>Địa chỉ: {{dia_chi_giao_hang}}</td></tr></table>
+<table><tr><td>Giá trị hợp đồng</td><td>{{gia_tri_hop_dong}}</td></tr><tr><td>Bằng chữ</td><td>{{gia_tri_bang_chu}}</td></tr><tr><td>Hiệu lực</td><td>{{ngay_hieu_luc}} đến {{ngay_het_han}}</td></tr><tr><td>Mốc thanh toán</td><td>{{moc_thanh_toan}}</td></tr><tr><td>Điều khoản khác</td><td>{{dieu_khoan}}</td></tr></table>`;
+    }
     return `<table class="sample-header">
     <tr>
         <td>
@@ -352,7 +384,10 @@ function wordTemplateContent() {
 </table>`;
 }
 
-function defaultTemplateContent() {
+function defaultTemplateContent(module = 'quotation') {
+    if (module === 'contract') {
+        return `<section class="doc-header"><div><p class="muted">HỢP ĐỒNG</p><h1>{{ma_hop_dong}}</h1><p><strong>{{ten_hop_dong}}</strong></p></div><div class="doc-meta"><span>Ngày lập</span><strong>{{ngay_hop_dong}}</strong></div></section><section class="doc-grid"><div class="doc-card"><h2>Bên A</h2><p><strong>{{ten_cong_ty}}</strong></p><p>Mã số thuế: {{ma_so_thue}}</p><p>Địa chỉ: {{dia_chi_cong_ty}}</p></div><div class="doc-card"><h2>Bên B</h2><p><strong>{{ten_khach_hang}}</strong></p><p>Người liên hệ: {{nguoi_lien_he}}</p><p>Địa chỉ: {{dia_chi_giao_hang}}</p></div></section><section class="doc-card"><h2>Giá trị và thời hạn</h2><p>Giá trị hợp đồng: <strong>{{gia_tri_hop_dong}}</strong></p><p>Bằng chữ: {{gia_tri_bang_chu}}</p><p>Hiệu lực: {{ngay_hieu_luc}} đến {{ngay_het_han}}</p></section><section class="doc-card"><h2>Mốc thanh toán</h2><p>{{moc_thanh_toan}}</p></section><section class="doc-card"><h2>Điều khoản khác</h2><p>{{dieu_khoan}}</p></section>`;
+    }
     return `<section class="doc-header">
     <div>
         <p class="muted">Báo giá</p>

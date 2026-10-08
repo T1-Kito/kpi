@@ -19,9 +19,19 @@ class TaskService
     }
 
     /** @param array<string, mixed> $data */
-    public function create(User $actor, array $data): Task
+    public function create(User $actor, array $data, bool $generated = true): Task
     {
-        return DB::transaction(function () use ($actor, $data) {
+        return DB::transaction(function () use ($actor, $data, $generated) {
+            if ($generated && !empty($data['source_type']) && !empty($data['source_id'])
+                && in_array($data['task_type'] ?? '', ['lead_follow_up', 'warehouse_issue', 'goods_receipt', 'purchase_request'], true)) {
+                // Serialize generated work per tenant, including the duplicate check.
+                \App\Models\Tenant::whereKey($actor->tenant_id)->lockForUpdate()->firstOrFail();
+                $existing = Task::where('tenant_id', $actor->tenant_id)
+                    ->where('source_type', $data['source_type'])->where('source_id', $data['source_id'])
+                    ->where('task_type', $data['task_type'])->whereIn('status', ['new', 'in_progress', 'overdue'])->first();
+                if ($existing) return $existing;
+                $data['assignee_id'] = $data['assignee_id'] ?? app(WorkAssignmentService::class)->pick($actor->tenant_id, $data['task_type']);
+            }
             $dueAt = $data['due_at'] ?? $this->calculateDueAt(
                 $actor->tenant_id,
                 $data['module'] ?? 'general',

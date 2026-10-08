@@ -3,6 +3,14 @@
 .env
 .env.backup
 .env.production
+.env.*
+!.env.example
+/database/*.sqlite*
+/.tmp_*
+/crm_document_extract.txt
+/approval-save-check.png
+/quotation-preview-fixed.png
+/quote-original-document-preview.png
 .phpactor.json
 .phpunit.result.cache
 /.fleet

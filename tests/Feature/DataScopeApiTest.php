@@ -79,6 +79,13 @@ class DataScopeApiTest extends TestCase
             ->getJson('/api/v1/inventory-balances?page_size=100')
             ->assertOk()
             ->assertJsonPath('meta.total', 2);
+        \App\Models\InventoryTransaction::create([
+            'tenant_id' => $tenantId, 'warehouse_id' => $otherWarehouse->id, 'sku_id' => $otherSku->id,
+            'lot_no' => 'HIDDEN', 'transaction_type' => 'receipt', 'quantity' => 10,
+            'source_type' => 'System', 'source_id' => 0,
+        ]);
+        $this->withToken($warehouseToken)->getJson('/api/v1/inventory-transactions?warehouse_id='.$otherWarehouse->id)
+            ->assertOk()->assertJsonPath('meta.total', 0);
     }
 
     private function loginAs(string $email): string
@@ -87,5 +94,44 @@ class DataScopeApiTest extends TestCase
             'email' => $email,
             'password' => 'Admin@123',
         ])->json('data.access_token');
+    }
+
+    public function test_sales_cannot_change_another_users_task_by_guessing_id(): void
+    {
+        $this->seed();
+        $admin = User::where('email', 'admin@vk-kpi.local')->firstOrFail();
+        $task = app(\App\Support\TaskService::class)->create($admin, [
+            'title' => 'Private task', 'task_type' => 'manual', 'assignee_id' => $admin->id,
+        ]);
+        $this->withToken($this->loginAs('sales@vk-kpi.local'))
+            ->postJson("/api/v1/tasks/{$task->id}/status", ['status' => 'completed'])->assertNotFound();
+        $this->assertSame('new', $task->fresh()->status);
+        $this->withToken($this->loginAs($admin->email))
+            ->postJson("/api/v1/tasks/{$task->id}/status", ['status' => 'completed'])->assertOk();
+    }
+
+    public function test_missing_department_does_not_expose_other_unallocated_records(): void
+    {
+        $this->seed();
+        $actor = User::where('email', 'procurement@vk-kpi.local')->firstOrFail();
+        $actor->update(['department_id' => null]);
+        $admin = User::where('email', 'admin@vk-kpi.local')->firstOrFail();
+        $admin->update(['department_id' => null]);
+        $task = app(\App\Support\TaskService::class)->create($admin, ['title' => 'Not shared', 'task_type' => 'manual', 'assignee_id' => $admin->id]);
+        $this->assertFalse(\App\Support\DataScope::task(\App\Models\Task::whereKey($task->id), $actor)->exists());
+        $customer = Customer::create(['tenant_id' => $actor->tenant_id, 'code' => 'NO-DEPARTMENT', 'name' => 'Private customer', 'sales_owner_id' => $admin->id]);
+        $this->assertFalse(\App\Support\DataScope::owned(Customer::whereKey($customer->id), $actor, 'sales_owner_id', 'salesOwner')->exists());
+    }
+
+    public function test_warehouse_queue_does_not_include_tasks_assigned_to_other_departments(): void
+    {
+        $this->seed();
+        $warehouse = User::where('email', 'warehouse@vk-kpi.local')->firstOrFail();
+        $admin = User::where('email', 'admin@vk-kpi.local')->firstOrFail();
+        $service = app(\App\Support\TaskService::class);
+        $private = $service->create($admin, ['title' => 'Other owner', 'task_type' => 'warehouse_issue', 'assignee_id' => $admin->id]);
+        $queue = $service->create($admin, ['title' => 'Unassigned issue', 'task_type' => 'warehouse_issue']);
+        $this->assertFalse(\App\Support\DataScope::task(\App\Models\Task::whereKey($private->id), $warehouse)->exists());
+        $this->assertTrue(\App\Support\DataScope::task(\App\Models\Task::whereKey($queue->id), $warehouse)->exists());
     }
 }

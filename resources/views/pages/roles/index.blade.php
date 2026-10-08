@@ -13,5 +13,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/roles.js"></script>
+<script src="/assets/js/features/roles.js?v=20261008-1"></script>
 @endpush

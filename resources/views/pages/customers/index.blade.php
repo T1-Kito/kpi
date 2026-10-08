@@ -5,6 +5,7 @@
 @section('page_title', 'Khách hàng')
 @section('page_subtitle', 'Quản lý khách hàng, liên hệ, hạn mức công nợ và trạng thái sử dụng.')
 @section('page_actions')
+    <button class="btn" type="button" data-customer-duplicates data-permission="master.merge">Xét khách trùng</button>
     <button class="btn primary" type="button" data-create-customer>Tạo khách hàng</button>
 @endsection
 
@@ -13,5 +14,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/customers.js?v=20260618-1"></script>
+<script src="/assets/js/features/customers.js?v=20261008-4"></script>
 @endpush

@@ -52,6 +52,70 @@ class MasterDataApiTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_customer_duplicate_check_and_normalized_tax_code_are_tenant_scoped(): void
+    {
+        $this->seed();
+        $token = $this->loginAs('admin@vk-kpi.local');
+        $first = $this->withToken($token)->postJson('/api/v1/customers', [
+            'name' => 'Công ty kiểm tra trùng',
+            'tax_code' => '031 123 4567',
+            'phone' => '0901 234 567',
+            'email' => 'sales@duplicate.example',
+        ])->assertCreated()->json('data');
+
+        $this->withToken($token)->getJson('/api/v1/customers/duplicates?phone=0901234567')
+            ->assertOk()->assertJsonPath('data.0.id', $first['id']);
+        $this->withToken($token)->getJson('/api/v1/customers/duplicates?email=SALES%40duplicate.example')
+            ->assertOk()->assertJsonPath('data.0.id', $first['id']);
+        $this->withToken($token)->postJson('/api/v1/customers', [
+            'name' => 'Bản trùng mã số thuế',
+            'tax_code' => '031.123.4567',
+        ])->assertStatus(409);
+        $this->assertDatabaseCount('customers', 3);
+    }
+
+    public function test_organization_can_have_multiple_contacts_with_one_primary_and_audit_history(): void
+    {
+        $this->seed();
+        $token = $this->loginAs('admin@vk-kpi.local');
+        $customer = $this->withToken($token)->postJson('/api/v1/customers', [
+            'name' => 'Trường Sơn Tiên', 'customer_type' => 'organization',
+        ])->assertCreated()->json('data');
+        $first = $this->withToken($token)->postJson("/api/v1/customers/{$customer['id']}/contacts", [
+            'name' => 'Chị Lan', 'position' => 'Điều phối', 'email' => 'lan@example.com',
+        ])->assertCreated()->assertJsonPath('data.is_primary', true)->json('data');
+        $second = $this->withToken($token)->postJson("/api/v1/customers/{$customer['id']}/contacts", [
+            'name' => 'Anh Minh', 'position' => 'Kế toán', 'is_primary' => true,
+        ])->assertCreated()->json('data');
+        $this->withToken($token)->getJson("/api/v1/customers/{$customer['id']}")
+            ->assertOk()->assertJsonCount(2, 'data.contacts')->assertJsonPath('data.contacts.0.id', $second['id']);
+        $this->assertDatabaseHas('customer_contacts', ['id' => $first['id'], 'is_primary' => false]);
+        $this->withToken($token)->deleteJson("/api/v1/customers/{$customer['id']}/contacts/{$second['id']}")->assertOk();
+        $this->assertDatabaseHas('customer_contacts', ['id' => $first['id'], 'is_primary' => true]);
+        $this->assertDatabaseHas('audit_logs', ['entity_type' => 'customer_contact', 'action' => 'delete_customer_contact']);
+    }
+
+    public function test_contact_cannot_be_added_to_person_or_edited_through_another_customer(): void
+    {
+        $this->seed();
+        $token = $this->loginAs('admin@vk-kpi.local');
+        $person = $this->withToken($token)->postJson('/api/v1/customers', [
+            'name' => 'Khách cá nhân', 'customer_type' => 'person',
+        ])->assertCreated()->json('data');
+        $this->withToken($token)->postJson("/api/v1/customers/{$person['id']}/contacts", ['name' => 'Sai'])
+            ->assertStatus(422);
+
+        $organization = $this->withToken($token)->postJson('/api/v1/customers', [
+            'name' => 'Tổ chức khác', 'customer_type' => 'organization',
+        ])->assertCreated()->json('data');
+        $contact = $this->withToken($token)->postJson("/api/v1/customers/{$organization['id']}/contacts", [
+            'name' => 'Người liên hệ',
+        ])->assertCreated()->json('data');
+        $this->withToken($token)->putJson("/api/v1/customers/{$person['id']}/contacts/{$contact['id']}", [
+            'name' => 'Không được sửa',
+        ])->assertNotFound();
+    }
+
     public function test_admin_can_update_master_data(): void
     {
         $this->seed();
@@ -114,6 +178,19 @@ class MasterDataApiTest extends TestCase
         $this->assertDatabaseHas('audit_logs', ['action' => 'update_supplier', 'entity_id' => $supplier->id]);
         $this->assertDatabaseHas('audit_logs', ['action' => 'update_sku', 'entity_id' => $sku->id]);
         $this->assertDatabaseHas('audit_logs', ['action' => 'update_warehouse', 'entity_id' => $warehouse->id]);
+    }
+
+    public function test_person_identity_is_separate_and_validated(): void
+    {
+        $this->seed();
+        $token = $this->loginAs('admin@vk-kpi.local');
+        $payload = ['name' => 'Khách lẻ', 'customer_type' => 'person', 'identity_number' => '001234567890'];
+        $customer = $this->withToken($token)->postJson('/api/v1/customers', $payload)
+            ->assertCreated()->assertJsonPath('data.identity_number', '001234567890')->assertJsonPath('data.tax_code', null)->json('data');
+        $this->withToken($token)->putJson('/api/v1/customers/'.$customer['id'], $payload)->assertOk();
+        $this->withToken($token)->postJson('/api/v1/customers', $payload)->assertUnprocessable();
+        $this->withToken($token)->postJson('/api/v1/customers', [...$payload, 'identity_number' => '123abc'])->assertUnprocessable();
+        $this->withToken($token)->postJson('/api/v1/customers', ['name' => 'Khách chưa cung cấp CCCD', 'customer_type' => 'person'])->assertCreated();
     }
 
     private function loginAs(string $email): string

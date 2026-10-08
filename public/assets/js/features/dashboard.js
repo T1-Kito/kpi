@@ -1,5 +1,8 @@
 (function () {
 document.addEventListener('vk:ready', () => loadDashboard());
+document.addEventListener('change', event => {
+    if (event.target.matches('[data-executive-month]')) loadDashboard({ source: 'pjax' });
+});
 
 async function loadDashboard(options = {}) {
     const root = document.getElementById('dashboardRoot');
@@ -8,9 +11,15 @@ async function loadDashboard(options = {}) {
 
     const fallback = { data: [], meta: { total: 0 } };
     const profile = getDashboardProfile();
-    const summary = await safeRequest(`/dashboard/summary?type=${encodeURIComponent(profile.type)}`);
+    document.querySelector('[data-dashboard-create-lead]')?.toggleAttribute('hidden', ['admin','director'].includes(profile.type) || !(window.VKUser?.permissions || []).includes('sales.lead.manage'));
+    const reviewAction = document.querySelector('[data-dashboard-work-action]');
+    if (reviewAction && ['admin','director'].includes(profile.type)) { reviewAction.textContent = 'Hồ sơ chờ duyệt'; reviewAction.href = '/approvals'; }
+    const month = document.querySelector('[data-executive-month]')?.value || new Date().toISOString().slice(0, 7);
+    const summary = await safeRequest(`/dashboard/summary?type=${encodeURIComponent(profile.type)}&month=${encodeURIComponent(month)}`);
     if (summary?.data) {
-        root.innerHTML = renderDashboard(withDashboardDefaults(summary.data));
+        root.innerHTML = summary.data.executive && ['admin', 'director'].includes(profile.type)
+            ? renderExecutiveDashboard(summary.data.executive, withDashboardDefaults(summary.data))
+            : renderDashboard(withDashboardDefaults(summary.data));
         return;
     }
 
@@ -54,6 +63,7 @@ function withDashboardDefaults(data) {
         invoices: data.invoices || fallback,
         receivables: data.receivables || fallback,
         notifications: data.notifications || fallback,
+        executive: data.executive || null,
     };
 }
 
@@ -129,14 +139,19 @@ function renderDashboard(data) {
     const metrics = buildMetrics(profile, data);
     const tasks = data.tasks.data.filter(row => ['new', 'assigned', 'in_progress', 'overdue'].includes(row.status));
     const alerts = buildAlerts(data);
+    const waitingApprovals = metrics.find(row => row.label === 'Chờ phê duyệt')?.value || 0;
 
     return `
-        <section class="dashboard-hello role-dashboard-hello">
-            <div>
-                <h2>${VKTable.escapeHtml(profile.title)}</h2>
-                <span>${VKTable.escapeHtml(profile.subtitle)} · ${formatLongDate(new Date())}</span>
+        <section class="dashboard-welcome">
+            <div class="dashboard-welcome-copy">
+                <small>${formatWelcomeDate(new Date())}</small>
+                <h2>${VKTable.escapeHtml(welcomeTitle(profile))}</h2>
+                <span>${VKTable.escapeHtml(welcomeMessage(tasks, profile))}</span>
             </div>
-            <span class="role-pill">${VKTable.escapeHtml(profile.label)}</span>
+            <div class="dashboard-welcome-actions">
+                ${welcomeFocus(tasks.length, 'Việc của tôi', 'việc cần ưu tiên')}
+                ${welcomeFocus(waitingApprovals, 'Chờ phê duyệt', 'hồ sơ đang chờ')}
+            </div>
         </section>
 
         <div class="dashboard-kpi-row">
@@ -153,17 +168,6 @@ function renderDashboard(data) {
                     <a class="text-link" href="${profile.workHref}">Mở màn hình</a>
                 </div>
                 ${renderPrimaryWork(profile, data, tasks)}
-            </section>
-
-            <section class="dashboard-card">
-                <div class="panel-head">
-                    <div>
-                        <h2>${VKTable.escapeHtml(profile.flowTitle)}</h2>
-                        <span>${VKTable.escapeHtml(profile.flowSubtitle)}</span>
-                    </div>
-                    <a class="text-link" href="${profile.flowHref}">Xem chi tiết</a>
-                </div>
-                ${renderRoleFlow(profile, data)}
             </section>
 
             <section class="dashboard-card">
@@ -187,8 +191,108 @@ function renderDashboard(data) {
                 </div>
                 ${renderKpiSummary(profile, data)}
             </section>
+
+            <section class="dashboard-card">
+                <div class="panel-head">
+                    <div>
+                        <h2>${VKTable.escapeHtml(profile.flowTitle)}</h2>
+                        <span>${VKTable.escapeHtml(profile.flowSubtitle)}</span>
+                    </div>
+                    <a class="text-link" href="${profile.flowHref}">Xem chi tiết</a>
+                </div>
+                ${renderRoleFlow(profile, data)}
+            </section>
         </div>
     `;
+}
+
+function renderExecutiveDashboard(executive, data) {
+    const month = executive.period || new Date().toISOString().slice(0, 7);
+    const change = executive.previous_revenue > 0
+        ? `${((executive.revenue / executive.previous_revenue - 1) * 100).toFixed(1)}% so với tháng trước`
+        : 'Chưa có kỳ trước để so sánh';
+    const metrics = [
+        ['Doanh thu hóa đơn', executive.revenue, change, '/sales-invoices', true],
+        ['Đơn bán mới', executive.orders, 'Phát sinh trong tháng', '/sales-orders'],
+        ['Báo giá mới', executive.funnel.quotations, 'Phát sinh trong tháng', '/quotations'],
+        ['Công nợ phải thu', executive.receivables, 'Số dư hiện tại', '/customer-receivables', true],
+        ['Nợ quá hạn', executive.overdue_receivables, 'Số dư đã quá hạn', '/customer-receivables', true],
+        ['Tồn kho ước tính', executive.inventory_value, 'Số lượng tồn × giá vốn danh mục', '/inventory', true],
+        ['Đơn chờ giao', executive.pending_delivery_count, 'Trạng thái hiện tại', '/deliveries'],
+        ['Việc quá hạn', executive.overdue_tasks, 'Toàn công ty hiện tại', '/tasks'],
+    ];
+    const maxRevenue = Math.max(...executive.monthly_revenue.map(row => Number(row.revenue || 0)), 1);
+    const maxFunnel = Math.max(...Object.values(executive.funnel).map(Number), 1);
+    const funnel = [
+        ['Khách hàng tiềm năng', executive.funnel.leads, '/leads'],
+        ['Báo giá', executive.funnel.quotations, '/quotations'],
+        ['Đơn bán', executive.funnel.orders, '/sales-orders'],
+        ['Đã giao', executive.funnel.deliveries, '/deliveries'],
+        ['Lượt thu tiền', executive.funnel.payments, '/customer-payments'],
+    ];
+    const priorities = [
+        ['Nợ quá hạn', executive.overdue_receivables, 'đ cần thu hồi', '/customer-receivables', true],
+        ['Đơn chờ giao', executive.pending_delivery_count, 'đơn cần theo dõi', '/deliveries'],
+        ['Hàng dưới mức tối thiểu', executive.low_stock_count, 'dòng tồn cần bổ sung', '/inventory'],
+        ['Đơn mua giao trễ', executive.purchase.orders_late, 'đơn cần thúc đẩy', '/purchase-orders'],
+        ['Việc quá hạn', executive.overdue_tasks, 'việc cần xử lý', '/tasks'],
+    ].filter(([, value]) => Number(value) > 0);
+    return `
+        <div class="executive-dashboard">
+            <div class="executive-heading">
+                <div><span class="executive-eyebrow">BAN ĐIỀU HÀNH · DỮ LIỆU THỰC</span><h2>Toàn cảnh doanh nghiệp</h2><p>Doanh thu và chứng từ theo tháng; công nợ, tồn kho và việc quá hạn là số dư hiện tại.</p></div>
+                <div class="executive-filters"><label>Tháng xem <input type="month" data-executive-month value="${month}"></label><button type="button" class="btn secondary" onclick="window.print()">In báo cáo</button></div>
+            </div>
+            <div class="executive-metrics" data-executive-panel="overview">${metrics.map(([label, value, note, href, money]) => `<a href="${href}" class="executive-metric"><span>${label}</span><strong>${money ? VKTable.money(value) + ' đ' : VKTable.money(value)}</strong><small>${VKTable.escapeHtml(note)}</small></a>`).join('')}</div>
+            <section class="executive-panel"><div class="executive-panel-head"><div><h3>Khách hàng & chất lượng dữ liệu</h3><p>Tình trạng hiện tại · hồ sơ đang hoạt động · cập nhật ${VKTable.escapeHtml(executive.generated_at ? new Date(executive.generated_at).toLocaleString('vi-VN') : 'vừa tải')}</p></div><a href="/customers">Mở hồ sơ khách hàng</a></div><div class="executive-priority-list">${[
+                ['Lead chưa phân công', executive.governance?.unassigned_leads, '/leads'],
+                ['Khách chưa có phụ trách', executive.governance?.customers_without_owner, '/customers'],
+                ['Tổ chức thiếu liên hệ chính', executive.governance?.organizations_without_contact, '/customer-contacts'],
+                ['Hồ sơ trùng đang chờ xét', executive.governance?.duplicate_reviews, '/customers'],
+                ['Báo giá bán chờ duyệt', executive.governance?.sales_quotes_pending, '/approvals'],
+            ].map(([label, count, href]) => `<a href="${href}" class="executive-quality-card"><span>${label}</span><strong>${count == null ? '—' : VKTable.money(count)}</strong><em>›</em></a>`).join('')}</div><p class="executive-data-note">Dữ liệu trùng chỉ tính các trường hợp đã được quét; chưa quét không có nghĩa là không trùng. KPI hiện chỉ tham khảo, chưa dùng chốt thưởng.</p></section>
+            <section class="executive-panel executive-priority" data-executive-panel="overview"><div class="executive-panel-head"><div><h3>Ưu tiên cần quyết định</h3><p>Chỉ hiện vấn đề đang có số liệu; bấm để xem chứng từ liên quan</p></div><span class="executive-priority-count">${priorities.length} vấn đề</span></div>${priorities.length ? `<div class="executive-priority-list">${priorities.map(([label,value,note,href,money],index)=>`<a href="${href}"><b>${index+1}</b><span>${label}<small>${note}</small></span><strong>${VKTable.money(value)}${money?' đ':''}</strong><em>›</em></a>`).join('')}</div>` : '<p class="executive-empty">Không có vấn đề ưu tiên từ các ngưỡng đang theo dõi.</p>'}</section>
+            <div class="executive-section-title"><h3>Bán hàng & doanh thu</h3><p>Diễn biến doanh thu, khách mua, đơn gần đây và tồn cần bổ sung</p></div>
+            <div class="executive-main-grid" data-executive-panel="overview sales">
+                <section class="executive-panel executive-chart"><div class="executive-panel-head"><div><h3>Doanh thu theo tháng</h3><p>Hóa đơn đã phát hành · 10 tháng gần nhất</p></div><a href="/sales-invoices">Xem hóa đơn</a></div>${executive.monthly_revenue.some(row => Number(row.revenue) > 0) ? `<div class="executive-bars">${executive.monthly_revenue.map(row => `<div class="executive-bar-item" title="${VKTable.escapeHtml(row.label)}: ${VKTable.money(row.revenue)} đ"><span>${VKTable.money(row.revenue)}</span><i style="height:${Math.max(3, Number(row.revenue || 0) / maxRevenue * 100)}%"></i><small>${VKTable.escapeHtml(row.label.slice(0, 2))}</small></div>`).join('')}</div>` : '<p class="executive-empty">Chưa có hóa đơn đã phát hành trong 10 tháng gần nhất.</p>'}</section>
+                <section class="executive-panel"><div class="executive-panel-head"><div><h3>Phễu chứng từ bán hàng</h3><p>Số chứng từ phát sinh trong tháng; không phải tỷ lệ chuyển đổi khách hàng</p></div></div><div class="executive-funnel">${funnel.map(([label, value, href]) => `<a href="${href}"><span>${label}</span><i><b style="width:${Math.max(2, Number(value || 0) / maxFunnel * 100)}%"></b></i><strong>${VKTable.money(value)}</strong></a>`).join('')}</div></section>
+            </div>
+            <div class="executive-detail-grid executive-sales-details" data-executive-panel="sales finance stock purchase work operations">
+                <section class="executive-panel" data-exec-category="sales"><div class="executive-panel-head"><div><h3>Khách hàng doanh thu cao</h3><p>Theo hóa đơn trong tháng đã chọn</p></div><a href="/customers">Khách hàng</a></div>${executive.top_customers.length ? `<div class="executive-simple-list">${executive.top_customers.map(row => `<a href="/customers"><span>${VKTable.escapeHtml(row.name)}</span><strong>${VKTable.money(row.revenue)} đ</strong></a>`).join('')}</div>` : '<p class="executive-empty">Chưa có hóa đơn trong tháng này.</p>'}</section>
+                <section class="executive-panel" data-exec-category="stock"><div class="executive-panel-head"><div><h3>Hàng dưới mức tối thiểu</h3><p>${VKTable.money(executive.low_stock_count)} dòng tồn cần kiểm tra</p></div><a href="/inventory">Xem kho</a></div>${executive.low_stock_items.length ? `<div class="executive-simple-list">${executive.low_stock_items.map(row => `<a href="/inventory"><span>${VKTable.escapeHtml(row.name)}<small>${VKTable.escapeHtml(row.sku_code)}</small></span><strong>${VKTable.money(row.available)} / ${VKTable.money(row.min_stock)}</strong></a>`).join('')}</div>` : '<p class="executive-empty">Không có dòng tồn dưới mức tối thiểu.</p>'}</section>
+                <section class="executive-panel executive-orders" data-exec-category="sales"><div class="executive-panel-head"><div><h3>Đơn hàng gần đây</h3><p>Khách nào mua, hàng gì, giá trị và trạng thái đơn</p></div><a href="/sales-orders">Tất cả đơn</a></div>${executive.recent_orders.length ? `<div class="executive-order-list">${executive.recent_orders.map(row => `<a href="/sales-orders?open=${encodeURIComponent(row.id)}"><span class="executive-order-identity"><b>${VKTable.escapeHtml(row.code)}</b><small>${VKTable.escapeHtml(row.customer_name)}</small><small>${formatDate(row.created_at)}</small></span><span class="executive-order-items">${row.items?.length ? row.items.map(item => `${VKTable.escapeHtml(item.name)} · ${VKTable.money(item.quantity)} ${VKTable.escapeHtml(item.unit)}`).join('<br>') : 'Chưa có dòng hàng'}${row.more_item_count ? `<small>+${row.more_item_count} dòng hàng khác</small>` : ''}</span><span class="executive-order-value"><strong>${VKTable.money(row.total_amount)} đ</strong><small>${VKTable.escapeHtml(VKTable.translateStatus(row.status) || row.status)}</small></span></a>`).join('')}</div>` : '<p class="executive-empty">Chưa có đơn bán nào.</p>'}</section>
+            </div>
+            <div class="executive-section-title"><h3>Tài chính, mua hàng & KPI</h3><p>Số dư hiện tại, đơn mua cần theo dõi và điểm vận hành gần nhất</p></div>
+            <div class="executive-detail-grid" data-executive-panel="sales finance stock purchase work operations">
+                <section class="executive-panel" data-exec-category="finance"><div class="executive-panel-head"><div><h3>Tuổi nợ phải thu</h3><p>Số dư hiện tại theo ngày đến hạn hóa đơn</p></div><a href="/customer-receivables">Xem công nợ</a></div><div class="executive-simple-list">${[['Chưa đến hạn',executive.receivable_aging.not_due],['Quá hạn 1–30 ngày',executive.receivable_aging.days_1_30],['Quá hạn 31–60 ngày',executive.receivable_aging.days_31_60],['Quá hạn trên 60 ngày',executive.receivable_aging.over_60]].map(([label,value])=>`<a href="/customer-receivables"><span>${label}</span><strong>${VKTable.money(value)} đ</strong></a>`).join('')}</div><div class="executive-overdue-customers"><h4>Khách hàng nợ quá hạn nhiều nhất</h4>${executive.overdue_customers?.length ? executive.overdue_customers.map(row=>`<div><span>${VKTable.escapeHtml(row.name)}</span><strong>${VKTable.money(row.balance)} đ</strong></div>`).join('') : '<p>Không có khách hàng nợ quá hạn.</p>'}</div></section>
+                <section class="executive-panel" data-exec-category="purchase"><div class="executive-panel-head"><div><h3>Mua hàng</h3><p>Giá trị đơn mua theo tháng; trạng thái xử lý hiện tại</p></div><a href="/purchase-orders">Xem đơn mua</a></div><div class="executive-simple-list"><a href="/purchase-requests"><span>Yêu cầu mua chờ xử lý</span><strong>${VKTable.money(executive.purchase.requests_pending)}</strong></a><a href="/purchase-orders"><span>Đơn mua chờ duyệt</span><strong>${VKTable.money(executive.purchase.orders_pending)}</strong></a><a href="/purchase-orders"><span>Đơn mua giao trễ</span><strong>${VKTable.money(executive.purchase.orders_late)}</strong></a><a href="/purchase-orders"><span>Giá trị đơn mua tháng này</span><strong>${VKTable.money(executive.purchase.order_value)} đ</strong></a><a href="/goods-receipts"><span>Phiếu nhập đã xác nhận</span><strong>${VKTable.money(executive.purchase.receipts)}</strong></a></div></section>
+                <section class="executive-panel" data-exec-category="operations"><div class="executive-panel-head"><div><h3>KPI & vận hành</h3><p>KPI là điểm lũy kế đã lưu, không phải điểm riêng tháng chọn</p></div><a href="/kpi">Xem KPI</a></div><div class="executive-simple-list"><a href="/kpi"><span>Điểm KPI gần nhất<small>${executive.operations.kpi_snapshot ? VKTable.escapeHtml(String(executive.operations.kpi_snapshot.snapshot_date).slice(0,10)) : 'Chưa tính điểm'}</small></span><strong>${executive.operations.kpi_snapshot ? Number(executive.operations.kpi_snapshot.overall_score).toFixed(0)+'/100' : '—'}</strong></a><a href="/alerts"><span>Cảnh báo đang mở</span><strong>${VKTable.money(executive.operations.open_alerts)}</strong></a><a href="/service-tickets"><span>Ticket chưa kết thúc</span><strong>${VKTable.money(executive.operations.open_tickets)}</strong></a><a href="/contracts"><span>Hợp đồng đang hiệu lực</span><strong>${VKTable.money(executive.operations.active_contracts)}</strong></a></div></section>
+            </div>
+            <div class="executive-section-title"><h3>Vận hành gần đây</h3><p>Việc cần xử lý và dấu vết hoạt động của hệ thống</p></div>
+            <section class="executive-panel"><div class="executive-panel-head"><div><h3>Việc cần xử lý của tôi</h3><p>Theo quyền và phạm vi của người đang đăng nhập</p></div><a href="/tasks">Mở công việc</a></div>${renderPrimaryWork(getDashboardProfile(), data, data.tasks.data.filter(row => ['new', 'assigned', 'in_progress', 'overdue'].includes(row.status)))}</section>
+            <section class="executive-panel executive-activity" data-executive-panel="work"><div class="executive-panel-head"><div><h3>Hoạt động gần đây</h3><p>Thao tác được ghi nhận trong nhật ký hệ thống</p></div><a href="/audit-logs">Xem nhật ký</a></div>${executive.activity.length ? `<div class="executive-activity-list">${executive.activity.map(row=>`<div><span>${VKTable.escapeHtml(row.user_name || 'Hệ thống')}</span><strong>${VKTable.escapeHtml(String(row.action || '').replaceAll('_',' '))}</strong><small>${VKTable.escapeHtml(String(row.created_at || '').slice(0,16))}</small></div>`).join('')}</div>` : '<p class="executive-empty">Chưa có hoạt động được ghi nhận.</p>'}</section>
+        </div>`;
+}
+
+function welcomeTitle(profile) {
+    const name = (window.VKUser || {}).name || 'bạn';
+    const hour = new Date().getHours();
+    const greeting = hour < 11 ? 'Chào buổi sáng' : hour < 18 ? 'Chào buổi chiều' : 'Chào buổi tối';
+    return `${greeting}, ${name}`;
+}
+
+function welcomeMessage(tasks, profile) {
+    if (tasks.length) return `Bạn có ${tasks.length} việc đang chờ xử lý. Hãy ưu tiên các việc quan trọng trong hôm nay.`;
+    return `Mọi việc đang ổn. ${profile.subtitle}.`;
+}
+
+function formatWelcomeDate(date) {
+    return new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit' })
+        .format(date).toUpperCase();
+}
+
+function welcomeFocus(value, label, note) {
+    return `<a class="dashboard-welcome-focus" href="/tasks"><b>${VKTable.money(value)}</b><span><strong>${VKTable.escapeHtml(label)}</strong><small>${VKTable.escapeHtml(note)}</small></span><em>›</em></a>`;
 }
 
 function getDashboardProfile() {
@@ -200,7 +304,7 @@ function getDashboardProfile() {
     if (roles.has('ROLE-ADMIN')) {
         return profile('Admin', `Xin chào, ${name}`, 'Toàn cảnh cấu hình, dữ liệu và luồng vận hành', 'Quản trị hệ thống', 'Việc cần xử lý toàn hệ thống', 'Task, cảnh báo và phê duyệt đang chờ.', '/tasks', 'Tổng quan vận hành', 'Sales, mua hàng, kho và công nợ.', '/dashboard', 'admin');
     }
-    if (roles.has('ROLE-DIR')) {
+    if (permissions.has('dashboard.executive.view')) {
         return profile('Ban giám đốc', `Xin chào, ${name}`, 'Tập trung rủi ro đỏ, doanh thu, công nợ và KPI', 'Điều hành', 'Điểm cần can thiệp', 'Cảnh báo, phê duyệt và task quá hạn.', '/alerts', 'Sức khỏe doanh nghiệp', 'Bán hàng, tồn kho, mua hàng và tài chính.', '/kpi', 'director');
     }
     if (roles.has('ROLE-WH') || permissions.has('inventory.issue.confirm')) {

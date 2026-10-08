@@ -13,5 +13,7 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/quotations.js?v=20260620-3"></script>
+<script src="/assets/vendor/jszip.min.js"></script>
+<script src="/assets/vendor/docx-preview.min.js"></script>
+<script src="/assets/js/features/quotations.js?v=20261008-2"></script>
 @endpush

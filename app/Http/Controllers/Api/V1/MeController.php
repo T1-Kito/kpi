@@ -27,6 +27,7 @@ class MeController extends Controller
                 ] : null,
                 'department' => $user->department?->only(['id', 'code', 'name']),
                 'roles' => $user->roles->pluck('code')->values(),
+                'data_scope' => $user->dataScope(),
                 'permissions' => $user->roles
                     ->flatMap(fn ($role) => $role->permissions->pluck('code'))
                     ->unique()

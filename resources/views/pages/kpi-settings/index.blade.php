@@ -2,8 +2,8 @@
 
 @section('title', 'Cấu hình KPI')
 @section('page', 'kpi-settings')
-@section('page_title', 'Cấu hình KPI')
-@section('page_subtitle', 'Thiết lập chỉ tiêu, mục tiêu theo kỳ và khóa kỳ KPI trước khi chốt điểm.')
+@section('page_title', 'Thiết lập KPI')
+@section('page_subtitle', 'Quản lý danh mục chỉ tiêu và mục tiêu theo kỳ tại một nơi, tách biệt với bảng kết quả.')
 
 @section('page_actions')
     <button class="btn secondary" type="button" data-create-kpi-target>Thêm mục tiêu</button>
@@ -11,7 +11,21 @@
 @endsection
 
 @section('content')
+@include('partials.kpi-navigation')
 <div id="kpiSettingsRoot" class="kpi-settings-page">
+    <section class="kpi-settings-intro">
+        <div>
+            <span class="kpi-eyebrow">THIẾT LẬP · DỮ LIỆU NỀN</span>
+            <h2>Chỉ tiêu là gì, mục tiêu là gì?</h2>
+            <p><strong>Danh mục chỉ tiêu</strong> định nghĩa tên, đơn vị và chiều tốt/xấu. <strong>Mục tiêu theo kỳ</strong> đặt con số cần đạt và khóa sau khi rà soát. <strong>Sổ điểm</strong> dùng để duyệt các khoản cộng/trừ cho từng nhân viên.</p>
+            <p class="kpi-settings-caveat">Lưu ý: công thức và trọng số khai báo ở danh mục hiện chưa tự thay đổi điểm tổng vận hành. Điểm tổng vẫn theo bốn nhóm cố định trên màn Tổng quan; đừng dùng trường này để cam kết cách chấm nhân viên cho đến khi quy tắc được chốt.</p>
+        </div>
+        <div class="kpi-settings-intro-links">
+            <a href="#kpi-definitions">Dữ liệu nền chỉ tiêu ↓</a>
+            <a href="#kpi-targets">Mục tiêu theo kỳ ↓</a>
+            <a href="/kpi-adjustments">Sổ điểm nhân viên ↗</a>
+        </div>
+    </section>
     <section class="kpi-settings-summary">
         <article>
             <span>Chỉ tiêu đang dùng</span>
@@ -30,11 +44,11 @@
         </article>
     </section>
 
-    <section class="module-panel">
+    <section class="module-panel" id="kpi-definitions">
         <div class="panel-head">
             <div>
-                <h2>Danh mục chỉ tiêu</h2>
-                <span>Admin khai báo công thức, đơn vị, trọng số và hướng tính điểm cho từng KPI.</span>
+                <h2>Dữ liệu nền · Danh mục chỉ tiêu</h2>
+                <span>Định nghĩa chỉ tiêu dùng chung. Công thức và trọng số đang là cấu hình tham khảo, chưa chi phối điểm tổng.</span>
             </div>
             <button class="btn primary" type="button" data-create-kpi-definition>Tạo chỉ tiêu</button>
         </div>
@@ -92,7 +106,7 @@
         </div>
     </section>
 
-    <section class="module-panel">
+    <section class="module-panel" id="kpi-targets">
         <div class="panel-head">
             <div>
                 <h2>Mục tiêu theo kỳ</h2>
@@ -173,5 +187,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/kpi-settings.js?v=20260619-3"></script>
+<script src="/assets/js/features/kpi-settings.js?v=20261005-1"></script>
 @endpush

@@ -47,13 +47,15 @@
         const isForm = options.body instanceof FormData;
         const controller = new AbortController();
         const timeout = window.setTimeout(() => controller.abort(), options.timeout || REQUEST_TIMEOUT);
+        const { cache: _appCache, timeout: _appTimeout, ...fetchOptions } = options;
         let response;
 
         try {
             response = await fetch('/api/v1' + path, {
-                ...options,
+                ...fetchOptions,
                 signal: options.signal || controller.signal,
                 headers: {
+                    Accept: 'application/json',
                     ...(isForm ? {} : { 'Content-Type': 'application/json' }),
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                     ...(options.headers || {}),

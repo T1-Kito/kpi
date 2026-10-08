@@ -25,18 +25,13 @@ async function loadOrganization() {
     };
 
     document.getElementById('organizationRoot').innerHTML = `
-        <div class="module-summary">
-            ${summaryCard('Phòng ban', departments.meta.total, 'Cơ cấu theo bộ phận')}
-            ${summaryCard('Chức vụ', positions.meta.total, 'Gắn với người dùng')}
-            ${summaryCard('Người dùng', users.meta.total, 'Đã có trong hệ thống')}
-            ${summaryCard('Đã gắn phòng ban', users.data.filter(row => row.department_id).length, 'Sẵn sàng phân quyền/KPI')}
-        </div>
+        <div class="organization-help"><strong>Thiết lập cơ cấu trước, gán nhân viên sau.</strong><span>Bước 1: tạo phòng ban/chức vụ. Bước 2: vào Người dùng để gán từng nhân viên vào phòng ban và chức vụ phù hợp.</span></div>
         <div class="layout-2">
             <section class="module-panel">
                 <div class="panel-head">
                     <div>
                         <h2>Phòng ban</h2>
-                        <span>Quản lý mã phòng ban, tên bộ phận và người phụ trách.</span>
+                        <span>Tạo tên phòng ban trước; nhân viên sẽ được gán tại mục Người dùng.</span>
                     </div>
                 </div>
                 ${renderDepartmentTable(organizationState.departments)}
@@ -74,18 +69,10 @@ function renderPositionTable(rows) {
 
 function openDepartmentModal(id = null) {
     const department = organizationState.departments.find(row => row.id === id);
-    const parentOptions = blankOption().concat(
-        organizationState.departments
-            .filter(row => row.id !== id)
-            .map(row => ({ value: row.id, label: `${row.code} - ${row.name}` }))
-    );
-    const managerOptions = blankOption().concat(organizationState.users.map(row => ({ value: row.id, label: `${row.name} - ${row.email}` })));
-
     VKModal.open(id ? 'Cập nhật phòng ban' : 'Tạo phòng ban', `
-        <div class="form-grid">
+        <div class="organization-simple-form">
             ${VKModal.field('name', 'Tên phòng ban', 'text', department?.name || '')}
-            ${VKModal.select('parent_id', 'Phòng ban cha', parentOptions, department?.parent_id || '')}
-            ${VKModal.select('manager_id', 'Người phụ trách', managerOptions, department?.manager_id || '')}
+            <small>Ví dụ: Kinh doanh, Kế toán, Kho. Sau khi tạo, vào mục Người dùng để gán nhân viên.</small>
         </div>
     `, async (form) => {
         const data = Object.fromEntries(new FormData(form));
@@ -93,8 +80,6 @@ function openDepartmentModal(id = null) {
             method: id ? 'PUT' : 'POST',
             body: JSON.stringify({
                 name: data.name,
-                parent_id: data.parent_id ? Number(data.parent_id) : null,
-                manager_id: data.manager_id ? Number(data.manager_id) : null,
             }),
         });
         VKModal.toast(id ? 'Đã cập nhật phòng ban.' : 'Đã tạo phòng ban.');
@@ -107,8 +92,9 @@ function openPositionModal(id = null) {
     const position = organizationState.positions.find(row => row.id === id);
 
     VKModal.open(id ? 'Cập nhật chức vụ' : 'Tạo chức vụ', `
-        <div class="form-grid">
+        <div class="organization-simple-form">
             ${VKModal.field('name', 'Tên chức vụ', 'text', position?.name || '')}
+            <small>Ví dụ: Nhân viên, Trưởng phòng, Kế toán trưởng.</small>
         </div>
     `, async (form) => {
         const data = Object.fromEntries(new FormData(form));

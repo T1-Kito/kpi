@@ -6,11 +6,12 @@
         user: 'Người dùng',
         alert: 'Cảnh báo',
         customer: 'Khách hàng',
-        salesOrder: 'Đơn bán',
+        salesOrder: 'Đơn hàng',
         purchaseRequest: 'Yêu cầu mua',
         purchaseOrder: 'Đơn mua',
         goodsReceipt: 'Nhập kho',
-        goodsIssue: 'Xuất kho',
+        goodsIssue: 'Phiếu xuất kho',
+        deal: 'Cơ hội bán hàng',
     };
 
     const tabLabels = {
@@ -74,11 +75,13 @@
         if (!state || !root) return;
         const row = state.row || {};
 
-        const pageClass = state.type === 'purchaseRequest' ? ' purchase-request-record-page' : '';
+        const pageClass = state.type === 'purchaseRequest'
+            ? ' purchase-request-record-page'
+            : (state.type === 'salesOrder' ? ' sales-order-record-page' : (state.type === 'goodsReceipt' ? ' goods-receipt-record-page' : (state.type === 'purchaseOrder' ? ' purchase-order-record-page' : '')));
 
         root.innerHTML = `
             <section class="record-page${pageClass}">
-                ${renderHead(key, state, row)}
+                ${state.type === 'salesOrder' ? '' : renderHead(key, state, row)}
                 ${renderTabs(key, state, row)}
                 <div class="record-page-body">
                     ${renderContent(state, row)}
@@ -88,11 +91,15 @@
     }
 
     function renderHead(key, state, row) {
+        if (['sku', 'purchaseOrder', 'goodsReceipt'].includes(state.type)) return '';
         if (state.type === 'purchaseRequest') {
             return renderPurchaseRequestHead(key, state, row);
         }
         if (state.type === 'salesOrder') {
             return renderSalesOrderHead(key, state, row);
+        }
+        if (state.type === 'goodsReceipt') {
+            return renderGoodsReceiptHead(key, state, row);
         }
 
         const title = labels[state.type] || 'Chi tiết';
@@ -136,16 +143,25 @@
     }
 
     function renderSalesOrderHead(key, state, row) {
-        const customer = row.customer || {};
-        const contact = [customer.contact_name, customer.phone, customer.email].filter(Boolean).join(' · ');
-
         return `
-            <div class="record-page-head sales-order-head">
+            <div class="sales-order-detail-toolbar">
+                <button class="btn small" type="button" data-record-page-back="${key}">Quay lại danh sách</button>
+                <div class="record-page-actions">${state.actions ? state.actions(row) : ''}</div>
+            </div>
+        `;
+    }
+
+    function renderGoodsReceiptHead(key, state, row) {
+        const order = row.purchase_order || {};
+        const supplier = order.supplier || {};
+        const receiptStatus = row.status === 'confirmed' ? 'Đã xác nhận nhập kho' : 'Chờ xác nhận nhập kho';
+        return `
+            <div class="record-page-head goods-receipt-head">
                 <button class="btn small" type="button" data-record-page-back="${key}">Quay lại danh sách</button>
                 <div class="record-page-title">
-                    <span>Đơn bán</span>
+                    <span>Phiếu nhập kho</span>
                     <h2>${escape(row.code || '-')} ${VKTable.statusBadge(row.status || 'draft')}</h2>
-                    <p><strong>${escape(customer.name || 'Chưa có khách hàng')}</strong>${contact ? ` · ${escape(contact)}` : ''}${row.stock_status ? ` · ${escape(VKTable.translateStatus(row.stock_status))}` : ''}</p>
+                    <p><strong>${escape(row.warehouse?.name || 'Chưa chọn kho')}</strong> · ${escape(receiptStatus)}${supplier.name ? ` · ${escape(supplier.name)}` : ''}</p>
                 </div>
                 <div class="record-page-meta">
                     <div><span>Ngày tạo</span><strong>${formatDateTime(row.created_at)}</strong></div>
@@ -177,11 +193,13 @@
         ];
         return `
             <div class="record-tabs">
+                ${['salesOrder', 'purchaseOrder', 'goodsReceipt'].includes(state.type) ? `<button class="btn small" type="button" data-record-page-back="${key}">← Quay lại</button>` : ''}
                 ${tabs.map(([tab, label]) => `
                     <button class="${state.tab === tab ? 'active' : ''}" type="button" data-record-page-key="${key}" data-record-page-tab="${tab}">
                         ${escape(label)}
                     </button>
                 `).join('')}
+                ${['sku', 'salesOrder', 'purchaseOrder', 'goodsReceipt'].includes(state.type) ? `<div class="record-page-actions" style="margin-left:auto">${state.actions ? state.actions(row) : ''}</div>` : ''}
             </div>
         `;
     }
@@ -190,6 +208,7 @@
         if (state.type === 'customer') return renderCustomerContent(state, row);
         if (state.type === 'salesOrder') return renderSalesOrderContentV2(state, row);
         if (state.type === 'purchaseRequest') return renderPurchaseRequestContent(state, row);
+        if (state.type === 'goodsReceipt') return renderGoodsReceiptContent(state, row);
         if (state.type === 'goodsIssue') return renderGoodsIssueContent(state, row);
         if (['lead', 'supplier', 'sku', 'user', 'alert'].includes(state.type)) {
             return renderSimpleEntityContent(state, row);
@@ -201,6 +220,7 @@
 
         return `
             ${renderMetrics(state.type, row)}
+            ${state.type === 'purchaseOrder' && row.approval_flow?.length ? renderPurchaseApproval(row) : ''}
             <div class="record-page-grid">
                 ${renderInfo(state.type, row)}
                 ${renderFlow(row)}
@@ -208,6 +228,118 @@
             ${renderLinkedDocuments(row.related_documents || [])}
             ${renderItems(row.items || [])}
             ${renderTotals(row)}
+        `;
+    }
+
+    function renderPurchaseApproval(row) {
+        const flow = row.approval_flow || [];
+        const complete = flow.filter(step => step.decided_at).length;
+        return `<section class="record-panel po-approval"><div class="po-approval-heading"><div><h3>Duyệt đơn mua <span>${complete}/${flow.length || '—'}</span></h3><p>${flow.length ? 'Đủ người duyệt nội bộ mới chuyển đến người duyệt cuối.' : 'Chưa thiết lập luồng nhiều người. Đơn đang dùng cơ chế duyệt một người.'}</p></div>${row.can_configure_approval && row.status === 'draft' && !complete ? `<button class="btn secondary small" data-configure-po-approval="${row.id}">Thiết lập người duyệt</button>` : ''}</div><div class="po-approval-people">${flow.map((step, index) => {
+            const locked = step.final && flow.some(other => !other.final && !other.decided_at);
+            return `<div class="po-approval-person ${step.decided_at ? 'approved' : locked ? 'locked' : 'pending'}"><i>${step.decided_at ? '✓' : locked ? '⌑' : index + 1}</i><div><strong>${escape(step.name)}</strong><small>${step.final ? 'Duyệt cuối · ' : ''}${step.decided_at ? formatDateTime(step.decided_at) : locked ? 'Chờ đủ các người duyệt trước' : 'Chờ duyệt'}</small></div></div>`;
+        }).join('')}</div></section>`;
+    }
+
+    function renderGoodsReceiptContent(state, row) {
+        if (state.tab === 'items') return renderGoodsReceiptItems(row.items || []);
+        if (state.tab === 'history') return renderTimeline(row.timeline || []);
+        if (state.tab === 'tasks') return renderRelated('Công việc liên quan', row.tasks || []);
+        if (state.tab === 'notes') return renderNotes();
+
+        const order = row.purchase_order || {};
+        const supplier = order.supplier || {};
+        const status = row.status === 'confirmed' ? 'Đã nhập kho' : 'Chờ xác nhận';
+        return `
+            <section class="goods-receipt-overview-banner ${row.status === 'confirmed' ? 'is-confirmed' : ''}">
+                <div class="goods-receipt-overview-icon" aria-hidden="true">↓</div>
+                <div class="goods-receipt-overview-copy">
+                    <span>Phiếu nhận hàng</span>
+                    <strong>${escape(status)}</strong>
+                    <p>${row.status === 'confirmed' ? 'Hàng đã được ghi nhận vào tồn kho.' : 'Kiểm tra chứng từ và xác nhận số lượng thực nhận.'}</p>
+                </div>
+                <div class="goods-receipt-overview-chips">
+                    <div><span>Kho nhận</span><strong>${escape(row.warehouse?.name || '-')}</strong></div>
+                    <div><span>Đơn mua</span><strong>${escape(order.code || '-')}</strong></div>
+                    <div><span>Số dòng</span><strong>${formatQuantity(row.items?.length || 0)}</strong></div>
+                </div>
+            </section>
+            <div class="goods-receipt-detail-grid">
+                ${renderGoodsReceiptInfo(row, supplier)}
+                <section class="record-panel goods-receipt-flow-panel">
+                    <h3>Tiến độ xử lý</h3>
+                    ${renderTimeline(row.timeline || [])}
+                </section>
+            </div>
+            ${renderGoodsReceiptDocuments(row.related_documents || [])}
+            ${renderGoodsReceiptItems(row.items || [])}
+        `;
+    }
+
+    function renderGoodsReceiptInfo(row, supplier) {
+        const order = row.purchase_order || {};
+        const fields = [
+            ['Mã phiếu nhập', row.code || '-'],
+            ['Trạng thái', VKTable.statusBadge(row.status || 'draft'), true],
+            ['Đơn mua', order.code || '-'],
+            ['Nhà cung cấp', supplier.name || 'Chưa khai báo'],
+            ['Mã nhà cung cấp', supplier.code || '-'],
+            ['Kho nhận', row.warehouse?.name || '-'],
+            ['Ngày dự kiến nhận', formatDate(order.expected_delivery_date)],
+            ['Xác nhận lúc', formatDateTime(row.confirmed_at)],
+        ];
+        return `
+            <section class="record-panel goods-receipt-info-panel">
+                <h3>Thông tin chứng từ</h3>
+                <div class="goods-receipt-detail-list">
+                    ${fields.map(([label, value, html]) => `
+                        <div><span>${escape(label)}</span><strong>${html ? value : escape(value)}</strong></div>
+                    `).join('')}
+                </div>
+            </section>
+        `;
+    }
+
+    function renderGoodsReceiptDocuments(rows) {
+        if (!rows.length) return '';
+        return `
+            <section class="record-panel goods-receipt-documents">
+                <h3>Chứng từ liên quan</h3>
+                <div class="goods-receipt-document-list">
+                    ${rows.map(document => `
+                        <a href="${escape(document.path || '#')}">
+                            <span class="goods-receipt-document-mark" aria-hidden="true">▤</span>
+                            <span><small>${escape(document.label || 'Chứng từ')}</small><strong>${escape(document.code || '-')}</strong></span>
+                            ${VKTable.statusBadge(document.status || '-')}
+                            <b aria-hidden="true">›</b>
+                        </a>
+                    `).join('')}
+                </div>
+            </section>
+        `;
+    }
+
+    function renderGoodsReceiptItems(items) {
+        return `
+            <section class="record-panel goods-receipt-lines">
+                <h3>Dòng hàng <small>${formatQuantity(items.length)} mặt hàng đã nhận</small></h3>
+                ${items.length ? `
+                    <div class="table-wrap list-table-wrap">
+                        <table class="list-table">
+                            <thead><tr><th>#</th><th>Mã hàng</th><th>Tên hàng</th><th>ĐVT</th><th>Lô hàng</th><th class="text-right">Số lượng nhập</th></tr></thead>
+                            <tbody>${items.map((item, index) => `
+                                <tr>
+                                    <td>${index + 1}</td>
+                                    <td><span class="mono">${escape(item.sku?.sku_code || '-')}</span></td>
+                                    <td><strong>${escape(item.sku?.name || '-')}</strong></td>
+                                    <td>${escape(item.sku?.unit || '-')}</td>
+                                    <td>${escape(item.lot_no || 'Chưa có số lô')}</td>
+                                    <td class="text-right"><span class="goods-receipt-quantity-pill">${formatQuantity(item.quantity)}</span></td>
+                                </tr>
+                            `).join('')}</tbody>
+                        </table>
+                    </div>
+                ` : '<div class="empty compact"><strong>Chưa có dòng hàng</strong><span>Hàng hóa nhận kho sẽ hiển thị tại đây.</span></div>'}
+            </section>
         `;
     }
 
@@ -248,7 +380,7 @@
         const customer = order.customer || {};
         const quotation = (row.related_documents || []).find(item => item.type === 'quotation') || {};
         const fields = [
-            ['Đơn bán', order.code || '-'],
+            ['Đơn hàng', order.code || '-'],
             ['Ngày tạo đơn', formatDateTime(order.created_at)],
             ['Khách hàng', customer.name || '-'],
             ['Liên hệ', [customer.contact_name, customer.phone].filter(Boolean).join(' - ') || '-'],
@@ -278,7 +410,7 @@
         const fields = [
             ['Mã', row.code || '-'],
             ['Trạng thái', VKTable.statusBadge(row.status || 'draft'), true],
-            ['Đơn bán', row.sales_order?.code || '-'],
+            ['Đơn hàng', row.sales_order?.code || '-'],
             ['Kho xuất', row.warehouse?.name || '-'],
             ['Ngày tạo phiếu', formatDateTime(row.created_at)],
             ['Cập nhật phiếu', formatDateTime(row.updated_at)],
@@ -376,8 +508,39 @@
 
         return `
             ${renderSimpleEntityInfo(state.type, row)}
+            ${state.type === 'sku' ? renderSkuProductInfo(row) : ''}
             ${row.tasks?.length ? renderRelated('Công việc liên quan', row.tasks) : ''}
             ${row.alerts?.length ? renderRelated('Cảnh báo liên quan', row.alerts) : ''}
+        `;
+    }
+
+    function renderSkuProductInfo(row) {
+        const product = row.product || {};
+        const specs = Array.isArray(product.technical_specs) ? product.technical_specs : [];
+        const fields = [
+            ['Mã sản phẩm', product.code],
+            ['Tên sản phẩm', product.name],
+            ['Danh mục', product.category?.name],
+            ['Hãng sản phẩm', product.brand?.name],
+        ];
+        const imagePath = String(product.image_path || '');
+        const imageUrl = imagePath && !imagePath.includes('..') && /^[a-zA-Z0-9_/.\-]+$/.test(imagePath)
+            ? `/storage/${imagePath}` : '';
+        return `
+            <section class="record-panel">
+                <h3>Thông tin sản phẩm</h3>
+                <div class="record-info-list">
+                    ${fields.map(([label, value]) => `<div><span>${escape(label)}</span><strong>${escape(value || 'Chưa khai báo')}</strong></div>`).join('')}
+                    <div><span>Mô tả sản phẩm</span><strong style="white-space:pre-wrap;overflow-wrap:anywhere">${escape(product.description || 'Chưa khai báo')}</strong></div>
+                    <div><span>Hình ảnh sản phẩm</span>${imageUrl ? `<img src="${escape(imageUrl)}" alt="${escape(product.name || 'Sản phẩm')}" style="max-width:100%;width:180px;height:150px;object-fit:contain" loading="lazy">` : '<strong>Chưa khai báo</strong>'}</div>
+                </div>
+            </section>
+            <section class="record-panel">
+                <h3>Thông số kỹ thuật</h3>
+                <div class="record-info-list">
+                    ${specs.length ? specs.map(item => `<div><span style="white-space:pre-wrap;overflow-wrap:anywhere">${escape(item.name || 'Thông số')}</span><strong style="white-space:pre-wrap;overflow-wrap:anywhere">${escape(item.value || '—')}</strong></div>`).join('') : '<div><span>Thông số kỹ thuật</span><strong>Chưa khai báo</strong></div>'}
+                </div>
+            </section>
         `;
     }
 
@@ -569,7 +732,7 @@
     function translatePurchaseRequestSource(source) {
         const sources = {
             Manual: 'Tạo thủ công',
-            SalesOrder: 'Đơn bán thiếu tồn',
+            SalesOrder: 'Đơn hàng thiếu tồn',
             System: 'Hệ thống',
         };
         return sources[source] || source || 'Hệ thống';
@@ -650,8 +813,25 @@
         if (state.tab === 'items') return renderSalesOrderItems(row);
 
         return `
+            ${renderSalesOrderHighlights(row)}
             ${renderSalesOrderInfoV2(row)}
             ${renderSalesOrderItems(row)}
+        `;
+    }
+
+    function renderSalesOrderHighlights(row) {
+        const items = row.items || [];
+        const total = Number(row.total_amount || 0);
+        const tax = Number(row.tax_amount || 0);
+        const paid = Number(row.invoices?.[0]?.paid_amount || 0);
+        const balance = Math.max(0, total - paid);
+        return `
+            <div class="sales-order-highlights">
+                <div class="sales-order-highlight total"><span>Tổng giá trị đơn</span><strong>${VKTable.money(total)}</strong><small>Đã gồm VAT ${VKTable.money(tax)}</small></div>
+                <div class="sales-order-highlight quantity"><span>Hàng hóa đặt</span><strong>${formatQuantity(items.reduce((sum, item) => sum + Number(item.quantity || 0), 0))}</strong><small>${items.length} dòng hàng</small></div>
+                <div class="sales-order-highlight payment"><span>Còn cần thu</span><strong>${VKTable.money(balance)}</strong><small>${paid ? `Đã thu ${VKTable.money(paid)}` : 'Chưa ghi nhận thanh toán'}</small></div>
+                <div class="sales-order-highlight delivery"><span>Giao hàng</span><strong>${escape(VKTable.translateStatus(row.status || 'draft'))}</strong><small>${escape(VKTable.translateStatus(row.stock_status || 'unchecked'))}</small></div>
+            </div>
         `;
     }
 
@@ -777,11 +957,11 @@
                                     <td><span class="mono">${escape(item.sku?.sku_code || '-')}</span></td>
                                     <td>${escape(item.sku?.name || '-')}</td>
                                     <td>${escape(item.sku?.unit || '-')}</td>
-                                    <td>${VKTable.money(item.quantity)}</td>
-                                    <td>${VKTable.money(item.unit_price || 0)}</td>
+                                    <td><span class="sales-order-quantity">${formatQuantity(item.quantity)}</span></td>
+                                    <td><span class="sales-order-price">${VKTable.money(item.unit_price || 0)}</span></td>
                                     <td>${Number(item.discount_rate || 0).toFixed(0)}</td>
                                     <td>${Number(item.vat_rate || 0).toFixed(0)}</td>
-                                    <td>${VKTable.money(item.line_total || 0)}</td>
+                                    <td><strong class="sales-order-line-total">${VKTable.money(item.line_total || 0)}</strong></td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -836,6 +1016,14 @@
         const profit = subtotal - cost;
         const hasMoney = ['salesOrder', 'purchaseOrder'].includes(type) || total > 0;
 
+        if (type === 'purchaseOrder') {
+            return `<div class="record-metrics po-metrics">
+                ${purchaseMetric('Giá trị đơn mua', `${VKTable.money(total)} đ`, 'Theo giá mua trên chứng từ', 'blue', '<path d="M3 3h2l3 12h10l3-9H6M9 20h.01M18 20h.01"/>')}
+                ${purchaseMetric('Ngày dự kiến nhận', row.expected_delivery_date ? formatDate(row.expected_delivery_date) : 'Chưa xác định', 'Lịch giao hàng của nhà cung cấp', 'orange', '<rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4m8-4v4M4 11h16"/>')}
+                ${purchaseMetric('Hàng hóa', String(row.items?.length || 0), 'Số dòng hàng cần nhận', 'green', '<path d="m12 3 9 5v9l-9 5-9-5V8l9-5Zm0 10 9-5M12 13 3 8m9 5v9M7.5 5.5l9 5"/>')}
+            </div>`;
+        }
+
         if (!hasMoney) {
             return `
                 <div class="record-metrics compact">
@@ -856,6 +1044,10 @@
                 ${metricBox('Số dòng', String(row.items?.length || 0), 'Dòng hàng')}
             </div>
         `;
+    }
+
+    function purchaseMetric(label, value, note, tone, icon) {
+        return `<div class="record-metric po-metric ${tone}"><div class="po-metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icon}</svg></div><div class="po-metric-content"><span>${escape(label)}</span><strong>${escape(value)}</strong><small>${escape(note)}</small></div></div>`;
     }
 
     function metricBox(label, value, note, tone = '') {
@@ -907,12 +1099,21 @@
                 ['Ngày dự kiến nhận', formatDate(row.expected_delivery_date)],
                 ['Tổng tiền', VKTable.money(row.total_amount || 0)],
             ],
+            deal: [
+                ['Khách hàng', row.customer?.name || row.lead?.name || 'Chưa gắn'],
+                ['Người phụ trách', row.owner?.name || '-'],
+                ['Giai đoạn', row.stage || '-'],
+                ['Giá trị dự kiến', VKTable.money(row.amount || 0)],
+                ['Dự kiến chốt', formatDate(row.expected_close_date)],
+                ['Nguồn', row.source || '-'],
+                ['Nhu cầu', row.description || '-'],
+            ],
             goodsReceipt: [
                 ['Đơn mua', row.purchase_order?.code],
                 ['Kho nhận', row.warehouse?.name],
             ],
             goodsIssue: [
-                ['Đơn bán', row.sales_order?.code],
+                ['Đơn hàng', row.sales_order?.code],
                 ['Kho xuất', row.warehouse?.name],
             ],
         };
@@ -955,7 +1156,7 @@
                     ${rows.map(row => `
                         <div>
                             <strong>${escape(row.label || row.type || 'Chứng từ')}</strong>
-                            <span>${escape(row.code || '-')} · ${escape(VKTable.translateStatus(row.status || '-'))}</span>
+                            <span>${escape(row.code || '-')} · ${escape(row.status === 'selected' ? 'Đã chọn làm căn cứ mua hàng' : VKTable.translateStatus(row.status || '-'))}</span>
                         </div>
                     `).join('')}
                 </div>

@@ -1,0 +1,4 @@
+<?php
+namespace App\Models;
+use Illuminate\Database\Eloquent\Model; use Illuminate\Database\Eloquent\Relations\BelongsTo; use Illuminate\Database\Eloquent\Relations\HasMany;
+class Contract extends Model { protected $fillable=['tenant_id','code','name','customer_id','quotation_id','sales_order_id','owner_id','total_amount','effective_date','expiry_date','status','note','accepted_at','accepted_by']; protected function casts():array{return ['effective_date'=>'date','expiry_date'=>'date','accepted_at'=>'datetime','total_amount'=>'decimal:2'];} public function customer():BelongsTo{return $this->belongsTo(Customer::class);} public function quotation():BelongsTo{return $this->belongsTo(Quotation::class);} public function salesOrder():BelongsTo{return $this->belongsTo(SalesOrder::class);} public function owner():BelongsTo{return $this->belongsTo(User::class,'owner_id');} public function milestones():HasMany{return $this->hasMany(ContractMilestone::class);} }

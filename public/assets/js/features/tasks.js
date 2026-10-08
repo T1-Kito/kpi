@@ -259,10 +259,16 @@ function renderTaskTabs() {
 function renderTaskTable(rows) {
     return VKTable.renderTable([
         { label: '', render: row => `<input type="checkbox" ${taskState.selectedId === row.id ? 'checked' : ''} aria-label="Chọn công việc">` },
-        { label: 'Mã', render: row => `<span class="mono">${VKTable.escapeHtml(row.code)}</span>` },
-        { label: 'Công việc', render: row => renderTaskInfo(row) },
-        { label: 'Phụ trách', render: row => renderOwner(row) },
+        { label: 'Mã', render: row => `<span class="mono" style="color:#e60073;font-weight:600">${VKTable.escapeHtml(row.code)}</span>` },
+        { label: 'Công việc', render: row => VKTable.escapeHtml(row.title || '—') },
+        { label: 'Loại công việc', render: row => VKTable.escapeHtml(taskTypeLabel(row.task_type)) },
+        { label: 'Nghiệp vụ', render: row => VKTable.escapeHtml(moduleLabel(row.module)) },
+        { label: 'Nguồn', render: row => VKTable.escapeHtml(row.source_type ? sourceLabel(row.source_type) : 'Thủ công') },
+        { label: 'Tham chiếu', render: row => VKTable.escapeHtml(String(row.source_id || '—')) },
+        { label: 'Người phụ trách', render: row => VKTable.escapeHtml(row.assignee?.name || 'Chưa phân công') },
+        { label: 'Phòng ban', render: row => VKTable.escapeHtml(row.department?.name || 'Chưa gắn phòng ban') },
         { label: 'Hạn xử lý', render: row => renderDue(row) },
+        { label: 'Tình trạng hạn', render: row => isOverdue(row) ? '<span class="badge danger">Quá hạn</span>' : isToday(row.due_at) ? '<span class="badge warning">Hôm nay</span>' : '—' },
         { label: 'Ưu tiên', render: row => VKTable.statusBadge(row.priority) },
         { label: 'Trạng thái', render: row => VKTable.statusBadge(row.status) },
         { label: '', className: 'actions-cell', render: row => renderTaskActions(row) },
@@ -319,7 +325,7 @@ function renderDue(row) {
     const due = new Date(row.due_at);
     const late = isOverdue(row);
     const today = isToday(row.due_at);
-    return `<span class="task-due ${late ? 'danger' : today ? 'warning' : 'info'}">${due.toLocaleString('vi-VN')}${late ? '<small>Quá hạn</small>' : today ? '<small>Hôm nay</small>' : ''}</span>`;
+    return `<span class="task-due ${late ? 'danger' : today ? 'warning' : 'info'}">${due.toLocaleString('vi-VN')}</span>`;
 }
 
 function renderTaskActions(row) {

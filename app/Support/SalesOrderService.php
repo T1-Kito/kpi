@@ -24,7 +24,11 @@ class SalesOrderService
     public function createFromQuotation(Quotation $quotation, User $actor): SalesOrder
     {
         return DB::transaction(function () use ($quotation, $actor) {
-            abort_if(! in_array($quotation->status, ['ready', 'approved'], true), 422, 'Báo giá chưa sẵn sàng tạo đơn bán.');
+            $quotation = Quotation::where('tenant_id', $actor->tenant_id)->whereKey($quotation->id)->lockForUpdate()->firstOrFail();
+            $allowed = $quotation->workflow_version == 2 ? ['accepted'] : ['ready', 'approved'];
+            abort_if(! in_array($quotation->status, $allowed, true), 422, 'Báo giá cần duyệt, phát hành và ghi nhận khách đồng ý trước khi tạo đơn bán.');
+            abort_if($quotation->workflow_version == 2 && (! $quotation->valid_until || $quotation->valid_until->endOfDay()->isPast()), 422, 'Báo giá đã hết hiệu lực.');
+            abort_if($quotation->workflow_version == 2 && ! \App\Models\QuotationIssue::where('quotation_id', $quotation->id)->where('tenant_id', $actor->tenant_id)->where('customer_decision', 'accepted')->whereNotNull('customer_evidence')->exists(), 422, 'Chưa có bản phát hành và bằng chứng khách đồng ý.');
 
             $existing = SalesOrder::where('tenant_id', $actor->tenant_id)
                 ->where('quotation_id', $quotation->id)
@@ -40,8 +44,8 @@ class SalesOrderService
                 'code' => $this->codes->next('sales_orders', 'code', 'SO-', fn ($query) => $query->where('tenant_id', $actor->tenant_id)),
                 'quotation_id' => $quotation->id,
                 'customer_id' => $quotation->customer_id,
-                'sales_owner_id' => $actor->id,
-                'subtotal_amount' => $quotation->subtotal_amount ?: ($quotation->total_amount - $quotation->tax_amount),
+                'sales_owner_id' => $quotation->sales_owner_id ?? $actor->id,
+                'subtotal_amount' => $quotation->workflow_version == 2 ? bcsub((string) $quotation->subtotal_amount, (string) $quotation->discount_amount, 2) : ($quotation->subtotal_amount ?: ($quotation->total_amount - $quotation->tax_amount)),
                 'tax_amount' => $quotation->tax_amount ?: 0,
                 'total_amount' => $quotation->total_amount,
                 'payment_terms' => $quotation->payment_terms,
@@ -68,18 +72,37 @@ class SalesOrderService
         });
     }
 
-    public function confirm(SalesOrder $order, User $actor): SalesOrder
+    public function confirm(SalesOrder $order, User $actor, array $fulfillment = []): SalesOrder
     {
-        return DB::transaction(function () use ($order, $actor) {
+        return DB::transaction(function () use ($order, $actor, $fulfillment) {
+            $order = SalesOrder::where('tenant_id', $actor->tenant_id)->whereKey($order->id)->lockForUpdate()->firstOrFail()->load(['items', 'customer']);
+            $type = $fulfillment['fulfillment_type'] ?? 'from_stock';
+            if ($order->stock_status === 'reserved' || $order->fulfillment_type === 'supplier_direct') {
+                abort_if(($order->fulfillment_type ?? 'from_stock') !== $type, 409, 'Đơn đã xác nhận; không được đổi cách giao hàng.');
+                app(\App\Services\Inventory\InventoryService::class)->ensureDraftIssue($order, $actor);
+                return $order->load('items.sku:id,sku_code,name');
+            }
+            abort_unless(in_array($order->status, ['draft', 'confirmed'], true), 422, 'Trạng thái đơn không cho phép xác nhận.');
+            // Lock all candidate balances in a stable order before checking or reserving.
+            $balances = InventoryBalance::where('tenant_id', $order->tenant_id)
+                ->whereIn('sku_id', $order->items->pluck('sku_id'))->orderBy('id')->lockForUpdate()->get();
             $old = $order->only(['status', 'stock_status']);
+            if (($fulfillment['fulfillment_type'] ?? 'from_stock') === 'supplier_direct') {
+                $order->update(['fulfillment_type' => 'supplier_direct', 'supplier_delivery_note' => $fulfillment['supplier_delivery_note'] ?? null, 'stock_status' => 'not_required', 'status' => 'awaiting_delivery', 'delivery_status' => 'pending']);
+                app(\App\Services\Inventory\InventoryService::class)->ensureDraftIssue($order, $actor);
+                $this->tasks->create($actor, ['module' => 'inventory', 'task_type' => 'warehouse_issue', 'priority' => 'high', 'title' => 'Lập phiếu xuất không trừ tồn cho đơn '.$order->code, 'description' => 'Nhà cung cấp giao thẳng khách. Kho lập phiếu để kiểm tra chứng từ, không trừ tồn kho.', 'source_type' => 'SalesOrder', 'source_id' => $order->id, 'assignee_id' => null]);
+                $this->audit->record('sales_order', $order->id, 'confirm_supplier_direct_sales_order', $actor, $old, $order->fresh()->only(['fulfillment_type', 'status', 'stock_status', 'delivery_status']));
+                $this->events->publish($order->tenant_id, 'SalesOrderSupplierDirect', 'SalesOrder', $order->id, ['code' => $order->code]);
+                return $order->refresh()->load('items.sku:id,sku_code,name');
+            }
+            $order->update(['fulfillment_type' => 'from_stock', 'supplier_delivery_note' => null]);
             $shortages = [];
-            foreach ($order->items as $item) {
-                $available = InventoryBalance::where('tenant_id', $order->tenant_id)
-                    ->where('sku_id', $item->sku_id)
-                    ->sum('available');
+            foreach ($order->items->groupBy('sku_id') as $skuId => $items) {
+                $required = $items->sum('quantity');
+                $available = $balances->where('sku_id', $skuId)->sum('available');
 
-                if ($available < $item->quantity) {
-                    $shortages[] = ['sku_id' => $item->sku_id, 'required' => (float) $item->quantity, 'available' => (float) $available];
+                if ($available < $required) {
+                    $shortages[] = ['sku_id' => $skuId, 'required' => (float) $required, 'available' => (float) $available];
                 }
             }
 
@@ -100,18 +123,19 @@ class SalesOrderService
                 $this->events->publish($order->tenant_id, 'SalesOrderStockShortage', 'SalesOrder', $order->id, ['shortages' => $shortages]);
             } else {
                 foreach ($order->items as $item) {
-                    $balance = InventoryBalance::where('tenant_id', $order->tenant_id)
-                        ->where('sku_id', $item->sku_id)
-                        ->where('available', '>=', $item->quantity)
-                        ->orderBy('id')
-                        ->firstOrFail();
-                    $balance->update([
-                        'reserved' => $balance->reserved + $item->quantity,
-                        'available' => $balance->available - $item->quantity,
-                    ]);
+                    $remaining = (float) $item->quantity;
+                    foreach ($balances->where('sku_id', $item->sku_id) as $balance) {
+                        $quantity = min($remaining, max(0, (float) $balance->available));
+                        if ($quantity <= 0) continue;
+                        $balance->update(['reserved' => $balance->reserved + $quantity, 'available' => $balance->available - $quantity]);
+                        $remaining -= $quantity;
+                        if ($remaining <= 0) break;
+                    }
+                    abort_if($remaining > 0, 409, 'Tồn kho đã thay đổi. Vui lòng kiểm tra lại.');
                 }
 
                 $order->update(['stock_status' => 'reserved', 'status' => 'confirmed']);
+                app(\App\Services\Inventory\InventoryService::class)->ensureDraftIssue($order, $actor);
                 $this->tasks->create($actor, [
                     'module' => 'inventory',
                     'task_type' => 'warehouse_issue',

@@ -37,6 +37,8 @@ async function loadGoodsReceipts(options = {}) {
     }
     const receipts = await VKApi.request('/goods-receipts');
     grState.rows = receipts.data || [];
+    const requestedReceipt = new URLSearchParams(window.location.search).get('receipt');
+    if (requestedReceipt) { openGoodsReceiptDetail(requestedReceipt); return; }
     if (grState.view === 'detail' && grState.currentId) {
         openGoodsReceiptDetail(grState.currentId);
         return;
@@ -69,6 +71,7 @@ function renderReceiptTable(rows) {
         { label: 'Kho nhận', render: row => VKTable.escapeHtml(row.warehouse?.name || '-') },
         { label: 'Hàng nhập', render: row => renderItems(row.items) },
         { label: 'Trạng thái', render: row => VKTable.statusBadge(row.status) },
+        { label: 'Tiến độ duyệt', render: row => (row.approval_flow || []).map((step, index) => `<span class="badge ${step.decided_at ? 'success' : 'info'}" title="${VKTable.escapeHtml(`Cấp ${index + 1}: ${step.name}`)}">${step.decided_at ? '✓' : '○'} ${index + 1}</span>`).join(' ') || 'Chưa cấu hình' },
         { label: '', render: row => VKTable.rowActions([
             VKTable.smallButton('Mở', `data-goods-receipt-detail="${row.id}"`),
             row.status === 'draft' ? VKTable.smallButton('Xác nhận', `data-confirm-goods-receipt="${row.id}"`, 'primary') : '',
@@ -98,21 +101,61 @@ async function openGoodsReceiptModal() {
     if (!orders.data.length) return VKModal.toast('Chưa có đơn mua đã duyệt để nhập kho.');
     if (!warehouses.data.length) return VKModal.toast('Chưa có kho nhận hàng.');
 
+    const newestOrderId = orders.data[0]?.id;
     VKModal.open('Tạo phiếu nhập kho', `
-        <div class="form-grid">
-            ${VKModal.select('purchase_order_id', 'Đơn mua', orders.data.map(row => ({ value: row.id, label: `${row.code} - ${VKTable.money(row.total_amount)}` })))}
+        <div class="form-grid goods-receipt-create-grid">
+            ${VKModal.select('purchase_order_id', 'Đơn mua đã duyệt', orders.data.map(row => ({ value: row.id, label: `${row.id === newestOrderId ? '[Mới nhất] ' : ''}${row.code} - ${row.supplier?.name || 'Chưa chọn nhà cung cấp'} - ${VKTable.money(row.total_amount)}` })))}
             ${VKModal.select('warehouse_id', 'Kho nhận', warehouses.data.map(row => ({ value: row.id, label: `${row.code} - ${row.name}` })))}
         </div>
+        <div class="goods-receipt-document" data-goods-receipt-document></div>
     `, async (form) => {
         const data = Object.fromEntries(new FormData(form));
         await VKApi.request('/goods-receipts', {
             method: 'POST',
             body: JSON.stringify({ purchase_order_id: Number(data.purchase_order_id), warehouse_id: Number(data.warehouse_id) }),
         });
-        VKModal.toast('Đã tạo phiếu nhập.');
+        VKModal.toast('Đã tạo phiếu nhập, kho có thể kiểm tra và xác nhận.');
         VKModal.close();
         loadGoodsReceipts();
-    });
+    }, { className: 'goods-receipt-create-modal', submitText: 'Lưu phiếu nhập kho' });
+
+    const orderSelect = document.querySelector('#modalBody [name="purchase_order_id"]');
+    const documentRoot = document.querySelector('#modalBody [data-goods-receipt-document]');
+    const showDocument = () => {
+        const order = orders.data.find(row => String(row.id) === String(orderSelect.value));
+        if (order && documentRoot) documentRoot.innerHTML = renderGoodsReceiptDocument(order);
+    };
+    orderSelect?.addEventListener('change', showDocument);
+    showDocument();
+}
+
+function renderGoodsReceiptDocument(order) {
+    const supplier = order.supplier || {};
+    const source = order.supplier_quotation?.code || order.purchase_request?.code || order.code;
+    return `
+        <div class="goods-receipt-document-heading">
+            <div><strong>Thông tin nhận hàng</strong><span>Kho kiểm tra nhà cung cấp, chứng từ và số lượng trước khi xác nhận nhập.</span></div>
+            <span class="goods-receipt-order-code">Đơn mua: ${VKTable.escapeHtml(order.code || '')}</span>
+        </div>
+        <div class="goods-receipt-info-grid">
+            <div><span>Nhà cung cấp</span><strong>${VKTable.escapeHtml(supplier.name || 'Chưa chọn')}</strong></div>
+            <div><span>Mã nhà cung cấp</span><strong>${VKTable.escapeHtml(supplier.code || '-')}</strong></div>
+            <div><span>Ngày dự kiến nhận</span><strong>${formatReceiptDate(order.expected_delivery_date)}</strong></div>
+            <div><span>Chứng từ gốc</span><strong>${VKTable.escapeHtml(source || '-')}</strong></div>
+        </div>
+        <div class="goods-receipt-items-wrap">
+            <div class="goods-receipt-items-title">Hàng cần nhận</div>
+            <table class="goods-receipt-items-table">
+                <thead><tr><th>Sản phẩm</th><th>ĐVT</th><th>SL đặt</th><th>Đơn giá</th><th>Thành tiền</th><th>SL nhập lần này</th></tr></thead>
+                <tbody>${(order.items || []).map(item => `<tr><td><strong>${VKTable.escapeHtml(item.sku?.name || '-')}</strong><small>${VKTable.escapeHtml(item.sku?.sku_code || '')}</small></td><td>${VKTable.escapeHtml(item.sku?.unit || '-')}</td><td>${VKTable.money(item.quantity || 0)}</td><td>${VKTable.money(item.unit_price || 0)}</td><td>${VKTable.money(item.line_total || 0)}</td><td><span class="goods-receipt-quantity">${VKTable.money(item.quantity || 0)}</span></td></tr>`).join('') || '<tr><td colspan="6">Đơn mua chưa có hàng hóa.</td></tr>'}</tbody>
+            </table>
+        </div>`;
+}
+
+function formatReceiptDate(value) {
+    if (!value) return 'Chưa xác định';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString('vi-VN');
 }
 
 function renderItems(items = []) {
@@ -129,9 +172,9 @@ async function confirmGoodsReceipt(id) {
 
         VKModal.notice({
             type: 'success',
-            title: 'Nhập kho thành công',
-            message: 'Đã xác nhận nhập kho và cập nhật tồn kho.',
-            details: [`Phiếu nhập: ${receipt.code || ''}`, receipt.purchase_order?.code ? `Đơn mua: ${receipt.purchase_order.code}` : 'Tồn kho liên quan đã được cập nhật.'],
+            title: receipt.status === 'confirmed' ? 'Nhập kho thành công' : 'Đã ghi nhận lượt duyệt',
+            message: receipt.status === 'confirmed' ? 'Đã duyệt đủ các cấp và cập nhật tồn kho.' : 'Đang chờ cấp duyệt tiếp theo. Chưa cộng tồn kho.',
+            details: [`Phiếu nhập: ${receipt.code || ''}`, ...(receipt.approval_flow || []).map(step => `${step.decided_at ? '✓' : '○'} ${step.name}`)],
         });
 
         if (grState.view === 'detail' && String(grState.currentId) === String(id)) {
@@ -164,7 +207,7 @@ function openGoodsReceiptDetail(id) {
             renderGoodsReceipts();
         },
         actions: row => row.status === 'draft'
-            ? `<button class="btn primary small" type="button" data-confirm-goods-receipt="${row.id}">Xác nhận nhập kho</button>`
+            ? `<button class="btn primary small" type="button" data-confirm-goods-receipt="${row.id}">Duyệt nhập kho</button>`
             : '',
     });
 }

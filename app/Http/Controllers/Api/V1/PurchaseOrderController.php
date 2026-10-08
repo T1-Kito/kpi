@@ -30,6 +30,8 @@ class PurchaseOrderController extends Controller
                 'supplierQuotation:id,code,total_amount,status',
                 'supplier:id,code,name',
                 'items.sku:id,sku_code,name,unit',
+                'receivingWarehouse:id,code,name',
+                'goodsReceipt:id,purchase_order_id,code,status,warehouse_id',
             ]);
 
         if ($status = $request->query('status')) {
@@ -56,6 +58,7 @@ class PurchaseOrderController extends Controller
             'delivery_terms' => ['nullable', 'string', 'max:255'],
             'warranty_terms' => ['nullable', 'string', 'max:255'],
             'shipping_fee' => ['nullable', 'numeric', 'min:0'],
+            'receiving_warehouse_id' => ['required', Rule::exists('warehouses', 'id')->where('tenant_id', $tenantId)->where('status', 'active')],
         ]);
 
         if (! empty($data['supplier_quotation_id'])) {
@@ -73,6 +76,21 @@ class PurchaseOrderController extends Controller
         ], 201);
     }
 
+    public function configureApprovalFlow(Request $request, PurchaseOrder $purchaseOrder): JsonResponse
+    {
+        abort_if($purchaseOrder->tenant_id !== $request->user()->tenant_id, 404);
+        abort_unless($request->user()->hasPermission('role.manage'), 403, 'Chỉ quản trị phân quyền được thiết lập người duyệt.');
+        $data = $request->validate(['approvers' => ['required', 'array', 'min:2', 'max:10'], 'approvers.*' => ['required', 'integer', 'distinct', Rule::exists('users', 'id')->where('tenant_id', $purchaseOrder->tenant_id)->where('is_active', true)]]);
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($purchaseOrder, $data) {
+            $purchaseOrder = PurchaseOrder::whereKey($purchaseOrder->id)->lockForUpdate()->firstOrFail();
+            abort_if($purchaseOrder->status !== 'draft' || collect($purchaseOrder->approval_flow ?? [])->contains(fn ($step) => !empty($step['decided_at'])), 422, 'Không được đổi luồng đã có người duyệt.');
+            $users = \App\Models\User::whereIn('id', $data['approvers'])->get()->keyBy('id');
+            foreach ($users as $user) abort_unless($user->hasPermission('procurement.po.approve'), 422, 'Người được chọn chưa có quyền duyệt đơn mua.');
+            $purchaseOrder->update(['approval_flow' => collect($data['approvers'])->map(fn ($id, $index) => ['user_id' => $id, 'name' => $users[$id]->name, 'final' => $index === count($data['approvers']) - 1, 'decided_at' => null])->all()]);
+            return response()->json(['data' => $purchaseOrder]);
+        });
+    }
+
     public function show(Request $request, PurchaseOrder $purchaseOrder): JsonResponse
     {
         abort_if($purchaseOrder->tenant_id !== $request->user()->tenant_id, 404);
@@ -82,10 +100,15 @@ class PurchaseOrderController extends Controller
             'supplierQuotation:id,code,total_amount,status',
             'supplier:id,code,name',
             'items.sku:id,sku_code,name,unit',
+            'receivingWarehouse:id,code,name',
+            'goodsReceipt:id,purchase_order_id,code,status,warehouse_id',
         ]);
 
         return response()->json(['data' => [
             ...$purchaseOrder->toArray(),
+            'can_configure_approval' => $request->user()->hasPermission('role.manage'),
+            'receiving_status' => $purchaseOrder->status === 'received' || $purchaseOrder->goodsReceipt?->status === 'confirmed' ? 'received' : ($purchaseOrder->status === 'approved' ? 'waiting_receipt' : $purchaseOrder->status),
+            'approval_candidates' => $request->user()->hasPermission('role.manage') ? \App\Models\User::where('tenant_id', $purchaseOrder->tenant_id)->where('is_active', true)->get()->filter(fn ($user) => $user->hasPermission('procurement.po.approve'))->map(fn ($user) => ['id' => $user->id, 'name' => $user->name])->values() : [],
             'related_documents' => array_merge(
                 $purchaseOrder->supplierQuotation ? [[
                     'type' => 'supplierQuotation',
@@ -117,7 +140,7 @@ class PurchaseOrderController extends Controller
             'timeline' => [
                 ['label' => $purchaseOrder->supplierQuotation ? 'Tạo đơn mua từ báo giá NCC' : 'Tạo đơn mua', 'status' => 'completed', 'at' => $purchaseOrder->created_at],
                 ['label' => 'Duyệt đơn mua', 'status' => $purchaseOrder->status === 'draft' ? 'pending' : 'approved', 'at' => $purchaseOrder->updated_at],
-                ['label' => 'Nhận hàng', 'status' => $purchaseOrder->status, 'at' => $purchaseOrder->updated_at],
+                ['label' => 'Nhập kho', 'status' => $purchaseOrder->status === 'received' ? 'completed' : ($purchaseOrder->status === 'approved' ? 'pending' : 'waiting'), 'at' => $purchaseOrder->goodsReceipt?->confirmed_at ?? $purchaseOrder->updated_at],
             ],
             'tasks' => Task::where('tenant_id', $purchaseOrder->tenant_id)->where('source_type', 'PurchaseOrder')->where('source_id', $purchaseOrder->id)->latest('id')->get(),
             'alerts' => Alert::where('tenant_id', $purchaseOrder->tenant_id)->where('source_type', 'PurchaseOrder')->where('source_id', $purchaseOrder->id)->latest('id')->get(),
@@ -133,6 +156,7 @@ class PurchaseOrderController extends Controller
             'delivery_terms' => $data['delivery_terms'] ?? null,
             'warranty_terms' => $data['warranty_terms'] ?? null,
             'shipping_fee' => (float) ($data['shipping_fee'] ?? 0),
+            'receiving_warehouse_id' => (int) $data['receiving_warehouse_id'],
         ];
     }
     public function approve(Request $request, PurchaseOrder $purchaseOrder): JsonResponse

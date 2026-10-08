@@ -1,8 +1,15 @@
 (function () {
+let procurementApproval = {data:{enabled:false,rules:[]},users:[]};
+let approvalRuleSequence = 0;
+let salesQuotationApproval = null;
+let workAssignment = null;
+let operationalApproval = null;
 document.addEventListener('vk:ready', () => loadSettings());
+document.addEventListener('vk:settings-menu', () => toggleSettingsLauncher(true));
 
 document.addEventListener('change', (event) => {
     if (!document.getElementById('settingsRoot')) return;
+
     if (event.target.matches('[data-logo-input]')) {
         previewLogo(event.target.files?.[0]);
     }
@@ -16,8 +23,32 @@ document.addEventListener('change', (event) => {
 
 document.addEventListener('click', (event) => {
     if (!document.getElementById('settingsRoot')) return;
+    const sectionButton = event.target.closest('[data-settings-nav]');
+    if (event.target.closest('[data-save-sales-approval]')) saveSalesQuotationApproval();
+    if (event.target.closest('[data-save-work-assignment]')) saveWorkAssignment();
+    const addPerson = event.target.closest('[data-add-approval-person]');
+    if (addPerson) {
+        const box = addPerson.closest('.approval-setting-rule').querySelector('[data-approval-people]');
+        if (box.children.length >= 50) return VKModal.toast('Mỗi luồng hỗ trợ tối đa 50 người duyệt.', 'warning');
+        box.insertAdjacentHTML('beforeend', approvalPerson(box.dataset.approvalPeople, '', box.children.length));
+        renumberApprovalPeople(box);
+    }
+    if (event.target.closest('[data-remove-approval-person]')) {
+        const row = event.target.closest('[data-person-row]');
+        const box = row?.parentElement;
+        row?.remove();
+        if (box) renumberApprovalPeople(box);
+    }
+    const saveOperational = event.target.closest('[data-save-operational-approval]');
+    if (saveOperational) saveOperationalApproval(saveOperational);
+    if (sectionButton) { showSettingsSection(sectionButton.dataset.settingsNav, true); toggleSettingsLauncher(false); return; }
+    if (event.target.closest('[data-settings-launcher-open]')) { toggleSettingsLauncher(true); return; }
+    if (event.target.closest('[data-settings-launcher-close]') || event.target.matches('[data-settings-launcher-layer]')) { toggleSettingsLauncher(false); return; }
 
     const createButton = event.target.closest('[data-create-sla-policy]');
+    if (event.target.closest('[data-add-approval-rule]')) document.querySelector('[data-approval-rules]').insertAdjacentHTML('beforeend', renderApprovalRule({minimum_amount:'',approvers:[]}));
+    if (event.target.closest('[data-remove-approval-rule]')) event.target.closest('.approval-setting-rule')?.remove();
+    if (event.target.closest('[data-save-procurement-approval]')) saveProcurementApproval();
     const editButton = event.target.closest('[data-edit-sla-policy]');
 
     if (event.target.matches('[data-save-logo]')) {
@@ -40,32 +71,135 @@ document.addEventListener('click', (event) => {
 async function loadSettings(options = {}) {
     const root = document.getElementById('settingsRoot');
     if (!root) return;
-    if (options.source !== 'pjax') {
-        root.innerHTML = renderLoading();
+    if (!root.querySelector('[data-settings-launcher-layer]')) {
+        procurementApproval = null;
+        root.innerHTML = renderSettings({me:{},slaPolicies:{data:[]}});
+        showSettingsSection(new URLSearchParams(location.search).get('section') || 'company');
+        if (!new URLSearchParams(location.search).has('section')) toggleSettingsLauncher(true);
     }
 
     const fallback = { data: [], meta: { total: 0 } };
-    const [me, users, roles, customers, suppliers, skus, warehouses, slaPolicies] = await Promise.all([
+    const [me, slaPolicies, approval, salesApproval, assignment, operational] = await Promise.all([
         safeRequest('/me'),
-        safeRequest('/users?page_size=100'),
-        safeRequest('/roles?page_size=100'),
-        safeRequest('/customers'),
-        safeRequest('/suppliers'),
-        safeRequest('/skus'),
-        safeRequest('/warehouses'),
         safeRequest('/sla-policies?page_size=100'),
+        safeRequest('/tenant/procurement-approval'),
+        safeRequest('/tenant/sales-quotation-approval'),
+        safeRequest('/tenant/work-assignment'),
+        safeRequest('/tenant/operational-approval'),
     ]);
-
+    if (document.getElementById('settingsRoot') !== root) return;
+    procurementApproval = approval || null;
+    salesQuotationApproval = salesApproval || null;
+    workAssignment = assignment || null;
+    operationalApproval = operational || null;
     root.innerHTML = renderSettings({
         me: me?.data || {},
-        users: users || fallback,
-        roles: roles || fallback,
-        customers: customers || fallback,
-        suppliers: suppliers || fallback,
-        skus: skus || fallback,
-        warehouses: warehouses || fallback,
         slaPolicies: slaPolicies || fallback,
     });
+    showSettingsSection(new URLSearchParams(location.search).get('section') || 'company');
+    if (!new URLSearchParams(location.search).has('section')) toggleSettingsLauncher(true);
+}
+
+function settingsIcon(key) {
+    const paths = {
+        company:'<path d="M5 21V5l7-3 7 3v16M3 21h18M9 7h1m4 0h1M9 11h1m4 0h1M10 21v-6h4v6"/>',
+        appearance:'<path d="M12 3a9 9 0 1 0 0 18h1a2 2 0 0 0 1-4 2 2 0 0 1 1-4h3a3 3 0 0 0 3-3c0-4-4-7-9-7Z"/><path d="M7 9h.01M10 6h.01M15 7h.01M6 14h.01"/>',
+        approval:'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2h6v2M8 13l3 3 5-6"/>',
+        sla:'<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/>',
+        users:'<circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M17 5a3 3 0 0 1 0 6m1 4a5 5 0 0 1 3 5"/>',
+        roles:'<path d="m12 2 9 4v6c0 5-9 10-9 10S3 17 3 12V6l9-4Z M8 12l3 3 5-6"/>',
+        data:'<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/>',
+        kpi:'<path d="M3 3v18h18M7 17v-5m5 5V7m5 10v-8"/>',
+        audit:'<path d="M5 3h10l4 4v14H5V3Zm10 0v5h4M8 12h8M8 16h6"/>'
+    };
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[key] || paths.company}</svg>`;
+}
+
+function toggleSettingsLauncher(open) {
+    const layer = document.querySelector('[data-settings-launcher-layer]');
+    if (!layer) return;
+    layer.hidden = !open;
+    document.querySelector('[data-settings-launcher-open]')?.setAttribute('aria-expanded',String(open));
+    if (open) layer.querySelector('[data-settings-launcher-close]')?.focus();
+    else document.querySelector('[data-settings-launcher-open]')?.focus();
+}
+
+document.addEventListener('keydown', event => {
+    const layer = document.querySelector('[data-settings-launcher-layer]:not([hidden])');
+    if (!layer) return;
+    if (event.key === 'Escape') { event.preventDefault(); toggleSettingsLauncher(false); }
+    if (event.key === 'Tab') {
+        const nodes = Array.from(layer.querySelectorAll('button,a[href]'));
+        const first = nodes[0], last = nodes.at(-1);
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+});
+
+function renderApprovalRule(rule) {
+    const ruleKey = ++approvalRuleSequence;
+    const approvers = rule.approvers || [];
+    return `<div class="approval-setting-rule"><div class="approval-rule-head"><label>Từ giá trị báo giá (VND)<input type="number" min="0" step="1000" data-approval-minimum value="${VKTable.escapeHtml(rule.minimum_amount)}" placeholder="0 cho luồng mặc định"></label><button class="btn secondary small" type="button" data-remove-approval-rule>Bỏ luồng</button></div><div data-approval-people="quotation" class="form-grid two">${(approvers.length ? approvers : ['']).map((id, index) => approvalPerson('quotation', id, index)).join('')}</div><button type="button" class="btn secondary small" data-add-approval-person>+ Thêm người duyệt</button><p class="form-note">Người cuối danh sách duyệt cuối; những người phía trước duyệt nội bộ song song.</p></div>`;
+}
+
+function approvalPerson(type, value, index) {
+    const users = type === 'quotation' ? procurementApproval.users : operationalApproval?.users?.[type] || [];
+    const options = [{value:'', label:'Chọn nhân sự'}, ...users.map(user => ({value:user.id, label:user.name}))];
+    return `<div data-person-row style="display:flex;align-items:end;gap:8px">${VKModal.select(`approval_person_${++approvalRuleSequence}`, `Người duyệt ${index + 1}`, options, value)}<button type="button" class="btn small danger" data-remove-approval-person aria-label="Bỏ người duyệt">Bỏ</button></div>`;
+}
+
+function renumberApprovalPeople(box) {
+    Array.from(box.children).forEach((row, index) => {
+        const label = row.querySelector('label');
+        if (label) label.textContent = `Người duyệt ${index + 1}${index === box.children.length - 1 ? ' (duyệt cuối)' : ''}`;
+    });
+}
+
+function renderOperationalApproval() {
+    if (!operationalApproval) return '<p class="form-note">Không tải được cấu hình duyệt đơn mua và nhập kho.</p>';
+    return Object.entries({purchase_order:'Duyệt đơn mua', goods_receipt:'Duyệt nhập kho'}).map(([type, title]) => {
+        const ids = operationalApproval.data?.[type]?.approvers || [];
+        return `<section class="module-panel settings-section approval-setting-rule"><div class="panel-head"><div><h2>${title}</h2><span>Luồng riêng, duyệt lần lượt theo thứ tự. Chưa lưu cấu hình sẽ chưa áp dụng nhiều cấp. Tối thiểu 2 người; người cuối hoàn tất phiếu.</span></div><button class="btn primary small" data-save-operational-approval="${type}">Lưu luồng</button></div><div data-approval-people="${type}" class="form-grid two">${(ids.length ? ids : ['', '']).map((id, index) => approvalPerson(type, id, index)).join('')}</div><button class="btn secondary small" type="button" data-add-approval-person>+ Thêm người duyệt</button><p class="form-note">${type === 'goods_receipt' ? 'Chỉ cộng tồn và chuyển đơn mua sang Đã nhập kho khi đủ mọi cấp duyệt.' : 'Báo giá duyệt xong tạo đơn mua chờ duyệt; chỉ tạo phiếu nhập khi đơn mua duyệt đủ.'} Khi lưu sẽ cập nhật phiếu nháp chưa ai duyệt. Phiếu đã có lượt duyệt giữ nguyên lịch sử.</p></section>`;
+    }).join('');
+}
+
+async function saveOperationalApproval(button) {
+    if (button.disabled) return;
+    const type = button.dataset.saveOperationalApproval;
+    const ids = Array.from(button.closest('.approval-setting-rule').querySelectorAll('[data-approval-people] select'), input => Number(input.value)).filter(Boolean);
+    if (ids.length < 2) return VKModal.toast('Chọn ít nhất 2 người duyệt.', 'danger');
+    if (new Set(ids).size !== ids.length) return VKModal.toast('Không chọn trùng người duyệt.', 'danger');
+    button.disabled = true;
+    try {
+        const result = await VKApi.request('/tenant/operational-approval', {method:'POST', body:JSON.stringify({type, approvers:ids})});
+        operationalApproval.data[type] = {approvers:ids};
+        VKModal.toast(`Đã lưu luồng và cập nhật ${result.updated} phiếu chưa duyệt.`);
+    } catch (error) { VKModal.toast(error.message, 'danger'); }
+    finally { button.disabled = false; }
+}
+
+function renderProcurementApproval() {
+    const config = procurementApproval.data;
+return `<section class="module-panel settings-section procurement-approval-settings"><div class="panel-head"><div><h2>Luồng duyệt báo giá nhà cung cấp</h2><span>Tự xác định người duyệt khi tạo báo giá, theo tổng giá trị hàng hóa.</span></div><button class="btn primary small" data-save-procurement-approval>Lưu thiết lập</button></div><p class="form-note">Duyệt một người: giữ một ô nhân sự. Duyệt nhiều người: bấm Thêm người duyệt; người cuối danh sách duyệt cuối, đủ lượt nội bộ mới đến người duyệt cuối. Luồng có ngưỡng cao nhất không vượt giá trị báo giá sẽ được áp dụng.</p><div data-approval-rules>${(config.rules.length?config.rules:[{minimum_amount:0,approvers:[]}]).map(renderApprovalRule).join('')}</div><button class="btn secondary small" data-add-approval-rule>+ Thêm luồng theo mức tiền</button><p class="form-note">Cần luồng mặc định từ 0 đồng. Chỉ hiển thị tài khoản đang hoạt động có quyền duyệt mua hàng. Khi lưu, báo giá chưa có lượt duyệt sẽ tự cập nhật theo thiết lập. Báo giá đã có lượt duyệt hoặc đã tạo đơn mua giữ nguyên lịch sử.</p></section>`;
+}
+
+async function saveProcurementApproval() {
+    const button = document.querySelector('[data-save-procurement-approval]');
+    if (button.disabled) return;
+    button.disabled = true;
+    try {
+        const rules = Array.from(document.querySelectorAll('#settingsRoot [data-approval-rules] .approval-setting-rule')).map((node, ruleIndex) => {
+            const values = Array.from(node.querySelectorAll('[data-approval-people] select'), input => input.value);
+            if (!values.length || values.some(value => !value)) throw new Error(`Luồng ${ruleIndex + 1}: chọn đủ nhân sự hoặc bỏ ô trống.`);
+            if (new Set(values).size !== values.length) throw new Error('Không chọn trùng người trong một luồng.');
+            const minimum = node.querySelector('[data-approval-minimum]').value;
+            if (minimum === '') throw new Error('Nhập ngưỡng tiền cho từng luồng.');
+            return {minimum_amount:Number(minimum),approvers:values.filter(Boolean).map(Number)};
+        });
+        await VKApi.request('/tenant/procurement-approval',{method:'POST',body:JSON.stringify({enabled:true,rules})});
+        VKModal.toast('Đã lưu và cập nhật luồng cho báo giá chưa có lượt duyệt.');
+    } catch(error) { VKModal.toast(error.message,'danger'); }
+    finally { button.disabled = false; }
 }
 
 async function safeRequest(path) {
@@ -76,7 +210,83 @@ async function safeRequest(path) {
     }
 }
 
+function renderSalesQuotationApproval() {
+    if (!salesQuotationApproval) return '<p class="form-note">Cần quyền quản lý người dùng để tải và thiết lập luồng duyệt.</p>';
+    const config = salesQuotationApproval.data || {};
+    const options = [{value:'',label:'Chọn người duyệt'},...(salesQuotationApproval.users || []).map(user => ({value:user.id,label:user.name}))];
+    return `<section class="module-panel settings-section"><div class="panel-head"><div><h2>Duyệt báo giá bán hàng</h2><span>Thiết lập một lần. Báo giá gửi duyệt tự lấy người duyệt, khóa giá và nội dung.</span></div><button class="btn primary" data-save-sales-approval>Lưu thiết lập</button></div><p class="form-note">Duyệt lần lượt theo thứ tự. Người lập được duyệt nếu có quyền, được phân công và đến đúng lượt. Không đổi luồng của báo giá đã gửi duyệt.</p><div class="form-grid">${[0,1,2].map(index => VKModal.select(`sales_approver_${index}`,`Người duyệt ${index + 1}${index === 0 ? ' *' : ' (tùy chọn)'}`, options, config.approvers?.[index] || '')).join('')}${VKModal.select('sales_exception_approver','Người duyệt thêm khi vượt ngưỡng (tùy chọn)',options,config.exception_approvers?.[0] || '')}${VKModal.field('sales_minimum_margin','Biên lợi nhuận tối thiểu (%)','number',config.minimum_margin ?? 15)}${VKModal.field('sales_maximum_discount','Chiết khấu tối đa không cần duyệt thêm (%)','number',config.maximum_discount ?? 0)}${VKModal.field('sales_amount_threshold','Giá trị cần duyệt thêm (VND, bỏ trống nếu không dùng)','number',config.amount_threshold ?? '')}</div><p class="form-note">Dưới biên lợi nhuận, vượt chiết khấu hoặc đạt mức tiền sẽ thêm người duyệt ngoại lệ. Nếu chưa cấu hình, hệ thống chỉ dùng quản lý trực tiếp hợp lệ; không tự chọn Admin.</p></section>`;
+}
+
+async function saveSalesQuotationApproval() {
+    const button = document.querySelector('[data-save-sales-approval]'); button.disabled = true;
+    try {
+        const value = name => document.getElementById(name)?.value || '';
+        const approvers = [0,1,2].map(index => value(`sales_approver_${index}`)).filter(Boolean).map(Number);
+        const exception = value('sales_exception_approver');
+        const payload = {approvers,exception_approvers:exception ? [Number(exception)] : [],minimum_margin:Number(value('sales_minimum_margin')),maximum_discount:Number(value('sales_maximum_discount')),amount_threshold:value('sales_amount_threshold') ? Number(value('sales_amount_threshold')) : null};
+        await VKApi.request('/tenant/sales-quotation-approval',{method:'POST',body:JSON.stringify(payload)});
+        salesQuotationApproval.data = payload; VKModal.toast('Đã lưu luồng duyệt cho báo giá gửi duyệt sau này.');
+    } catch(error) { VKModal.toast(error.message,'danger'); }
+    finally { button.disabled = false; }
+}
+
+function renderWorkAssignment() {
+    if (!workAssignment) return '<p class="form-note">Cần quyền quản lý người dùng để thiết lập phân công tự động. Nếu đã có quyền, vui lòng tải lại trang.</p>';
+    const config = workAssignment.data || {};
+    return `<section class="module-panel settings-section"><div class="panel-head"><div><h2>Tự động phân công công việc</h2><span>Thiết lập một lần · Luân phiên người nhận · Không thay người đã được chọn</span></div><button class="btn primary" data-save-work-assignment>Lưu thiết lập</button></div><label class="form-note" style="display:flex;align-items:center;gap:10px"><input type="checkbox" data-assignment-enabled ${config.enabled ? 'checked' : ''}> Bật phân công tự động cho dữ liệu tạo mới</label><div class="form-grid">${Object.entries(workAssignment.rules || {}).map(([key, rule]) => `<section class="module-panel"><div class="panel-head"><h3>${VKTable.escapeHtml(rule.label)}</h3></div><div style="padding:16px;display:grid;gap:12px">${rule.users.length ? rule.users.map(user => `<label style="display:flex;align-items:center;gap:10px"><input type="checkbox" data-assignment-pool="${key}" value="${Number(user.id)}" ${(config.pools?.[key] || []).map(Number).includes(Number(user.id)) ? 'checked' : ''}>${VKTable.escapeHtml(user.name)}</label>`).join('') : '<p class="form-note">Chưa có nhân sự đang hoạt động với đủ quyền.</p>'}</div></section>`).join('')}</div><p class="form-note">Nhóm để trống sẽ giữ việc ở trạng thái chưa phân công. Người bị khóa hoặc mất quyền sẽ tự được bỏ qua. Không tự duyệt chứng từ, xác nhận giao nhận hay ghi nhận tiền; không đổi dữ liệu cũ.</p></section>`;
+}
+
+async function saveWorkAssignment() {
+    const button = document.querySelector('[data-save-work-assignment]');
+    button.disabled = true;
+    try {
+        const pools = Object.fromEntries(Object.keys(workAssignment.rules).map(key => [key, Array.from(document.querySelectorAll(`[data-assignment-pool="${key}"]:checked`)).map(input => Number(input.value))]));
+        const payload = {enabled:document.querySelector('[data-assignment-enabled]').checked,pools};
+        await VKApi.request('/tenant/work-assignment', {method:'POST',body:JSON.stringify(payload)});
+        workAssignment.data = payload;
+        VKModal.toast('Đã lưu phân công tự động cho dữ liệu tạo mới.');
+    } catch (error) { VKModal.toast(error.message, 'danger'); }
+    finally { button.disabled = false; }
+}
+
 function renderSettings(data) {
+    window.__slaPolicies = data.slaPolicies.data || [];
+    const sections = [['company','Công ty','Thông tin doanh nghiệp'],['appearance','Giao diện','Logo và biểu tượng'],['assignment','Tự động phân công','Chia đều việc cho người có quyền'],['approval','Duyệt mua hàng','Người duyệt và mức tiền'],['salesApproval','Duyệt báo giá bán','Luồng duyệt tự động'],['sla','Thời hạn công việc','SLA và cảnh báo']];
+    const panel = (title, description, body, tools = '') => `<section class="module-panel settings-section"><div class="panel-head"><div><h2>${title}</h2><span>${description}</span></div>${tools}</div>${body}</section>`;
+    return `<div class="settings-launcher-workspace"><div class="settings-page-toolbar"><div><span>Thiết lập</span><strong data-settings-current-title>Thông tin công ty</strong></div><button type="button" class="btn secondary" data-settings-launcher-open aria-expanded="false" aria-controls="settingsLauncher">${settingsIcon('data')} Menu thiết lập</button></div><div class="settings-launcher-layer" data-settings-launcher-layer hidden><section class="settings-launcher" id="settingsLauncher" role="dialog" aria-modal="true" aria-labelledby="settingsLauncherTitle"><header><div><h2 id="settingsLauncherTitle">Menu thiết lập</h2><small>Chọn chức năng cần sử dụng</small></div><button type="button" data-settings-launcher-close aria-label="Đóng menu">×</button></header><div class="settings-launcher-group">Hệ thống & quy trình</div><div class="settings-launcher-grid">${sections.map(([key,title,note]) => `<button type="button" data-settings-nav="${key}" title="${note}"><span class="settings-tile-icon">${settingsIcon(key)}</span><span>${title}</span></button>`).join('')}</div><div class="settings-launcher-group">Danh mục & quản trị</div><div class="settings-launcher-grid">${[['users','Người dùng','/users'],['roles','Phân quyền','/roles'],['data','Dữ liệu nền','/sales-master-data'],['kpi','Thiết lập KPI','/kpi-settings'],['audit','Nhật ký','/audit-logs']].map(([key,title,href]) => `<a href="${href}"><span class="settings-tile-icon">${settingsIcon(key)}</span><span>${title}</span></a>`).join('')}</div><footer>Mỗi chức năng mở một màn hình riêng</footer></section></div><div class="settings-content">
+        <div data-settings-section="company" hidden>${panel('Thông tin công ty','Thông tin doanh nghiệp và tài khoản đang sử dụng.',renderCompany(data.me))}</div>
+        <div data-settings-section="appearance" hidden class="settings-stack">${panel('Logo hệ thống','Nhận diện thương hiệu trên phần mềm.',renderLogoSetting(data.me))}${panel('Biểu tượng menu','Tùy chỉnh biểu tượng cho từng phân hệ.',renderSidebarIconSetting())}</div>
+        <div data-settings-section="approval" hidden>${procurementApproval ? renderProcurementApproval() + renderOperationalApproval() : panel('Duyệt mua hàng','Không thể tải cấu hình.', '<p class="form-note">Bạn cần quyền quản lý người dùng để thiết lập. Nếu đã có quyền, vui lòng thử lại.</p>')}</div>
+        <div data-settings-section="salesApproval" hidden>${renderSalesQuotationApproval()}</div>
+        <div data-settings-section="assignment" hidden>${renderWorkAssignment()}</div>
+        <div data-settings-section="sla" hidden>${panel('Thời hạn xử lý công việc','Cấu hình thời hạn, nhắc việc và leo thang cho từng loại công việc.',renderSlaPolicies(data.slaPolicies.data || []),'<button class="btn primary small" data-create-sla-policy>Thêm SLA</button>')}</div>
+    </div></div>`;
+}
+
+function showSettingsSection(key, updateUrl = false) {
+    const root = document.getElementById('settingsRoot');
+    if (!root) return;
+    if (!['company','appearance','approval','salesApproval','assignment','sla'].includes(key)) key = 'company';
+    const grid = root.querySelector('.settings-launcher-grid:last-of-type');
+    if (grid && !grid.querySelector('[data-settings-admin-extra]')) {
+        grid.insertAdjacentHTML('beforeend', [['company','Phòng ban & chức vụ','/organization'],['audit','Mẫu in','/print-templates'],['approval','Quy trình','/workflows']].map(([icon,title,href]) => `<a href="${href}" data-settings-admin-extra><span class="settings-tile-icon">${settingsIcon(icon)}</span><span>${title}</span></a>`).join(''));
+    }
+    const title = root.querySelector('[data-settings-current-title]');
+    if (title) title.textContent = {company:'Thông tin công ty',appearance:'Giao diện',approval:'Luồng duyệt mua hàng',salesApproval:'Duyệt báo giá bán hàng',assignment:'Tự động phân công',sla:'Thời hạn công việc'}[key];
+    root.querySelectorAll('[data-settings-section]').forEach(node => { node.hidden = node.dataset.settingsSection !== key; });
+    root.querySelectorAll('[data-settings-nav]').forEach(button => {
+        const active = button.dataset.settingsNav === key;
+        button.classList.toggle('active',active);
+        button.setAttribute('aria-pressed', String(active));
+    });
+    if (updateUrl) {
+        const url = new URL(location.href);
+        url.searchParams.set('section',key);
+        history.replaceState(history.state,'',url.pathname+url.search);
+    }
+}
+
+function renderLegacySettings(data) {
     return `
         <div class="settings-stack">
             <section class="module-panel settings-section">

@@ -21,11 +21,18 @@ class SupplierQuotation extends Model
         'note',
         'selected_by',
         'selected_at',
+        'approval_flow',
+        'document_path',
+        'document_name',
+        'document_mime',
     ];
+
+    protected $hidden = ['document_path'];
 
     protected function casts(): array
     {
         return [
+            'approval_flow' => 'array',
             'quoted_at' => 'date',
             'valid_until' => 'date',
             'selected_at' => 'datetime',
@@ -56,5 +63,10 @@ class SupplierQuotation extends Model
     public function lines(): HasMany
     {
         return $this->hasMany(SupplierQuotationLine::class);
+    }
+
+    public function purchaseOrders(): HasMany
+    {
+        return $this->hasMany(PurchaseOrder::class)->whereNotIn('status', ['cancelled', 'rejected']);
     }
 }

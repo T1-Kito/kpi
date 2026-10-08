@@ -46,7 +46,9 @@ class PrintTemplateController extends Controller
                 'page' => $templates->currentPage(),
                 'page_size' => $templates->perPage(),
                 'total' => $templates->total(),
-                'fields' => self::fields(),
+                'fields' => self::fields($request->query('module', 'quotation')),
+                'field_sets' => collect(array_keys(self::modules()))->mapWithKeys(fn ($module) => [$module => self::fields($module)]),
+                'modules' => self::modules(),
             ],
         ]);
     }
@@ -64,21 +66,19 @@ class PrintTemplateController extends Controller
             ->latest('id')
             ->first();
 
-        return response()->json([
-            'data' => $template ?: [
-                'id' => null,
-                'code' => 'TPL-QUOTATION-DEFAULT',
-                'name' => 'Mẫu báo giá mặc định',
-                'module' => 'quotation',
-                'content_html' => self::defaultQuotationTemplate(),
-                'merge_fields' => self::fields(),
-                'file_path' => null,
-                'file_name' => null,
-                'is_default' => true,
-                'is_system' => true,
-                'status' => 'active',
-            ],
-        ]);
+        return response()->json(['data' => $template ?: [
+            'id' => null,
+            'code' => 'TPL-'.strtoupper($module).'-DEFAULT',
+            'name' => (self::modules()[$module] ?? 'Chứng từ').' mặc định',
+            'module' => $module,
+            'content_html' => self::defaultTemplate($module),
+            'merge_fields' => self::fields($module),
+            'file_path' => null,
+            'file_name' => null,
+            'is_default' => true,
+            'is_system' => true,
+            'status' => 'active',
+        ]]);
     }
 
     public function choices(Request $request): JsonResponse
@@ -119,8 +119,8 @@ class PrintTemplateController extends Controller
                 ...$file,
                 'tenant_id' => $tenantId,
                 'code' => $this->codes->next('print_templates', 'code', 'TPL-', fn ($query) => $query->where('tenant_id', $tenantId)),
-                'content_html' => $data['content_html'] ?: self::defaultQuotationTemplate(),
-                'merge_fields' => self::fields(),
+                'content_html' => $data['content_html'] ?: self::defaultTemplate($data['module']),
+                'merge_fields' => self::fields($data['module']),
                 'is_default' => (bool) ($data['is_default'] ?? false),
                 'status' => $data['status'] ?? 'active',
             ]);
@@ -147,8 +147,8 @@ class PrintTemplateController extends Controller
             $printTemplate->update([
                 ...$data,
                 ...$file,
-                'content_html' => $data['content_html'] ?: self::defaultQuotationTemplate(),
-                'merge_fields' => self::fields(),
+                'content_html' => $data['content_html'] ?: self::defaultTemplate($data['module']),
+                'merge_fields' => self::fields($data['module']),
                 'is_default' => (bool) ($data['is_default'] ?? false),
             ]);
         });
@@ -186,12 +186,53 @@ class PrintTemplateController extends Controller
     {
         return [
             'quotation' => 'Báo giá',
+            'sales_order' => 'Đơn bán hàng',
+            'goods_issue' => 'Phiếu xuất kho',
+            'contract' => 'Hợp đồng',
         ];
     }
 
-    public static function fields(): array
+    public static function fields(string $module = 'quotation'): array
     {
+        $common = [
+            ['key' => 'ma_chung_tu', 'label' => 'Mã chứng từ'],
+            ['key' => 'ngay_chung_tu', 'label' => 'Ngày chứng từ'],
+            ['key' => 'ten_khach_hang', 'label' => 'Tên khách hàng'],
+            ['key' => 'ma_khach_hang', 'label' => 'Mã khách hàng'],
+            ['key' => 'nguoi_lien_he', 'label' => 'Người liên hệ / nhận hàng'],
+            ['key' => 'so_dien_thoai', 'label' => 'Số điện thoại'],
+            ['key' => 'dia_chi_giao_hang', 'label' => 'Địa chỉ giao hàng'],
+            ['key' => 'stt', 'label' => 'STT dòng hàng'],
+            ['key' => 'ma_hang', 'label' => 'Mã hàng'],
+            ['key' => 'ten_hang', 'label' => 'Tên hàng'],
+            ['key' => 'dvt', 'label' => 'Đơn vị tính'],
+            ['key' => 'so_luong', 'label' => 'Số lượng'],
+            ['key' => 'bang_dong_hang', 'label' => 'Bảng dòng hàng dạng text'],
+            ['key' => 'nguoi_lap', 'label' => 'Người lập'],
+        ];
+        if ($module === 'goods_issue') {
+            return [...$common, ['key' => 'ma_don_ban', 'label' => 'Mã đơn bán'], ['key' => 'kho_xuat', 'label' => 'Kho xuất'], ['key' => 'ly_do_xuat', 'label' => 'Lý do xuất'], ['key' => 'dia_diem_giao_hang', 'label' => 'Địa điểm giao'], ['key' => 'chung_tu_goc', 'label' => 'Chứng từ gốc'], ['key' => 'co_tru_ton', 'label' => 'Có trừ tồn kho']];
+        }
+        if ($module === 'sales_order') {
+            return [...$common, ['key' => 'ma_don_ban', 'label' => 'Mã đơn bán'], ['key' => 'ma_bao_gia', 'label' => 'Mã báo giá nguồn'], ['key' => 'hinh_thuc_giao_hang', 'label' => 'Hình thức giao hàng'], ['key' => 'ghi_chu_giao_hang', 'label' => 'Ghi chú giao hàng'], ['key' => 'tong_cong', 'label' => 'Tổng cộng'], ['key' => 'tong_tien_bang_chu', 'label' => 'Tổng tiền bằng chữ']];
+        }
+        if ($module === 'contract') {
+            return [...$common,
+                ['key' => 'ma_hop_dong', 'label' => 'Số hợp đồng'],
+                ['key' => 'ten_hop_dong', 'label' => 'Tên hợp đồng'],
+                ['key' => 'ngay_hop_dong', 'label' => 'Ngày lập hợp đồng'],
+                ['key' => 'ngay_hieu_luc', 'label' => 'Ngày hiệu lực'],
+                ['key' => 'ngay_het_han', 'label' => 'Ngày hết hạn'],
+                ['key' => 'gia_tri_hop_dong', 'label' => 'Giá trị hợp đồng'],
+                ['key' => 'gia_tri_bang_chu', 'label' => 'Giá trị bằng chữ'],
+                ['key' => 'ma_bao_gia', 'label' => 'Báo giá tham chiếu'],
+                ['key' => 'ma_don_hang', 'label' => 'Đơn hàng tham chiếu'],
+                ['key' => 'dieu_khoan', 'label' => 'Ghi chú / điều khoản'],
+                ['key' => 'moc_thanh_toan', 'label' => 'Các mốc thanh toán'],
+            ];
+        }
         return [
+            ...$common,
             ['key' => 'ma_bao_gia', 'label' => 'Mã báo giá'],
             ['key' => 'ngay_bao_gia', 'label' => 'Ngày báo giá'],
             ['key' => 'ten_khach_hang', 'label' => 'Tên khách hàng'],
@@ -218,6 +259,15 @@ class PrintTemplateController extends Controller
             ['key' => 'tong_cong', 'label' => 'Tổng cộng'],
             ['key' => 'tong_tien_bang_chu', 'label' => 'Tổng tiền bằng chữ'],
         ];
+    }
+
+    public static function defaultTemplate(string $module = 'quotation'): string
+    {
+        if ($module === 'contract') {
+            return '<section class="doc-header"><div><p class="muted">HỢP ĐỒNG</p><h1>{{ma_hop_dong}}</h1><p><strong>{{ten_hop_dong}}</strong></p></div><div class="doc-meta"><span>Ngày lập</span><strong>{{ngay_hop_dong}}</strong></div></section><section class="doc-grid"><div class="doc-card"><h2>Bên A</h2><p><strong>{{ten_cong_ty}}</strong></p><p>Mã số thuế: {{ma_so_thue}}</p><p>Địa chỉ: {{dia_chi_cong_ty}}</p></div><div class="doc-card"><h2>Bên B</h2><p><strong>{{ten_khach_hang}}</strong></p><p>Người liên hệ: {{nguoi_lien_he}}</p><p>Địa chỉ: {{dia_chi_giao_hang}}</p></div></section><section class="doc-card"><h2>Giá trị và thời hạn</h2><p>Giá trị hợp đồng: <strong>{{gia_tri_hop_dong}}</strong></p><p>Bằng chữ: {{gia_tri_bang_chu}}</p><p>Hiệu lực: {{ngay_hieu_luc}} đến {{ngay_het_han}}</p></section><section class="doc-card"><h2>Mốc thanh toán</h2><p>{{moc_thanh_toan}}</p></section><section class="doc-card"><h2>Điều khoản khác</h2><p>{{dieu_khoan}}</p></section>';
+        }
+        $title = self::modules()[$module] ?? 'Chứng từ';
+        return '<section class="doc-header"><div><p class="muted">'.$title.'</p><h1>{{ma_chung_tu}}</h1><p><strong>{{ten_khach_hang}}</strong> · {{nguoi_lien_he}} · {{so_dien_thoai}}</p></div><div class="doc-meta"><span>Ngày lập</span><strong>{{ngay_chung_tu}}</strong></div></section><section class="doc-card"><h2>Thông tin giao nhận</h2><p>Địa chỉ: <strong>{{dia_chi_giao_hang}}</strong></p></section>{{bang_dong_hang}}';
     }
 
     private static function defaultTemplateRecord(): array

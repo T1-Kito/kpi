@@ -16,6 +16,7 @@ use Tests\TestCase;
 class SalesFlowApiTest extends TestCase
 {
     use RefreshDatabase;
+    use \Tests\Concerns\CompletesSalesQuotation;
 
     public function test_sales_can_quick_create_customer_for_quotation_without_duplicate_phone(): void
     {
@@ -107,9 +108,11 @@ class SalesFlowApiTest extends TestCase
             ]);
 
         $response->assertCreated()
-            ->assertJsonPath('data.status', 'pending_approval');
+            ->assertJsonPath('data.status', 'draft');
 
         $quotationId = $response->json('data.id');
+        $this->withToken($token)->putJson("/api/v1/quotations/{$quotationId}", ['customer_id' => 1, 'valid_until' => now()->addDays(15)->toDateString(), 'items' => [['sku_id' => $sku->id, 'quantity' => 1, 'unit_price' => 2700000]]])->assertOk();
+        $this->withToken($token)->postJson("/api/v1/quotations/{$quotationId}/workflow/submit")->assertOk()->assertJsonPath('data.status', 'pending_approval');
         $this->assertDatabaseHas('approvals', [
             'source_type' => 'Quotation',
             'source_id' => $quotationId,
@@ -183,7 +186,7 @@ class SalesFlowApiTest extends TestCase
             'unit' => $sku->unit,
         ]);
     }
-    public function test_pending_quotation_can_be_updated_before_sales_order(): void
+    public function test_draft_quotation_can_be_updated_before_submission(): void
     {
         $this->seed();
         $token = $this->loginAs('sales@vk-kpi.local');
@@ -197,7 +200,7 @@ class SalesFlowApiTest extends TestCase
                 ],
             ])
             ->assertCreated()
-            ->assertJsonPath('data.status', 'pending_approval');
+            ->assertJsonPath('data.status', 'draft');
 
         $quotationId = $created->json('data.id');
 
@@ -209,14 +212,14 @@ class SalesFlowApiTest extends TestCase
                 ],
             ])
             ->assertOk()
-            ->assertJsonPath('data.status', 'ready');
+            ->assertJsonPath('data.status', 'draft');
 
         $this->assertDatabaseHas('quotations', [
             'id' => $quotationId,
             'subtotal_amount' => 7000000,
             'tax_amount' => 560000,
             'total_amount' => 7560000,
-            'status' => 'ready',
+            'status' => 'draft',
         ]);
         $this->assertSame(1, Quotation::findOrFail($quotationId)->items()->count());
     }
@@ -237,6 +240,7 @@ class SalesFlowApiTest extends TestCase
             ->assertCreated()
             ->json('data.id');
 
+        $this->completeSalesQuotation($quotationId);
         $this->withToken($token)
             ->postJson('/api/v1/sales-orders', ['quotation_id' => $quotationId])
             ->assertCreated();
@@ -277,6 +281,7 @@ class SalesFlowApiTest extends TestCase
             ->postJson('/api/v1/quotations', $payload)
             ->assertCreated();
 
+        $this->completeSalesQuotation($first->json('data.id'));
         $this->withToken($token)
             ->postJson('/api/v1/sales-orders', ['quotation_id' => $first->json('data.id')])
             ->assertCreated();
@@ -364,6 +369,7 @@ class SalesFlowApiTest extends TestCase
             'line_cost' => 999 * 2600000,
         ]);
 
+        $this->completeSalesQuotation($quotationId);
         $create = $this->withToken($token)
             ->postJson('/api/v1/sales-orders', ['quotation_id' => $quotation->id])
             ->assertCreated();

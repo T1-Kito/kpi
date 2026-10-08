@@ -30,14 +30,17 @@ class DataScope
         return match ($user->dataScope()) {
             'company' => $query,
             'department' => $query->where(function (Builder $scope) use ($user) {
-                $scope->where('department_id', $user->department_id)
-                    ->orWhereHas('assignee', fn (Builder $assignee) => $assignee->where('department_id', $user->department_id))
-                    ->orWhere('created_by', $user->id);
+                $scope->where('created_by', $user->id)->orWhere('assignee_id', $user->id);
+                if ($user->department_id) {
+                    $scope->orWhere('department_id', $user->department_id)
+                        ->orWhereHas('assignee', fn (Builder $assignee) => $assignee->where('department_id', $user->department_id));
+                }
             }),
             'warehouse' => $query->where(function (Builder $scope) use ($user) {
                 $scope->where('assignee_id', $user->id)
-                    ->orWhere('department_id', $user->department_id)
-                    ->orWhere('task_type', 'warehouse_issue');
+                    ->orWhere('created_by', $user->id);
+                if ($user->department_id) $scope->orWhere('department_id', $user->department_id);
+                $scope->orWhere(fn (Builder $queue) => $queue->where('task_type', 'warehouse_issue')->whereNull('assignee_id'));
             }),
             default => $query->where(function (Builder $scope) use ($user) {
                 $scope->where('assignee_id', $user->id)->orWhere('created_by', $user->id);
@@ -76,11 +79,11 @@ class DataScope
         ?string $departmentColumn,
     ): Builder {
         return $query->where(function (Builder $scope) use ($user, $ownerColumn, $ownerRelation, $departmentColumn) {
-            if ($departmentColumn) {
+            if ($departmentColumn && $user->department_id) {
                 $scope->where($departmentColumn, $user->department_id);
             }
 
-            if ($ownerRelation) {
+            if ($ownerRelation && $user->department_id) {
                 $scope->orWhereHas($ownerRelation, fn (Builder $owner) => $owner->where('department_id', $user->department_id));
             } elseif ($ownerColumn) {
                 $scope->orWhere($ownerColumn, $user->id);

@@ -65,7 +65,7 @@ class TaskController extends Controller
             'due_at' => ['nullable', 'date'],
         ]);
 
-        $task = $this->tasks->create($request->user(), $data);
+        $task = $this->tasks->create($request->user(), $data, false);
 
         return response()->json(['data' => $task->load(['assignee:id,name,email', 'department:id,code,name'])], 201);
     }
@@ -83,6 +83,7 @@ class TaskController extends Controller
     public function updateStatus(Request $request, Task $task): JsonResponse
     {
         abort_if($task->tenant_id !== $request->user()->tenant_id, 404);
+        abort_unless(DataScope::task(Task::whereKey($task->id), $request->user())->exists(), 404);
 
         $data = $request->validate([
             'status' => ['required', Rule::in(['new', 'in_progress', 'completed', 'overdue', 'cancelled'])],

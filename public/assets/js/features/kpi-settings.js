@@ -69,6 +69,7 @@
                     { value: 'inactive', label: 'Tạm ngưng' },
                 ], row?.status || 'active')}
             </div>
+            <p class="form-note">Đây là dữ liệu nền của chỉ tiêu. Trọng số và công thức nhập tại đây hiện chưa được áp dụng vào điểm tổng công ty; điểm tổng đang theo bốn nhóm cố định ở màn Tổng quan KPI.</p>
         `, async (form) => {
             const payload = Object.fromEntries(new FormData(form));
             payload.weight = Number(payload.weight || 0);
@@ -117,6 +118,7 @@
                     { value: 'active', label: 'Đang theo dõi' },
                 ], row?.status === 'locked' ? 'active' : (row?.status || 'active'))}
             </div>
+            <p class="form-note">Mục tiêu là số cần đạt trong kỳ. “Thực tế” và “Điểm” nhập tại đây có thể được hệ thống tính lại từ dữ liệu vận hành khi chạy Tính lại KPI; hãy kiểm tra trước khi khóa.</p>
             ${row?.locked_at ? '<p class="form-note danger">Kỳ này đã khóa, hệ thống không cho sửa mục tiêu.</p>' : ''}
         `, async (form) => {
             if (row?.locked_at) {

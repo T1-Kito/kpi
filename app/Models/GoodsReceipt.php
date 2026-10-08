@@ -8,11 +8,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class GoodsReceipt extends Model
 {
-    protected $fillable = ['tenant_id', 'code', 'purchase_order_id', 'warehouse_id', 'warehouse_location_id', 'confirmed_by', 'confirmed_at', 'status'];
+    protected $fillable = ['tenant_id', 'code', 'purchase_order_id', 'warehouse_id', 'warehouse_location_id', 'confirmed_by', 'confirmed_at', 'status', 'approval_flow'];
 
     protected function casts(): array
     {
-        return ['confirmed_at' => 'datetime'];
+        return ['confirmed_at' => 'datetime', 'approval_flow' => 'array'];
     }
 
     public function items(): HasMany

@@ -147,10 +147,10 @@ class UserRoleAdminApiTest extends TestCase
         $this->seed();
         $token = $this->loginAs('admin@vk-kpi.local');
 
-        $this->withToken($token)
+        $totalBeforeCreate = $this->withToken($token)
             ->getJson('/api/v1/sla-policies?page_size=100')
             ->assertOk()
-            ->assertJsonPath('meta.total', 4);
+            ->json('meta.total');
 
         $policyId = $this->withToken($token)
             ->postJson('/api/v1/sla-policies', [
@@ -186,6 +186,7 @@ class UserRoleAdminApiTest extends TestCase
         ]);
 
         $this->assertSame(false, SlaPolicy::findOrFail($policyId)->escalation_rules['manager']);
+        $this->assertSame($totalBeforeCreate + 1, SlaPolicy::where('tenant_id', Tenant::firstOrFail()->id)->count());
     }
 
     public function test_admin_can_upload_tenant_logo(): void

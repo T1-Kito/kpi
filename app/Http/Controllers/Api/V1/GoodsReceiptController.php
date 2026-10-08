@@ -56,7 +56,12 @@ class GoodsReceiptController extends Controller
         abort_if($goodsReceipt->tenant_id !== $request->user()->tenant_id, 404);
         abort_if(! DataScope::warehouseScope(GoodsReceipt::whereKey($goodsReceipt->id), $request->user())->exists(), 404);
 
-        $goodsReceipt->load(['purchaseOrder:id,code,status,purchase_request_id', 'warehouse:id,code,name', 'items.sku:id,sku_code,name,unit']);
+        $goodsReceipt->load([
+            'purchaseOrder:id,code,status,purchase_request_id,supplier_id,expected_delivery_date,total_amount',
+            'purchaseOrder.supplier:id,code,name',
+            'warehouse:id,code,name',
+            'items.sku:id,sku_code,name,unit',
+        ]);
         $purchaseOrder = $goodsReceipt->purchaseOrder;
         $purchaseRequest = $purchaseOrder
             ? PurchaseRequest::where('tenant_id', $goodsReceipt->tenant_id)->whereKey($purchaseOrder->purchase_request_id)->first()
@@ -92,6 +97,7 @@ class GoodsReceiptController extends Controller
             ),
             'timeline' => [
                 ['label' => 'Tạo phiếu nhập', 'status' => 'completed', 'at' => $goodsReceipt->created_at],
+                ...collect($goodsReceipt->approval_flow ?? [])->map(fn ($step, $index) => ['label' => 'Cấp '.($index + 1).' · '.$step['name'], 'status' => !empty($step['decided_at']) ? 'completed' : 'pending', 'at' => $step['decided_at'] ?? null])->all(),
                 ['label' => 'Xác nhận nhập kho', 'status' => $goodsReceipt->status, 'at' => $goodsReceipt->confirmed_at ?? $goodsReceipt->updated_at],
                 ['label' => 'Cập nhật tồn kho', 'status' => $goodsReceipt->status === 'confirmed' ? 'completed' : 'pending', 'at' => $goodsReceipt->confirmed_at],
             ],
@@ -103,6 +109,7 @@ class GoodsReceiptController extends Controller
     public function confirm(Request $request, GoodsReceipt $goodsReceipt): JsonResponse
     {
         abort_if($goodsReceipt->tenant_id !== $request->user()->tenant_id, 404);
+        abort_if(! DataScope::warehouseScope(GoodsReceipt::whereKey($goodsReceipt->id), $request->user())->exists(), 404);
 
         return response()->json(['data' => $this->inventory->confirmReceipt($goodsReceipt->load('items'), $request->user())]);
     }

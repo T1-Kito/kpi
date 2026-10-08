@@ -125,28 +125,39 @@ class KpiService
         $snapshotDate = $period['end']->toDateString();
 
         return DB::transaction(function () use ($tenant, $periodType, $snapshotDate, $metrics, $period) {
-            $snapshot = KpiScoreSnapshot::updateOrCreate(
-                [
-                    'tenant_id' => $tenant->id,
-                    'snapshot_date' => $snapshotDate,
-                    'period_type' => $periodType,
-                ],
-                [
-                    'overall_score' => $metrics['totalScore'],
-                    'metrics' => $metrics,
-                    'status' => 'draft',
-                    'locked_at' => null,
-                ],
-            );
+            $existing = KpiScoreSnapshot::where('tenant_id', $tenant->id)
+                ->whereDate('snapshot_date', $snapshotDate)
+                ->where('period_type', $periodType)
+                ->first();
+            abort_if($existing?->locked_at || $existing?->status === 'locked', 422, 'Kỳ KPI đã khóa, không thể tính lại.');
+
+            $snapshot = $existing ?? new KpiScoreSnapshot([
+                'tenant_id' => $tenant->id,
+                'snapshot_date' => $snapshotDate,
+                'period_type' => $periodType,
+            ]);
+            $snapshot->fill([
+                'overall_score' => $metrics['totalScore'],
+                'metrics' => $metrics,
+                'status' => 'draft',
+                'locked_at' => null,
+            ])->save();
 
             $definitions = KpiDefinition::where('tenant_id', $tenant->id)->where('status', 'active')->get();
             foreach ($definitions as $definition) {
-                $target = KpiTarget::firstOrNew([
-                    'tenant_id' => $tenant->id,
-                    'kpi_definition_id' => $definition->id,
-                    'period_type' => $periodType,
-                    'period_start' => $period['start']->toDateString(),
-                ]);
+                $target = KpiTarget::where('tenant_id', $tenant->id)
+                    ->where('kpi_definition_id', $definition->id)
+                    ->where('period_type', $periodType)
+                    ->whereDate('period_start', $period['start']->toDateString())
+                    ->first() ?? new KpiTarget([
+                        'tenant_id' => $tenant->id,
+                        'kpi_definition_id' => $definition->id,
+                        'period_type' => $periodType,
+                        'period_start' => $period['start']->toDateString(),
+                    ]);
+                if ($target->exists && $target->locked_at) {
+                    continue;
+                }
                 $target->period_end = $period['end']->toDateString();
                 $target->target_value = $target->target_value ?: $this->defaultTargetValue($definition->code);
                 $target->actual_value = $this->actualValueFor($definition->code, $metrics);

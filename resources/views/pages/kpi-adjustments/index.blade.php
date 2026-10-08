@@ -6,6 +6,7 @@
 @section('page_subtitle', 'Quản lý cộng điểm, trừ điểm, duyệt điều chỉnh và truy vết lý do KPI theo từng kỳ.')
 
 @section('content')
+@include('partials.kpi-navigation')
 @php
     $periodOptions = [
         'day' => 'Theo ngày',

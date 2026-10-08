@@ -30,6 +30,9 @@ class InventoryService
     public function createReceiptFromPo(PurchaseOrder $po, User $actor, int $warehouseId, ?int $locationId = null): GoodsReceipt
     {
         return DB::transaction(function () use ($po, $actor, $warehouseId, $locationId) {
+            $po = PurchaseOrder::where('tenant_id', $actor->tenant_id)->whereKey($po->id)->lockForUpdate()->firstOrFail()->load('items');
+            $existing = GoodsReceipt::where('tenant_id', $po->tenant_id)->where('purchase_order_id', $po->id)->whereIn('status', ['draft', 'confirmed'])->first();
+            abort_if($existing, 422, 'Đơn mua đã có phiếu nhập. Vui lòng mở phiếu hiện có để xử lý tiếp.');
             abort_if($po->status !== 'approved', 422, 'Don mua chua duoc duyet.');
 
             $receipt = GoodsReceipt::create([
@@ -39,6 +42,7 @@ class InventoryService
                 'warehouse_id' => $warehouseId,
                 'warehouse_location_id' => $locationId,
                 'status' => 'draft',
+                'approval_flow' => app(\App\Support\OperationalApproval::class)->flow($po->tenant_id, 'goods_receipt'),
             ]);
 
             foreach ($po->items as $item) {
@@ -50,6 +54,12 @@ class InventoryService
             }
 
             $this->audit->record('goods_receipt', $receipt->id, 'create_goods_receipt', $actor, null, $receipt->toArray());
+            $this->tasks->create($actor, [
+                'module' => 'inventory', 'task_type' => 'goods_receipt', 'priority' => 'high',
+                'title' => 'Nhập kho cho đơn mua '.$po->code,
+                'description' => 'Phiếu nhập được tạo tự động sau khi đơn mua được duyệt.',
+                'source_type' => 'GoodsReceipt', 'source_id' => $receipt->id, 'assignee_id' => null,
+            ]);
 
             return $receipt->load('items.sku:id,sku_code,name');
         });
@@ -58,7 +68,17 @@ class InventoryService
     public function confirmReceipt(GoodsReceipt $receipt, User $actor): GoodsReceipt
     {
         return DB::transaction(function () use ($receipt, $actor) {
+            $receipt = GoodsReceipt::where('tenant_id', $actor->tenant_id)->whereKey($receipt->id)->lockForUpdate()->firstOrFail()->load('items');
             abort_if($receipt->status === 'confirmed', 422, 'Phieu nhap da duoc xac nhan.');
+            abort_unless($receipt->status === 'draft', 422, 'Chỉ được xác nhận phiếu nhập nháp.');
+            $sourcePo = PurchaseOrder::where('tenant_id', $actor->tenant_id)->whereKey($receipt->purchase_order_id)->lockForUpdate()->firstOrFail();
+            abort_unless($sourcePo->status === 'approved', 422, 'Đơn mua nguồn không còn ở trạng thái đã duyệt.');
+            if ($receipt->approval_flow) {
+                $flow = app(\App\Support\OperationalApproval::class)->decide($receipt->approval_flow, $actor);
+                $receipt->update(['approval_flow' => $flow]);
+                $this->audit->record('goods_receipt', $receipt->id, 'approve_goods_receipt_step', $actor, null, ['approval_flow' => $flow]);
+                if (collect($flow)->contains(fn ($step) => empty($step['decided_at']))) return $receipt->refresh()->load('items.sku:id,sku_code,name');
+            }
             $old = $receipt->only(['status', 'confirmed_by', 'confirmed_at']);
 
             foreach ($receipt->items as $item) {
@@ -72,6 +92,7 @@ class InventoryService
                     ],
                     ['on_hand' => 0, 'reserved' => 0, 'available' => 0],
                 );
+                $balance = InventoryBalance::whereKey($balance->id)->lockForUpdate()->firstOrFail();
                 $balance->update([
                     'on_hand' => $balance->on_hand + $item->quantity,
                     'available' => $balance->available + $item->quantity,
@@ -92,6 +113,10 @@ class InventoryService
             }
 
             $receipt->update(['status' => 'confirmed', 'confirmed_by' => $actor->id, 'confirmed_at' => now()]);
+            foreach (Task::where('tenant_id', $receipt->tenant_id)->where('source_type', 'GoodsReceipt')->where('source_id', $receipt->id)
+                ->where('task_type', 'goods_receipt')->whereIn('status', ['new', 'in_progress', 'overdue'])->get() as $task) {
+                $this->tasks->changeStatus($task, $actor, 'completed', 'goods_receipt_confirmed');
+            }
             $purchaseOrder = PurchaseOrder::where('tenant_id', $receipt->tenant_id)
                 ->where('id', $receipt->purchase_order_id)
                 ->first();
@@ -110,10 +135,12 @@ class InventoryService
         });
     }
 
-    public function createIssueFromSalesOrder(SalesOrder $order, User $actor, int $warehouseId, ?int $locationId = null): GoodsIssue
+    public function createIssueFromSalesOrder(SalesOrder $order, User $actor, int $warehouseId, ?int $locationId = null, array $documentDetails = []): GoodsIssue
     {
-        return DB::transaction(function () use ($order, $actor, $warehouseId, $locationId) {
-            abort_if($order->stock_status !== 'reserved', 422, 'Don ban chua giu hang.');
+        return DB::transaction(function () use ($order, $actor, $warehouseId, $locationId, $documentDetails) {
+            $order = SalesOrder::where('tenant_id', $actor->tenant_id)->whereKey($order->id)->lockForUpdate()->firstOrFail()->load(['items', 'customer', 'quotation']);
+            $isDirectDelivery = $order->fulfillment_type === 'supplier_direct';
+            abort_if(! $isDirectDelivery && $order->stock_status !== 'reserved', 422, 'Đơn bán chưa giữ hàng.');
 
             $existingIssue = GoodsIssue::where('tenant_id', $order->tenant_id)
                 ->where('sales_order_id', $order->id)
@@ -124,13 +151,15 @@ class InventoryService
                 abort(422, "Đơn bán {$order->code} đã có phiếu xuất {$existingIssue->code}. Vui lòng mở phiếu xuất hiện có để xử lý tiếp.");
             }
 
-            foreach ($order->items as $item) {
-                $reservedQty = InventoryBalance::where('tenant_id', $order->tenant_id)
-                    ->where('warehouse_id', $warehouseId)
-                    ->where('sku_id', $item->sku_id)
-                    ->sum('reserved');
+            if (! $isDirectDelivery) {
+                foreach ($order->items as $item) {
+                    $reservedQty = InventoryBalance::where('tenant_id', $order->tenant_id)
+                        ->where('warehouse_id', $warehouseId)
+                        ->where('sku_id', $item->sku_id)
+                        ->sum('reserved');
 
-                abort_if($reservedQty < $item->quantity, 422, 'Kho chon chua du hang da giu de xuat.');
+                    abort_if($reservedQty < $item->quantity, 422, 'Kho chọn chưa đủ hàng đã giữ để xuất.');
+                }
             }
 
             $issue = GoodsIssue::create([
@@ -139,6 +168,13 @@ class InventoryService
                 'sales_order_id' => $order->id,
                 'warehouse_id' => $warehouseId,
                 'warehouse_location_id' => $locationId,
+                'recipient_name' => $documentDetails['recipient_name'] ?? $order->customer?->contact_name ?? $order->customer?->name,
+                'recipient_phone' => $documentDetails['recipient_phone'] ?? $order->customer?->phone,
+                'recipient_address' => $documentDetails['recipient_address'] ?? $order->customer?->address ?? $order->customer?->billing_address,
+                'delivery_location' => $documentDetails['delivery_location'] ?? $order->customer?->address ?? $order->customer?->billing_address,
+                'issue_reason' => $documentDetails['issue_reason'] ?? 'Xuất kho bán hàng cho đơn '.$order->code,
+                'source_document' => $documentDetails['source_document'] ?? $order->quotation?->code ?? $order->code,
+                'affects_stock' => ! $isDirectDelivery,
                 'status' => 'draft',
             ]);
 
@@ -156,13 +192,38 @@ class InventoryService
         });
     }
 
+    public function ensureDraftIssue(SalesOrder $order, User $actor): ?GoodsIssue
+    {
+        return DB::transaction(function () use ($order, $actor) {
+            $order = SalesOrder::where('tenant_id', $actor->tenant_id)->whereKey($order->id)->lockForUpdate()->firstOrFail()->load('items');
+            $existing = GoodsIssue::where('tenant_id', $order->tenant_id)->where('sales_order_id', $order->id)->whereIn('status', ['draft', 'confirmed'])->first();
+            if ($existing) return $existing;
+            if ($order->stock_status !== 'reserved' && $order->fulfillment_type !== 'supplier_direct') return null;
+            $warehouses = \App\Models\Warehouse::where('tenant_id', $order->tenant_id)->where('status', 'active')->orderBy('id')->get();
+            if ($order->fulfillment_type === 'supplier_direct') {
+                if ($warehouses->count() !== 1) return null;
+                return $this->createIssueFromSalesOrder($order, $actor, $warehouses->first()->id);
+            }
+            $required = $order->items->groupBy('sku_id')->map(fn ($items) => $items->sum('quantity'));
+            foreach ($warehouses as $warehouse) {
+                $reserved = InventoryBalance::where('tenant_id', $order->tenant_id)->where('warehouse_id', $warehouse->id)->whereIn('sku_id', $required->keys())->get()->groupBy('sku_id')->map(fn ($balances) => $balances->sum('reserved'));
+                if ($required->every(fn ($quantity, $skuId) => ($reserved[$skuId] ?? 0) >= $quantity)) {
+                    return $this->createIssueFromSalesOrder($order, $actor, $warehouse->id);
+                }
+            }
+            return null;
+        });
+    }
+
     public function confirmIssue(GoodsIssue $issue, User $actor): GoodsIssue
     {
         return DB::transaction(function () use ($issue, $actor) {
+            $issue = GoodsIssue::where('tenant_id', $actor->tenant_id)->whereKey($issue->id)->lockForUpdate()->firstOrFail()->load('items');
             abort_if($issue->status === 'confirmed', 422, 'Phieu xuat da duoc xac nhan.');
+            abort_unless($issue->status === 'draft', 422, 'Chỉ được xác nhận phiếu xuất nháp.');
             $old = $issue->only(['status', 'confirmed_by', 'confirmed_at']);
 
-            foreach ($issue->items as $item) {
+            if ($issue->affects_stock) foreach ($issue->items as $item) {
                 $remaining = (float) $item->quantity;
                 $balances = InventoryBalance::where('tenant_id', $issue->tenant_id)
                     ->where('warehouse_id', $issue->warehouse_id)
@@ -214,6 +275,10 @@ class InventoryService
 
             $this->audit->record('goods_issue', $issue->id, 'confirm_goods_issue', $actor, $old, $issue->fresh()->only(['status', 'confirmed_by', 'confirmed_at']));
             if ($salesOrder) {
+                foreach (Task::where('tenant_id', $salesOrder->tenant_id)->where('source_type', 'SalesOrder')->where('source_id', $salesOrder->id)
+                    ->where('task_type', 'warehouse_issue')->whereIn('status', ['new', 'in_progress', 'overdue'])->get() as $task) {
+                    $this->tasks->changeStatus($task, $actor, 'completed', 'goods_issue_confirmed');
+                }
                 $this->audit->record('sales_order', $salesOrder->id, 'mark_sales_order_awaiting_delivery', $actor, $oldOrder, $salesOrder->fresh()->only(['status', 'stock_status', 'delivery_status']));
                 $this->tasks->create($actor, [
                     'module' => 'sales',
@@ -244,6 +309,7 @@ class InventoryService
 
         $order = SalesOrder::with('items')
             ->where('tenant_id', $receipt->tenant_id)
+            ->lockForUpdate()
             ->find($purchaseRequest->source_id);
 
         if (! $order || $order->stock_status !== 'shortage' || ! $this->canReserveSalesOrder($order)) {
@@ -253,6 +319,7 @@ class InventoryService
         $old = $order->only(['stock_status', 'status']);
         $this->reserveSalesOrderStock($order);
         $order->update(['stock_status' => 'reserved', 'status' => 'confirmed']);
+        $this->ensureDraftIssue($order, $actor);
 
         Alert::where('tenant_id', $order->tenant_id)
             ->where('alert_type', 'stock_shortage')
@@ -286,12 +353,12 @@ class InventoryService
 
     private function canReserveSalesOrder(SalesOrder $order): bool
     {
-        foreach ($order->items as $item) {
+        foreach ($order->items->groupBy('sku_id') as $skuId => $items) {
             $available = InventoryBalance::where('tenant_id', $order->tenant_id)
-                ->where('sku_id', $item->sku_id)
+                ->where('sku_id', $skuId)
                 ->sum('available');
 
-            if ($available < $item->quantity) {
+            if ($available < $items->sum('quantity')) {
                 return false;
             }
         }

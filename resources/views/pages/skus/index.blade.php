@@ -2,10 +2,10 @@
 
 @section('title', 'Mã hàng')
 @section('page', 'skus')
-@section('page_title', 'Mã hàng')
-@section('page_subtitle', 'Quản lý SKU, giá vốn, giá bán, đơn vị tính và ngưỡng tồn kho.')
+@section('page_title', 'Sản phẩm và mã hàng')
+@section('page_subtitle', 'Quản lý danh mục, hãng, ảnh, mô tả, thông số kỹ thuật và giá bán.')
 @section('page_actions')
-    <button class="btn primary" type="button" data-create-sku>Tạo mã hàng</button>
+    <button class="btn primary" type="button" data-create-sku>+ Thêm sản phẩm</button>
 @endsection
 
 @section('content')
@@ -13,5 +13,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/skus.js?v=20260615-2"></script>
+<script src="/assets/js/features/skus.js?v=20260923-2"></script>
 @endpush

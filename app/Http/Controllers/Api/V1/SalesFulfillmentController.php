@@ -144,6 +144,7 @@ class SalesFulfillmentController extends Controller
                 'customers.phone',
                 'customers.email',
                 'customers.tax_code',
+                'customers.identity_number',
                 'customers.credit_limit',
                 'customers.status',
             ])
@@ -161,6 +162,7 @@ class SalesFulfillmentController extends Controller
                 'customers.phone',
                 'customers.email',
                 'customers.tax_code',
+                'customers.identity_number',
                 'customers.credit_limit',
                 'customers.status',
             ]);
@@ -202,6 +204,7 @@ class SalesFulfillmentController extends Controller
                 'phone' => $row->phone,
                 'email' => $row->email,
                 'tax_code' => $row->tax_code,
+                'identity_number' => $row->identity_number,
                 'credit_limit' => $creditLimit,
                 'invoice_count' => (int) $row->invoice_count,
                 'total_amount' => (float) $row->total_amount,

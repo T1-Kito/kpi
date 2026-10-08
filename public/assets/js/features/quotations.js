@@ -1,8 +1,17 @@
 (function () {
 let quotationState = { rows: [], q: '', status: '', view: 'list', detail: null, detailTab: 'overview', detailCache: {} };
 let quotationTemplateCache = null;
+let customerSearchTimer = null;
+let customerSearchResults = [];
+let quotationCustomers = [];
 
-document.addEventListener('vk:ready', () => loadQuotations());
+document.addEventListener('vk:ready', async () => {
+    await loadQuotations();
+    const params = new URLSearchParams(location.search);
+    const requested = params.get('open') || params.get('record');
+    if (requested && /^\d+$/.test(requested)) await openQuotationDetail(requested);
+    openQuotationFromDeal();
+});
 document.addEventListener('vk:flow-updated', () => loadQuotations());
 document.addEventListener('input', (event) => {
     if (!document.getElementById('quotationsRoot')) return;
@@ -13,6 +22,13 @@ document.addEventListener('input', (event) => {
     if (event.target.matches('[name="quantity[]"], [name="unit_price[]"]')) {
         updateQuotationDraftTotals();
     }
+    if (event.target.matches('[name="discount_percent"]')) updateQuotationDraftTotals();
+    if (event.target.matches('[data-quotation-customer-search]')) {
+        searchQuotationCustomers(event.target.value);
+    }
+    if (event.target.matches('[data-quotation-sku-search]')) {
+        searchQuotationSkus(event.target);
+    }
 });
 document.addEventListener('change', (event) => {
     if (!document.getElementById('quotationsRoot')) return;
@@ -20,10 +36,26 @@ document.addEventListener('change', (event) => {
         quotationState.status = event.target.value;
         renderQuotations();
     }
+    if (event.target.matches('[name="price_book_id"]')) {
+        const field = document.querySelector('[name="discount_percent"]');
+        if (field) field.value = event.target.selectedOptions[0]?.dataset.discount || 0;
+        updateQuotationDraftTotals();
+    }
+    if (event.target.matches('[name="vat_rate[]"]')) updateQuotationDraftTotals();
 });
 document.addEventListener('click', (event) => {
     if (!document.getElementById('quotationsRoot')) return;
+    const workflowButton = event.target.closest('[data-quote-workflow]');
+    if (workflowButton) { event.preventDefault(); openQuotationWorkflow(workflowButton.dataset.quoteWorkflow); return; }
+    if (event.target.closest('[data-quote-revision]')) { openQuotationDetail(event.target.closest('[data-quote-revision]').dataset.quoteRevision); return; }
+    if (event.target.closest('[data-quote-request-change]')) { approveQuotation(quotationState.detail.id, 'change_requested'); return; }
+    if (event.target.closest('[data-quote-workflow-download]')) {
+        downloadIssuedQuotation().catch(error => VKModal.toast(error.message, 'danger')); return;
+    }
     if (event.target.matches('[data-create-quotation]')) openQuotationModal();
+    if (event.target.matches('[data-delete-quotation]')) {
+        event.preventDefault(); event.stopPropagation(); deleteQuotation(event.target.dataset.deleteQuotation);
+    }
     if (event.target.matches('[data-edit-quotation]')) {
         event.preventDefault();
         event.stopPropagation();
@@ -31,7 +63,13 @@ document.addEventListener('click', (event) => {
     }
     if (event.target.matches('[data-toggle-quick-customer]')) {
         event.preventDefault();
-        document.querySelector('[data-quick-customer-panel]')?.classList.toggle('hidden');
+        const panel = document.querySelector('[data-quick-customer-panel]');
+        panel?.classList.toggle('hidden');
+        if (!panel?.classList.contains('hidden')) {
+            document.getElementById('customer_id').value = '';
+            updateQuotationCustomerSummary();
+            panel.classList.remove('completed');
+        }
     }
     if (event.target.matches('[data-save-quick-customer]')) {
         event.preventDefault();
@@ -40,6 +78,16 @@ document.addEventListener('click', (event) => {
     if (event.target.matches('[data-lookup-tax-code]')) {
         event.preventDefault();
         lookupQuickCustomerTaxCode();
+    }
+    const customerSuggestion = event.target.closest('[data-select-quotation-customer]');
+    if (customerSuggestion) {
+        event.preventDefault();
+        selectQuotationCustomer(customerSearchResults[Number(customerSuggestion.dataset.selectQuotationCustomer)]);
+    }
+    const skuSuggestion = event.target.closest('[data-select-quotation-sku]');
+    if (skuSuggestion) {
+        event.preventDefault();
+        selectQuotationSku(skuSuggestion.closest('[data-quotation-line]'), skuSuggestion.dataset.selectQuotationSku);
     }
     if (event.target.matches('[data-add-quotation-line]')) {
         event.preventDefault();
@@ -91,9 +139,13 @@ document.addEventListener('click', (event) => {
         event.preventDefault();
         window.location.href = event.target.dataset.openSalesOrder;
     }
-    if (event.target.matches('[data-quotation-print]')) {
+    if (event.target.matches('[data-quotation-preview]')) {
         event.preventDefault();
-        openQuotationPrintPicker('print');
+        openQuotationTemplate();
+    }
+    if (event.target.matches('[data-quotation-document-preview]')) {
+        event.preventDefault();
+        previewQuotationWord().catch(error => VKModal.toast(error.message, 'danger'));
     }
     if (event.target.matches('[data-quotation-template]')) {
         event.preventDefault();
@@ -126,15 +178,6 @@ document.addEventListener('change', (event) => {
     if (!document.getElementById('quotationsRoot')) return;
     if (event.target.matches('[data-quick-customer-tax-code]')) {
         lookupQuickCustomerTaxCode();
-    }
-    if (event.target.matches('[data-quotation-sku]')) {
-        const option = event.target.selectedOptions[0];
-        const line = event.target.closest('[data-quotation-line]');
-        const price = line?.querySelector('[name="unit_price[]"]');
-        const unit = line?.querySelector('[data-quotation-unit]');
-        if (price && option?.dataset.price) price.value = option.dataset.price;
-        if (unit) unit.textContent = option?.dataset.unit || '-';
-        updateQuotationDraftTotals();
     }
     if (event.target.matches('#customer_id')) {
         updateQuotationCustomerSummary();
@@ -171,6 +214,11 @@ function renderQuotations(total = quotationState.rows.length) {
             status: [
                 { value: 'draft', label: 'Nháp' },
                 { value: 'pending_approval', label: 'Chờ duyệt' },
+                { value: 'issued', label: 'Đã phát hành' },
+                { value: 'accepted', label: 'Khách đồng ý' },
+                { value: 'change_requested', label: 'Yêu cầu sửa' },
+                { value: 'customer_rejected', label: 'Khách từ chối' },
+                { value: 'superseded', label: 'Đã thay thế' },
                 { value: 'ready', label: 'Sẵn sàng' },
                 { value: 'approved', label: 'Đã duyệt' },
                 { value: 'rejected', label: 'Từ chối' },
@@ -194,6 +242,7 @@ function renderQuotationTable(rows) {
         { label: '', render: row => VKTable.rowActions([
             VKTable.smallButton('Mở', `data-quotation-detail="${row.id}"`),
             canEditQuotation(row) ? VKTable.smallButton('Sửa', `data-edit-quotation="${row.id}"`, 'primary') : '',
+            canDeleteQuotation(row) ? VKTable.smallButton('Xóa', `data-delete-quotation="${row.id}"`, 'danger') : '',
             window.VKLayout?.hasPermission?.('sales.quotation.create') ? VKTable.smallButton('Nhân bản', `data-duplicate-quotation="${row.id}"`) : '',
             ...quotationActions(row),
         ]) },
@@ -239,6 +288,7 @@ function renderQuotationCode(code, tone = '') {
 
 function quotationActions(row) {
     if (row.status !== 'pending_approval' || !window.VKLayout?.hasPermission('sales.margin.approve')) return [];
+    if (Number(row.workflow_version) === 2 && !row.can_approve) return [];
     return [
         VKTable.smallButton('Duyệt', `data-approve-quotation="${row.id}"`, 'primary'),
         VKTable.smallButton('Từ chối', `data-reject-quotation="${row.id}"`, 'danger'),
@@ -246,9 +296,25 @@ function quotationActions(row) {
 }
 
 function canEditQuotation(row) {
-    const canCreate = window.VKLayout?.hasPermission?.('sales.quotation.create');
+    if (Number(row.workflow_version) === 2 && row.status !== 'draft') return false;
+    const canCreate = window.VKLayout?.hasPermission?.('sales.quotation.edit');
     const hasSalesOrder = (row.related_documents || row.sales_orders || []).some?.(item => item.type === 'salesOrder') || Number(row.sales_orders_count || 0) > 0;
     return Boolean(canCreate) && !hasSalesOrder && ['draft', 'pending_approval', 'ready', 'rejected'].includes(row.status);
+}
+
+function canDeleteQuotation(row) {
+    return Boolean(window.VKLayout?.hasPermission?.('sales.quotation.delete')) && !row.revision_root_id && row.status === 'draft' && Number(row.sales_orders_count || 0) === 0;
+}
+
+async function deleteQuotation(id) {
+    const row = quotationState.rows.find(item => String(item.id) === String(id)) || quotationState.detail;
+    if (!window.confirm(`Xóa báo giá nháp ${row?.code || ''}? Thao tác này không thể hoàn tác.`)) return;
+    try {
+        await VKApi.request(`/quotations/${id}`, { method: 'DELETE' });
+        quotationState.view = 'list'; quotationState.detail = null;
+        await loadQuotations();
+        VKModal.toast('Đã xóa báo giá nháp.');
+    } catch (error) { VKModal.toast(error.message || 'Không xóa được báo giá.', 'danger'); }
 }
 
 async function openQuotationEditor(id) {
@@ -268,8 +334,9 @@ async function openQuotationEditor(id) {
     openQuotationModal(row);
 }
 
-async function openQuotationModal(row = null) {
-    const [customers, skus] = await Promise.all([VKApi.request('/customers'), VKApi.request('/skus')]);
+async function openQuotationModal(row = null, preset = {}) {
+    const [customers, skus, masterData] = await Promise.all([VKApi.request('/customers?page_size=100'), VKApi.request('/skus?page_size=100'), VKApi.request('/sales-master-data')]);
+    quotationCustomers = customers.data || [];
     const encodedSkus = encodeURIComponent(JSON.stringify(skus.data || []));
     const isEdit = Boolean(row?.id);
     VKModal.open(isEdit ? `Sửa báo giá ${row.code || ''}` : 'Tạo báo giá', `
@@ -280,13 +347,15 @@ async function openQuotationModal(row = null) {
                     <button class="btn small" type="button" data-toggle-quick-customer>+ Thêm nhanh</button>
                 </div>
                 <div class="quotation-customer-card">
+                    <div class="quotation-customer-search"><input type="search" data-quotation-customer-search autocomplete="off" placeholder="Tìm theo tên khách hàng hoặc mã số thuế..."><div class="quotation-customer-results hidden" data-quotation-customer-results></div><small>Tìm theo tên, mã khách, mã số thuế hoặc số điện thoại.</small></div>
                     <label class="quotation-customer-select">
                         <span class="quotation-customer-icon" aria-hidden="true">◎</span>
                         <select id="customer_id" name="customer_id">
-                            ${(customers.data || []).map(customer => `
+                            <option value="">Chọn khách hàng</option>
+                            ${quotationCustomers.map(customer => `
                                 <option
                                     value="${customer.id}"
-                                    ${String(customer.id) === String(row?.customer_id || row?.customer?.id || '') ? 'selected' : ''}
+                                    ${String(customer.id) === String(row?.customer_id || row?.customer?.id || preset.customer_id || '') ? 'selected' : ''}
                                     data-code="${VKTable.escapeHtml(customer.code || '')}"
                                     data-name="${VKTable.escapeHtml(customer.name || '')}"
                                     data-contact="${VKTable.escapeHtml(customer.contact_name || '')}"
@@ -353,18 +422,18 @@ async function openQuotationModal(row = null) {
                 </div>
             </section>
 
+            <input type="hidden" name="deal_id" value="${VKTable.escapeHtml(String(row?.deal_id || preset.deal_id || ''))}">
+            ${preset.deal_code ? `<div class="quotation-linked-deal">Báo giá này thuộc cơ hội <strong>${VKTable.escapeHtml(preset.deal_code)}</strong>.</div>` : ''}
             <section class="quotation-create-section">
                 <div class="quotation-create-section-head">
                     <h3>Điều khoản báo giá</h3>
                 </div>
                 <div class="form-grid two">
                     ${VKModal.field('valid_until', 'Hiệu lực đến', 'date', defaultQuotationValidUntil(row))}
-                    ${VKModal.select('payment_terms', 'Phương thức thanh toán', [
-                        { value: 'Chuyển khoản', label: 'Chuyển khoản' },
-                        { value: 'Tiền mặt', label: 'Tiền mặt' },
-                        { value: 'Thanh toán trước 100%', label: 'Thanh toán trước 100%' },
-                        { value: 'Công nợ 30 ngày', label: 'Công nợ 30 ngày' },
-                    ], row?.payment_terms || 'Chuyển khoản')}
+                    ${VKModal.field('payment_terms', 'Thanh toán (bỏ trống để lấy từ khách hàng / điều khoản mặc định)', 'text', row?.payment_terms || quotationCustomers.find(customer => String(customer.id) === String(preset.customer_id))?.payment_terms || '')}
+                    ${VKModal.select('payment_term_id', 'Điều khoản thanh toán', [{ value: '', label: 'Điều khoản mặc định' }, ...(masterData.data?.payment_terms || []).filter(item => item.is_active).map(item => ({ value: item.id, label: `${item.name}${item.is_default ? ' (mặc định)' : ''}` }))], row?.payment_term_id || (masterData.data?.payment_terms || []).find(item => item.is_active && item.is_default)?.id || '')}
+                    ${VKModal.select('price_book_id', 'Chính sách giá', [{ value: '', label: 'Giá bán tiêu chuẩn' }, ...(masterData.data?.price_books || []).filter(item => item.is_active).map(item => ({ value: item.id, label: `${item.name} · giảm ${Number(item.discount_percent || 0).toFixed(0)}%` }))], row?.price_book_id || (masterData.data?.price_books || []).find(item => item.is_active && item.is_default)?.id || '')}
+                    ${VKModal.field('discount_percent', 'Chiết khấu (%) — tự lấy theo chính sách giá', 'number', row?.discount_percent ?? (masterData.data?.price_books || []).find(item => item.is_active && item.is_default)?.discount_percent ?? 0)}
                     <div class="field full"><label for="note">Ghi chú báo giá</label><textarea id="note" name="note" rows="3">${VKTable.escapeHtml(row?.note || '')}</textarea></div>
                 </div>
             </section>
@@ -374,11 +443,11 @@ async function openQuotationModal(row = null) {
                     <button class="btn small" type="button" data-add-quotation-line data-skus="${encodedSkus}">+ Thêm dòng hàng</button>
                 </div>
                 <div class="quotation-line-header" aria-hidden="true">
-                    <span>#</span><span>Mã hàng / Tên hàng</span><span>ĐVT</span><span>Số lượng</span>
+                    <span>#</span><span>Mã hàng</span><span>Tên hàng</span><span>ĐVT</span><span>Số lượng</span>
                     <span>Đơn giá</span><span>VAT (%)</span><span>Thành tiền</span><span></span>
                 </div>
                 <div class="quotation-lines quotation-create-lines" data-quotation-lines>
-                    ${(row?.items?.length ? row.items : [null]).map((item, index) => quotationLineHtml(skus.data || [], index, item)).join('')}
+                    ${(row?.items?.length ? row.items : preset.items?.length ? preset.items : [null]).map((item, index) => quotationLineHtml(skus.data || [], index, item)).join('')}
                 </div>
                 <div class="quotation-create-bottom">
                     <div class="quotation-draft-summary">
@@ -404,10 +473,16 @@ async function openQuotationModal(row = null) {
             vat_rate: Number(vatRates[index] || 0),
         })).filter(item => item.sku_id && item.quantity > 0);
 
+        if (!data.customer_id) { VKModal.toast('Vui lòng chọn khách hàng từ danh sách tìm kiếm.', 'warning'); return; }
+        if (!data.customer_id) throw new Error('Vui lòng tìm và chọn một khách hàng trước khi lưu báo giá.');
         await VKApi.request(isEdit ? `/quotations/${row.id}` : '/quotations', {
             method: isEdit ? 'PUT' : 'POST',
             body: JSON.stringify({
                 customer_id: Number(data.customer_id),
+                deal_id: data.deal_id ? Number(data.deal_id) : null,
+                price_book_id: data.price_book_id ? Number(data.price_book_id) : null,
+                discount_percent: Number(data.discount_percent || 0),
+                payment_term_id: data.payment_term_id ? Number(data.payment_term_id) : null,
                 valid_until: data.valid_until || null,
                 payment_terms: data.payment_terms || null,
                 delivery_terms: null,
@@ -427,8 +502,60 @@ async function openQuotationModal(row = null) {
         className: 'quotation-create-modal',
         submitText: isEdit ? 'Lưu thay đổi' : 'Lưu báo giá',
     });
+    document.querySelectorAll('[name="price_book_id"] option').forEach(option => { option.dataset.discount = (masterData.data?.price_books || []).find(item => String(item.id) === option.value)?.discount_percent || 0; });
+    const discountField = document.querySelector('[name="discount_percent"]');
+    if (discountField) { discountField.min = 0; discountField.max = 99.99; discountField.step = 0.01; }
     updateQuotationCustomerSummary();
     updateQuotationDraftTotals();
+}
+
+async function openQuotationFromDeal() {
+    const dealId = new URLSearchParams(window.location.search).get('deal_id');
+    if (!dealId || !/^[0-9]+$/.test(dealId)) return;
+    try {
+        const response = await VKApi.request(`/deals/${dealId}`);
+        const deal = response.data;
+        if (!deal.customer_id) {
+            VKModal.toast('Cơ hội này chưa có khách hàng; hãy cập nhật khách hàng trước khi lập báo giá.', 'warning');
+            return;
+        }
+        await openQuotationModal(null, { deal_id: deal.id, deal_code: deal.code, customer_id: deal.customer_id, items: deal.items || [] });
+    } finally {
+        window.history.replaceState({}, '', '/quotations');
+    }
+}
+
+function customerOptionHtml(customer) {
+    return `<option value="${customer.id}" data-code="${VKTable.escapeHtml(customer.code || '')}" data-name="${VKTable.escapeHtml(customer.name || '')}" data-contact="${VKTable.escapeHtml(customer.contact_name || '')}" data-phone="${VKTable.escapeHtml(customer.phone || '')}" data-email="${VKTable.escapeHtml(customer.email || '')}" data-billing-address="${VKTable.escapeHtml(customer.billing_address || '')}" data-address="${VKTable.escapeHtml(customer.address || '')}">${VKTable.escapeHtml(`${customer.code} - ${customer.name}${customer.tax_code ? ` · MST: ${customer.tax_code}` : ''}`)}</option>`;
+}
+
+function applyCustomerOption(select, customer) {
+    let option = [...select.options].find(item => String(item.value) === String(customer.id));
+    if (!option) { option = new Option(`${customer.code} - ${customer.name}`, customer.id); select.add(option, 1); }
+    option.dataset.code = customer.code || ''; option.dataset.name = customer.name || ''; option.dataset.contact = customer.contact_name || ''; option.dataset.phone = customer.phone || ''; option.dataset.email = customer.email || ''; option.dataset.billingAddress = customer.billing_address || ''; option.dataset.address = customer.address || '';
+    return option;
+}
+
+function selectQuotationCustomer(customer) {
+    if (!customer) return;
+    const select = document.getElementById('customer_id');
+    applyCustomerOption(select, customer); select.value = String(customer.id);
+    const search = document.querySelector('[data-quotation-customer-search]'); if (search) search.value = `${customer.code} - ${customer.name}`;
+    const results = document.querySelector('[data-quotation-customer-results]'); if (results) { results.innerHTML = ''; results.classList.add('hidden'); }
+    updateQuotationCustomerSummary();
+}
+
+function searchQuotationCustomers(query) {
+    window.clearTimeout(customerSearchTimer);
+    customerSearchTimer = window.setTimeout(() => {
+        const results = document.querySelector('[data-quotation-customer-results]');
+        if (!results) return;
+        if (!query.trim()) { results.innerHTML = ''; results.classList.add('hidden'); return; }
+        const keyword = query.trim().toLowerCase();
+        customerSearchResults = quotationCustomers.filter(customer => `${customer.code || ''} ${customer.name || ''} ${customer.tax_code || ''} ${customer.phone || ''}`.toLowerCase().includes(keyword)).slice(0, 20);
+        results.innerHTML = customerSearchResults.length ? customerSearchResults.map((customer, index) => `<button type="button" data-select-quotation-customer="${index}"><strong>${VKTable.escapeHtml(customer.name)}</strong><span>${VKTable.escapeHtml(`${customer.code}${customer.tax_code ? ` · MST: ${customer.tax_code}` : ''}${customer.phone ? ` · ${customer.phone}` : ''}`)}</span></button>`).join('') : '<div class="quotation-customer-no-result">Không tìm thấy khách phù hợp.</div>';
+        results.classList.remove('hidden');
+    }, 250);
 }
 
 async function createQuickCustomer(button) {
@@ -572,16 +699,8 @@ function fillQuickCustomerField(selector, value) {
 function quotationLineHtml(skus, index, item = null) {
     const selectedSkuId = item?.sku_id || item?.sku?.id || skus[0]?.id;
     const selectedSku = skus.find(sku => String(sku.id) === String(selectedSkuId)) || skus[0] || {};
-    const options = skus.map(sku => `
-        <option
-            value="${sku.id}"
-            ${String(sku.id) === String(selectedSkuId) ? 'selected' : ''}
-            data-price="${Number(sku.sale_price || 0)}"
-            data-unit="${VKTable.escapeHtml(sku.unit || '-')}"
-            data-name="${VKTable.escapeHtml(sku.name || '')}"
-        >${VKTable.escapeHtml(`${sku.sku_code}${sku.name ? ` - ${sku.name}` : ''}`)}</option>
-    `).join('');
-    const price = Number(item?.unit_price ?? selectedSku.sale_price ?? 0);
+    const encodedSkus = encodeURIComponent(JSON.stringify(skus));
+    const price = Number(item?.list_unit_price ?? item?.unit_price ?? selectedSku.sale_price ?? 0);
     const quantity = Number(item?.quantity ?? 1);
     const vatRate = Number(item?.vat_rate ?? 8);
 
@@ -590,8 +709,14 @@ function quotationLineHtml(skus, index, item = null) {
     return `
         <div class="quotation-line quotation-create-line" data-quotation-line>
             <span class="quotation-line-number" data-quotation-line-number>${index + 1}</span>
-            <div class="quotation-product-field">
-                <select name="sku_id[]" data-quotation-sku>${options}</select>
+            <div class="quotation-product-field quotation-sku-code-field" data-quotation-sku-options="${encodedSkus}">
+                <input type="hidden" name="sku_id[]" value="${VKTable.escapeHtml(String(selectedSkuId || ''))}" data-quotation-sku-id>
+                <input type="search" autocomplete="off" data-quotation-sku-search="code" value="${VKTable.escapeHtml(selectedSku.sku_code || '')}" placeholder="Nhập mã hàng...">
+                <div class="quotation-sku-results hidden" data-quotation-sku-results></div>
+            </div>
+            <div class="quotation-product-field quotation-sku-name-field">
+                <input type="search" autocomplete="off" data-quotation-sku-search="name" value="${VKTable.escapeHtml(selectedSku.name || '')}" placeholder="Nhập tên sản phẩm...">
+                <div class="quotation-sku-results hidden" data-quotation-sku-results></div>
             </div>
             <div class="quotation-unit-field">
                 <span data-quotation-unit>${VKTable.escapeHtml(unit)}</span>
@@ -607,6 +732,58 @@ function quotationLineHtml(skus, index, item = null) {
             <button class="quotation-remove-line" type="button" data-remove-quotation-line aria-label="Xóa dòng">×</button>
         </div>
     `;
+}
+
+async function searchQuotationSkus(input) {
+    const line = input.closest('[data-quotation-line]');
+    const field = line?.querySelector('[data-quotation-sku-options]');
+    const results = input.parentElement?.querySelector('[data-quotation-sku-results]');
+    if (!field || !results) return;
+    let skus = JSON.parse(decodeURIComponent(field.dataset.quotationSkuOptions || '[]'));
+    const keyword = input.value.trim().toLowerCase();
+    const searchByName = input.dataset.quotationSkuSearch === 'name';
+    let matches = keyword
+        ? skus.filter(sku => String(searchByName ? sku.name : sku.sku_code).toLowerCase().includes(keyword)).slice(0, 10)
+        : skus.slice(0, 10);
+    if (keyword.length >= 2) {
+        try {
+            const response = await VKApi.request(`/skus?q=${encodeURIComponent(keyword)}&page_size=20`, { cache: false });
+            if (input.value.trim().toLowerCase() !== keyword) return;
+            const remoteSkus = response.data || [];
+            const known = new Map(skus.map(sku => [String(sku.id), sku]));
+            remoteSkus.forEach(sku => known.set(String(sku.id), sku));
+            skus = [...known.values()];
+            field.dataset.quotationSkuOptions = encodeURIComponent(JSON.stringify(skus));
+            matches = remoteSkus.slice(0, 10);
+        } catch (error) {
+            // Khi mạng tạm chậm vẫn cho chọn trong các sản phẩm đã tải sẵn.
+        }
+    }
+    results.innerHTML = matches.length ? matches.map(sku => `
+        <button type="button" data-select-quotation-sku="${VKTable.escapeHtml(String(sku.id))}">
+            <strong>${VKTable.escapeHtml(sku.sku_code || '-')}</strong><span>${VKTable.escapeHtml(sku.name || '')} · ${VKTable.escapeHtml(sku.unit || '-')} · ${VKTable.money(sku.sale_price || 0)}</span>
+        </button>`).join('') : '<div class="quotation-sku-no-result">Không tìm thấy sản phẩm phù hợp.</div>';
+    results.classList.remove('hidden');
+    if (!line) results.classList.add('hidden');
+}
+
+function selectQuotationSku(line, skuId) {
+    const field = line?.querySelector('[data-quotation-sku-options]');
+    if (!field) return;
+    const skus = JSON.parse(decodeURIComponent(field.dataset.quotationSkuOptions || '[]'));
+    const sku = skus.find(item => String(item.id) === String(skuId));
+    if (!sku) return;
+    const hidden = field.querySelector('[data-quotation-sku-id]');
+    const inputs = line.querySelectorAll('[data-quotation-sku-search]');
+    const results = line.querySelectorAll('[data-quotation-sku-results]');
+    const price = line.querySelector('[name="unit_price[]"]');
+    const unit = line.querySelector('[data-quotation-unit]');
+    if (hidden) hidden.value = String(sku.id);
+    inputs.forEach(input => { input.value = input.dataset.quotationSkuSearch === 'code' ? (sku.sku_code || '') : (sku.name || ''); });
+    if (price) price.value = Number(sku.sale_price || 0);
+    if (unit) unit.textContent = sku.unit || '-';
+    results.forEach(result => { result.innerHTML = ''; result.classList.add('hidden'); });
+    updateQuotationDraftTotals();
 }
 
 function addQuotationLine(encodedSkus) {
@@ -635,9 +812,11 @@ function renumberQuotationLines() {
 function updateQuotationDraftTotals() {
     let subtotal = 0;
     let tax = 0;
+    const discount = Number(document.querySelector('[name="discount_percent"]')?.value || 0);
     document.querySelectorAll('[data-quotation-line]').forEach(line => {
         const quantity = Number(line.querySelector('[name="quantity[]"]')?.value || 0);
-        const price = Number(line.querySelector('[name="unit_price[]"]')?.value || 0);
+        const listPrice = Number(line.querySelector('[name="unit_price[]"]')?.value || 0);
+        const price = Math.round(listPrice * (100 - discount)) / 100;
         const vatRate = Number(line.querySelector('[name="vat_rate[]"]')?.value || 0);
         const lineSubtotal = quantity * price;
         const lineTax = lineSubtotal * vatRate / 100;
@@ -674,12 +853,54 @@ function formatDraftMoney(value) {
 }
 
 async function approveQuotation(id, status) {
-    await VKApi.request(`/quotations/${id}/approve`, {
-        method: 'POST',
-        body: JSON.stringify({ status, reason: status === 'approved' ? 'Duyệt từ màn hình báo giá' : 'Từ chối từ màn hình báo giá' }),
-    });
-    VKModal.toast(status === 'approved' ? 'Đã duyệt báo giá.' : 'Đã từ chối báo giá.');
-    loadQuotations();
+    const label = status === 'approved' ? 'Duyệt' : status === 'change_requested' ? 'Yêu cầu sửa' : 'Từ chối';
+    VKModal.open(`${label} báo giá`, `<p class="form-note">Quyết định được lưu vào lịch sử. Khi đủ lượt duyệt, báo giá mới được phát hành.</p><div class="field"><label>Lý do ${status === 'approved' ? '(tùy chọn)' : '*'}</label><textarea name="reason" ${status !== 'approved' ? 'required' : ''} maxlength="500"></textarea></div>`, async data => {
+        const reason = String(new FormData(data).get('reason') || '').trim();
+        await VKApi.request(`/quotations/${id}/approve`, {method:'POST', body:JSON.stringify({status,reason:reason || null})});
+        VKModal.close(); quotationState.detailCache = {}; await loadQuotations(); await openQuotationDetail(id);
+        VKModal.toast('Đã ghi nhận quyết định.');
+    }, {submitText:label});
+}
+
+function openQuotationWorkflow(action) {
+    const row = quotationState.detail;
+    if (!row) return;
+    let body = '', title = '', submit = 'Xác nhận';
+    if (action === 'submit') {
+        title = 'Gửi duyệt báo giá'; submit = 'Gửi duyệt';
+        body = '<p>Nội dung và giá sẽ được khóa. Hệ thống tự lấy người duyệt từ thiết lập công ty; bạn không cần chọn lại.</p>';
+    } else if (action === 'revise') {
+        title = 'Tạo phiên bản mới'; submit = 'Tạo phiên bản';
+        body = '<p>Giữ nguyên nội dung và lịch sử bản cũ. Bản mới là nháp, cần duyệt và phát hành lại. Bản cũ không còn dùng để chốt đơn.</p>';
+    } else if (action === 'issue') {
+        title = 'Ghi nhận phát hành báo giá'; submit = 'Lưu phát hành';
+        body = `<p class="form-note">Lưu cố định file Word và mã kiểm tra. Đây là ghi nhận việc gửi bên ngoài, không tự gửi email/Zalo. Chỉ xác nhận sau khi đã chuyển báo giá cho khách.</p><div class="form-grid">${VKModal.field('recipient','Người nhận', 'text', row.customer?.email || row.customer?.contact_name || '')}${VKModal.select('channel','Kênh gửi',[{value:'email',label:'Email'},{value:'zalo',label:'Zalo'},{value:'direct',label:'Trực tiếp'},{value:'other',label:'Khác'}])}</div><div class="field"><label>Bằng chứng gửi *</label><textarea name="delivery_evidence" required maxlength="2000" placeholder="Thời gian gửi, người nhận, mã email hoặc đường dẫn chứng từ..."></textarea></div>`;
+    } else {
+        title = 'Ghi nhận phản hồi khách hàng'; submit = 'Lưu phản hồi';
+        body = `${VKModal.select('decision','Kết quả',[{value:'accepted',label:'Khách đồng ý'},{value:'rejected',label:'Khách từ chối'}])}<div class="field"><label>Bằng chứng xác nhận *</label><textarea name="evidence" required maxlength="2000" placeholder="Email/tin nhắn, người xác nhận và thời gian, đường dẫn chứng từ..."></textarea></div>`;
+    }
+    VKModal.open(title, body, async data => {
+        const payload = Object.fromEntries(new FormData(data));
+        const response = await VKApi.request(`/quotations/${row.id}/workflow/${action}`, {method:'POST',body:JSON.stringify(payload)});
+        VKModal.close(); quotationState.detailCache = {}; await loadQuotations(); await openQuotationDetail(response.data.id);
+        VKModal.toast('Đã cập nhật luồng báo giá.');
+    }, {submitText:submit,className:'modal-wide'});
+}
+
+async function downloadIssuedQuotation() {
+    const row = quotationState.detail;
+    const response = await fetch(`/api/v1/quotations/${row.id}/issued-file`, {headers:{Authorization:`Bearer ${VKApi.token()}`}});
+    if (!response.ok) throw new Error(await response.json().then(data => data.message).catch(() => 'Không tải được bản phát hành.'));
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement('a'); link.href = url; link.download = `${row.code}-v${row.revision_number}.docx`; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function renderQuotationWorkflow(row) {
+    if (Number(row.workflow_version) !== 2) return '<p class="form-note">Báo giá cũ: giữ luồng và lịch sử trước khi nâng cấp. Nhân bản để sử dụng quy trình mới.</p>';
+    const stages = [['draft','Nháp'],['pending_approval','Duyệt nội bộ'],['approved','Đã duyệt'],['issued','Phát hành'],['accepted','Khách đồng ý']];
+    const current = stages.findIndex(([key]) => key === row.status);
+    return `<section class="quote-workflow-panel"><div class="quote-workflow-stages">${stages.map(([key,label],index) => `<div class="${index === current ? 'current' : index < current ? 'done' : ''}"><span>${index < current ? '✓' : index + 1}</span>${label}</div>`).join('')}</div><p class="form-note">Phiên bản ${row.revision_number || 1} · ${row.status === 'draft' ? 'Có thể chỉnh sửa. Gửi duyệt để khóa giá và nội dung.' : 'Nội dung đã khóa. Muốn thay đổi hãy tạo phiên bản mới.'}</p>${(row.approval_steps || []).length ? `<div class="quote-approval-steps">${row.approval_steps.map((step,index) => `<div><strong>${index + 1}. ${VKTable.escapeHtml(step.name)}</strong><span>${step.status === 'approved' ? '✓ Đã duyệt' : VKTable.translateStatus(step.status)}</span>${step.reason ? `<small>${VKTable.escapeHtml(step.reason)}</small>` : ''}</div>`).join('')}</div>` : ''}${row.issue ? `<div class="quote-issue-fields"><div><small>Người nhận</small><strong>${VKTable.escapeHtml(row.issue.recipient)}</strong></div><div><small>Phát hành</small><strong>${formatDate(row.issue.issued_at)}</strong></div><div><small>Kênh gửi</small><strong>${VKTable.escapeHtml(row.issue.channel)}</strong></div><div><small>Bằng chứng gửi</small><span>${VKTable.escapeHtml(row.issue.delivery_evidence)}</span></div>${row.issue.customer_evidence ? `<div><small>Bằng chứng phản hồi</small><span>${VKTable.escapeHtml(row.issue.customer_evidence)}</span></div>` : ''}</div>` : ''}</section>`;
 }
 
 async function duplicateQuotation(id) {
@@ -755,10 +976,10 @@ function renderQuotationDetailPage() {
     if (!root || !row) return;
 
     root.innerHTML = `
-        <section class="record-page record-page-quotation quotation-detail-page">
+        <section class="record-page record-page-quotation quotation-detail-page quotation-detail-redesign">
             ${renderQuotationPageHeader(row)}
             ${renderQuotationPageTabs(row)}
-            <div class="record-page-body">
+            <div class="record-page-body ${quotationState.detailTab === 'overview' ? 'quote-form-body' : ''}">
                 ${renderQuotationPageTabContent(row)}
             </div>
         </section>
@@ -831,21 +1052,23 @@ function renderQuotationPageHeader(row) {
     const contact = [customer.contact_name, customer.phone, customer.email].filter(Boolean).join(' · ');
 
     return `
-        <div class="record-page-head">
-            <button class="btn small" type="button" data-back-quotation-list>Quay lại danh sách</button>
-            <div class="record-page-title">
-                <span>Báo giá</span>
-                <h2>${VKTable.escapeHtml(row.code || '-')} ${VKTable.statusBadge(row.status || 'draft')}</h2>
-                <p><strong>${VKTable.escapeHtml(customer.name || 'Chưa có khách hàng')}</strong>${contact ? ` · ${VKTable.escapeHtml(contact)}` : ''}</p>
+        <header class="quotation-hero">
+            <div class="quotation-hero-tools">
+                <button class="btn small" type="button" data-back-quotation-list>← Danh sách báo giá</button>
+                <div class="record-page-actions">${renderQuotationPageActions(row)}</div>
             </div>
-            <div class="record-page-meta">
-                <div><span>Ngày tạo</span><strong>${formatDate(row.created_at)}</strong></div>
-                <div><span>Cập nhật</span><strong>${formatDate(row.updated_at)}</strong></div>
+            <div class="quotation-hero-content">
+                <div class="quotation-hero-title">
+                    <span>Báo giá</span>
+                    <h2>${VKTable.escapeHtml(row.code || '-')} ${VKTable.statusBadge(row.status || 'draft')}</h2>
+                    <p><strong>${VKTable.escapeHtml(customer.name || 'Chưa có khách hàng')}</strong>${contact ? ` · ${VKTable.escapeHtml(contact)}` : ''}</p>
+                </div>
+                <div class="quotation-hero-meta">
+                    <div><span>Ngày tạo</span><strong>${formatDate(row.created_at)}</strong></div>
+                    <div><span>Cập nhật</span><strong>${formatDate(row.updated_at)}</strong></div>
+                </div>
             </div>
-            <div class="record-page-actions">
-                ${renderQuotationPageActions(row)}
-            </div>
-        </div>
+        </header>
     `;
 }
 
@@ -853,21 +1076,30 @@ function renderQuotationPageActions(row) {
     const can = window.VKLayout?.hasPermission || (() => false);
     const salesOrder = (row.related_documents || []).find(item => item.type === 'salesOrder');
     const actions = [
-        `<button class="btn primary small" type="button" data-quotation-word>Tải Word mẫu in</button>`,
-        `<button class="btn small" type="button" data-quotation-print>In/PDF</button>`,
+        `<button class="btn small" type="button" data-quotation-document-preview>Xem trước</button>`,
+        `<button class="btn small" type="button" data-quotation-preview>Xuất file</button>`,
     ].filter(Boolean);
     if (canEditQuotation(row)) {
         actions.unshift(`<button class="btn small" type="button" data-edit-quotation="${row.id}">Sửa</button>`);
     }
-    if (row.status === 'pending_approval' && can('sales.margin.approve')) {
+    if (canDeleteQuotation(row)) actions.push(`<button class="btn danger small" type="button" data-delete-quotation="${row.id}">Xóa</button>`);
+    if (Number(row.workflow_version) === 2) {
+        if (row.status === 'draft' && can('sales.quotation.edit')) actions.push('<button class="btn primary small" data-quote-workflow="submit">Gửi duyệt</button>');
+        if (row.status === 'approved' && can('sales.quotation.edit')) actions.push('<button class="btn primary small" data-quote-workflow="issue">Ghi nhận phát hành</button>');
+        if (row.status === 'issued' && can('sales.quotation.edit')) actions.push('<button class="btn primary small" data-quote-workflow="customer-response">Phản hồi khách</button>');
+        if (row.status !== 'draft' && row.status !== 'superseded' && !salesOrder && can('sales.quotation.edit')) actions.push('<button class="btn small" data-quote-workflow="revise">Phiên bản mới</button>');
+        if (row.issue) actions.push('<button class="btn small" data-quote-workflow-download>Bản đã phát hành</button>');
+    }
+    if (row.status === 'pending_approval' && can('sales.margin.approve') && (Number(row.workflow_version) !== 2 || row.can_approve)) {
         actions.push(`<button class="btn primary small" type="button" data-page-approve-quotation="${row.id}">Duyệt</button>`);
         actions.push(`<button class="btn danger small" type="button" data-page-reject-quotation="${row.id}">Từ chối</button>`);
+        if (Number(row.workflow_version) === 2) actions.push('<button class="btn small" data-quote-request-change>Yêu cầu sửa</button>');
     }
     if (salesOrder?.path) {
         const orderId = String(salesOrder.path || '').split('/').filter(Boolean).pop();
-        actions.push(`<button class="btn primary small" type="button" data-open-sales-order="/sales-orders?open=${VKTable.escapeHtml(orderId || '')}">Mở đơn bán</button>`);
-    } else if (['ready', 'approved'].includes(row.status) && can('sales.order.create')) {
-        actions.push(`<button class="btn primary small" type="button" data-page-create-sales-order="${row.id}">Tạo đơn bán</button>`);
+        actions.push(`<button class="btn primary small" type="button" data-open-sales-order="/sales-orders?open=${VKTable.escapeHtml(orderId || '')}">Mở đơn hàng</button>`);
+    } else if ((Number(row.workflow_version) === 2 ? row.status === 'accepted' : ['ready', 'approved'].includes(row.status)) && can('sales.order.create')) {
+        actions.push(`<button class="btn primary small" type="button" data-page-create-sales-order="${row.id}">Tạo đơn hàng</button>`);
     }
     return actions.join('');
 }
@@ -892,14 +1124,17 @@ function renderQuotationPageTabs(row) {
 
 function renderQuotationPageTabContent(row) {
     if (quotationState.detailTab === 'items') return renderQuotationPageItems(row.items || [], false, row);
-    if (quotationState.detailTab === 'history') return renderQuotationTimeline(row.timeline || []);
+    if (quotationState.detailTab === 'history') return `<section class="quote-workflow-panel"><h3>Các phiên bản báo giá</h3>${(row.revisions || []).map(item => `<button class="btn small" data-quote-revision="${item.id}">${VKTable.escapeHtml(item.code)} · v${item.revision_number} · ${VKTable.translateStatus(item.status)}</button>`).join(' ')}</section>${renderQuotationTimeline(row.timeline || [])}`;
     if (quotationState.detailTab === 'approval') return renderQuotationApprovalPayment(row);
     if (quotationState.detailTab === 'notes') return renderQuotationNotes();
 
     return `
+        ${row.is_expired ? '<p class="form-note quote-expired-note">Báo giá đã hết hiệu lực. Hãy tạo phiên bản mới trước khi tiếp tục chốt đơn.</p>' : ''}
+        ${renderQuotationWorkflow(row)}
         <div class="quote-overview-layout">
             ${renderQuotationQuickInfo(row)}
-            ${renderQuotationPageItems(row.items || [], true, row)}
+            ${renderQuotationPageItems(row.items || [], true)}
+            ${renderQuotationCompactTotals(row)}
         </div>
     `;
 }
@@ -909,17 +1144,18 @@ function renderQuotationApprovalPayment(row) {
     const approval = row.approval || {};
     const approvalText = approval.status
         ? `${VKTable.translateStatus(approval.status)}${approval.reason ? ` - ${approval.reason}` : ''}`
-        : (Number(row.margin_percent || 0) < 15 ? 'Cần duyệt biên lợi nhuận' : 'Không cần duyệt thêm');
+        : (Number(row.workflow_version) === 2 ? 'Chưa gửi duyệt' : (Number(row.margin_percent || 0) < 15 ? 'Cần duyệt biên lợi nhuận' : 'Không cần duyệt thêm'));
     const fields = [
         ['Hạn mức công nợ', VKTable.money(customer.credit_limit || 0)],
         ['Phương thức thanh toán', row.payment_terms || 'Chưa khai báo'],
         ['Người phụ trách', row.sales_owner?.name || row.salesOwner?.name || '-'],
         ['Biên lợi nhuận', `${Number(row.margin_percent || 0).toFixed(2)}%`],
-        ['Duyệt lợi nhuận', approvalText],
+        ['Duyệt báo giá', approvalText],
         ['Ghi chú', row.note || 'Chưa có ghi chú'],
     ];
 
     return `
+        ${renderQuotationWorkflow(row)}
         <section class="record-panel">
             <h3>Thanh toán & duyệt</h3>
             <div class="quotation-approval-grid">
@@ -1085,8 +1321,13 @@ function renderQuotationTimeline(rows) {
 
 function renderQuotationPageItems(items, compact = false, quotation = null) {
     const rows = items.map((item, index) => ({ ...item, _index: index + 1 }));
-    const columns = [
-        ...(compact ? [{ label: '#', render: item => String(item._index) }] : []),
+    const columns = compact ? [
+        { label: 'Mã hàng', render: item => `<span class="mono">${VKTable.escapeHtml(item.sku?.sku_code || '-')}</span>` },
+        { label: 'Tên hàng', render: item => VKTable.escapeHtml(item.name || item.sku?.name || '-') },
+        { label: 'SL', render: item => `${VKTable.money(item.quantity)} ${VKTable.escapeHtml(item.unit || item.sku?.unit || '')}` },
+        { label: 'Đơn giá', render: item => VKTable.money(item.unit_price) },
+        { label: 'Thành tiền', render: item => VKTable.money(item.line_total) },
+    ] : [
         { label: 'Mã hàng', render: item => `<span class="mono">${VKTable.escapeHtml(item.sku?.sku_code || '-')}</span>` },
         { label: 'Tên hàng', render: item => VKTable.escapeHtml(item.name || item.sku?.name || '-') },
         { label: 'ĐVT', render: item => VKTable.escapeHtml(item.unit || item.sku?.unit || '-') },
@@ -1104,6 +1345,20 @@ function renderQuotationPageItems(items, compact = false, quotation = null) {
             ${renderQuotationItemsTable(columns, rows, quotation)}
         </section>
     `;
+}
+
+function renderQuotationCompactTotals(row) {
+    const subtotal = Number(row.subtotal_amount || row.total_amount || 0);
+    const tax = Number(row.tax_amount || 0);
+    const amount = Number(row.total_amount || subtotal + tax);
+    const discount = Number(row.discount_amount || 0);
+    const discountPercent = subtotal > 0 ? (discount / subtotal) * 100 : 0;
+    return `<aside class="quote-compact-total">
+        <div><span>Tạm tính</span><strong>${VKTable.money(subtotal)}</strong></div>
+        <div><span>Chiết khấu (${discountPercent.toFixed(0)}%)</span><strong>${VKTable.money(discount)}</strong></div>
+        <div><span>VAT</span><strong>${VKTable.money(tax)}</strong></div>
+        <div class="quote-compact-grand"><span>Tổng cộng</span><strong>${VKTable.money(amount)}</strong><em>VND</em></div>
+    </aside>`;
 }
 
 function renderQuotationItemsTable(columns, rows, quotation) {
@@ -1220,21 +1475,28 @@ async function createSalesOrderFromQuotation(id) {
 async function openQuotationTemplate() {
     const row = quotationState.detail;
     if (!row) return;
-
-    const popup = window.open('', '_blank', 'width=980,height=720');
-    if (!popup) {
-        VKModal.toast('Trình duyệt đang chặn cửa sổ mẫu in. Vui lòng cho phép popup để xem mẫu.', 'warning');
+    let template = null;
+    try {
+        const response = await fetch('/api/v1/print-templates/active?module=quotation', {
+            headers: { Accept: 'application/json', Authorization: `Bearer ${VKApi.token()}` },
+        });
+        if (response.ok) {
+            template = (await response.json()).data || null;
+        }
+    } catch (error) {
+        template = null;
+    }
+    if (template?.id && template.file_path && /\.docx$/i.test(template.file_name || '')) {
+        quotationTemplateCache = template;
+        await downloadQuotationWord(template);
         return;
     }
-
-    popup.document.open();
-    popup.document.write('<p style="font-family:Arial;padding:24px">Đang tải mẫu in...</p>');
-    popup.document.close();
-
-    const template = await getActiveQuotationTemplate();
-    popup.document.open();
-    popup.document.write(quotationDocumentHtml(row, { autoPrint: false, template }));
-    popup.document.close();
+    VKModal.notice({
+        type: 'warning',
+        title: 'Chưa có mẫu báo giá để xuất',
+        message: 'Hệ thống chỉ tải file Word theo mẫu báo giá đang đặt mặc định, không tự mở bản in mặc định nữa.',
+        details: ['Vào Mẫu in → chọn Báo giá.', 'Tải lên file .docx và bật “Mặc định”, sau đó bấm Xuất file lại.'],
+    });
 }
 
 async function openQuotationPrintPicker(mode = 'print') {
@@ -1251,13 +1513,13 @@ async function openQuotationPrintPicker(mode = 'print') {
 
     const selected = templates.find(item => item.is_default) || templates[0] || null;
 
-    VKModal.open(mode === 'word' ? 'Chọn mẫu xuất Word' : 'Chọn mẫu In/PDF', `
+    VKModal.open(mode === 'word' ? 'Chọn mẫu xuất Word' : 'Chọn mẫu xuất PDF', `
         <div class="quotation-template-picker">
             <input type="hidden" name="template_id" value="${VKTable.escapeHtml(String(selected?.id ?? 'default'))}" data-selected-print-template>
             <div class="quotation-template-picker-list">
                 ${templates.map(template => renderQuotationTemplateChoice(template, String(selected?.id ?? 'default'))).join('')}
             </div>
-            <p>Hệ thống sẽ trộn dữ liệu báo giá hiện tại vào mẫu đã chọn trước khi ${mode === 'word' ? 'tải Word' : 'mở bản in/PDF'}.</p>
+            <p>${mode === 'word' ? 'Hệ thống sẽ trộn dữ liệu vào file Word mẫu đã chọn.' : 'PDF được mở từ bản xem trước; tại cửa sổ in chọn “Lưu dưới dạng PDF”.'}</p>
         </div>
     `, async (form) => {
         const data = Object.fromEntries(new FormData(form));
@@ -1273,7 +1535,7 @@ async function openQuotationPrintPicker(mode = 'print') {
             VKModal.toast(error.message || 'Không thể xuất báo giá lúc này.', 'danger');
         }
     }, {
-        submitText: mode === 'word' ? 'Tải Word' : 'In/PDF',
+        submitText: mode === 'word' ? 'Tải Word' : 'Mở bản in PDF',
         className: 'modal-wide',
     });
 }
@@ -1324,6 +1586,50 @@ async function downloadQuotationWord(template = null) {
 
     template = template || await getActiveQuotationTemplate();
     await downloadQuotationDocx(row, template);
+}
+
+async function previewQuotationWord() {
+    const row = quotationState.detail;
+    if (!row) return;
+    const template = row.issue ? {id:'default'} : await getActiveQuotationTemplate();
+    if (!template?.id) throw new Error('Chưa có mẫu Word báo giá mặc định. Vui lòng thiết lập Mẫu in.');
+    VKModal.open(`Xem trước báo giá ${row.code}`, '<p class="form-note">Bản xem trước dùng file Word đã trộn dữ liệu. Phân trang có thể khác khi mở trong Microsoft Word.</p><div data-quotation-word-preview>Đang tạo bản xem trước…</div>', null, {className:'modal-wide quotation-word-preview-modal',hideSubmit:true,cancelText:'Đóng'});
+    const host = document.querySelector('[data-quotation-word-preview]');
+    const response = await fetch(`/api/v1/quotations/${encodeURIComponent(row.id)}/word?template_id=${encodeURIComponent(template.id)}`, {headers:{Accept:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',Authorization:`Bearer ${VKApi.token()}`}});
+    if (!response.ok) {
+        const message = await response.json().then(body => body.message).catch(() => null);
+        if (host.isConnected) host.textContent = message || 'Không tạo được bản xem trước.';
+        return;
+    }
+    const blob = await response.blob();
+    if (!host.isConnected) return;
+    if (!window.docx?.renderAsync) throw new Error('Không tải được bộ xem trước Word. Hãy tải lại trang.');
+    host.textContent = '';
+    const frame = document.createElement('iframe');
+    frame.title = 'Bản xem trước file báo giá';
+    frame.setAttribute('sandbox','allow-same-origin');
+    frame.style.cssText = 'width:100%;height:100%;border:0;background:#f1f5f9';
+    host.appendChild(frame);
+    const frameDoc = frame.contentDocument;
+    await window.docx.renderAsync(blob,frameDoc.body,frameDoc.head,{inWrapper:true,ignoreWidth:false,ignoreHeight:false,breakPages:true});
+    // Word's floating textboxes do not reserve space in browser layout.
+    // Normalize only the preview, keeping the downloaded DOCX untouched.
+    frameDoc.querySelectorAll('svg').forEach(svg => {
+        const textbox = svg.querySelector('foreignObject');
+        if (!textbox || !textbox.textContent.trim()) return;
+        const block = frameDoc.createElement('div');
+        block.className = 'quotation-preview-textbox';
+        Array.from(textbox.childNodes).forEach(child => block.appendChild(child.cloneNode(true)));
+        svg.replaceWith(block);
+    });
+    const previewStyle = frameDoc.createElement('style');
+    previewStyle.textContent = 'body{margin:0}.docx-wrapper{padding:24px!important}.docx-wrapper>section.docx{margin:0 auto 24px!important;height:auto!important;min-height:0!important}section.docx table{float:none!important;position:static!important;margin-top:12px!important;margin-bottom:12px!important;width:100%!important;max-width:100%!important} .quotation-preview-textbox{display:block;position:static!important;margin:12px 0;width:100%;height:auto;overflow:visible}.quotation-preview-textbox p{height:auto!important;min-height:1em;overflow:visible}';
+    frameDoc.head.appendChild(previewStyle);
+    const download = document.createElement('button');
+    download.type = 'button'; download.className = 'btn primary'; download.textContent = 'Tải file Word';
+    download.style.marginTop = '12px';
+    download.addEventListener('click',()=>downloadBlob(blob,`${safeFileName(row.code || 'bao-gia')}.docx`));
+    host.appendChild(download);
 }
 
 async function downloadQuotationDocx(row, template) {
@@ -1435,11 +1741,15 @@ function normalizeQuotationTemplateChoice(template = {}) {
 
 async function getActiveQuotationTemplate() {
     try {
-        const response = await VKApi.request('/print-templates/active?module=quotation', { cache: false });
-        quotationTemplateCache = response.data || null;
+        const response = await VKApi.request('/print-templates/choices?module=quotation', { cache: false });
+        const templates = response.data || [];
+        quotationTemplateCache = templates.find(template => template.is_default) || templates[0] || null;
+        if (quotationTemplateCache) return quotationTemplateCache;
+
+        const active = await VKApi.request('/print-templates/active?module=quotation', { cache: false });
+        quotationTemplateCache = active.data || null;
         return quotationTemplateCache;
     } catch (error) {
-        VKModal.toast('Không tải được mẫu in, hệ thống sẽ dùng mẫu mặc định trong màn báo giá.', 'warning');
         return null;
     }
 }

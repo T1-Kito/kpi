@@ -8,6 +8,8 @@ use App\Models\GoodsIssue;
 use App\Models\SalesInvoice;
 use App\Models\SalesOrder;
 use App\Models\User;
+use App\Models\Task;
+use App\Support\TaskService;
 use App\Support\AuditLogger;
 use App\Support\BusinessEventPublisher;
 use App\Support\CodeGenerator;
@@ -19,6 +21,7 @@ class SalesFulfillmentService
         private readonly AuditLogger $audit,
         private readonly BusinessEventPublisher $events,
         private readonly CodeGenerator $codes,
+        private readonly TaskService $tasks,
     ) {
     }
 
@@ -26,6 +29,7 @@ class SalesFulfillmentService
     public function confirmDelivery(SalesOrder $order, User $actor, array $data): Delivery
     {
         return DB::transaction(function () use ($order, $actor, $data) {
+            $order = SalesOrder::where('tenant_id', $actor->tenant_id)->whereKey($order->id)->lockForUpdate()->firstOrFail();
             $issue = GoodsIssue::where('tenant_id', $order->tenant_id)
                 ->where('sales_order_id', $order->id)
                 ->where('status', 'confirmed')
@@ -59,6 +63,7 @@ class SalesFulfillmentService
             $this->audit->record('delivery', $delivery->id, 'confirm_delivery', $actor, null, $delivery->toArray());
             $this->audit->record('sales_order', $order->id, 'mark_sales_order_delivered', $actor, $old, $order->fresh()->only(['status', 'delivery_status', 'delivered_at']));
             $this->events->publish($order->tenant_id, 'DeliveryConfirmed', 'Delivery', $delivery->id, ['sales_order_id' => $order->id]);
+            $this->completeWork($actor, 'SalesOrder', $order->id, 'delivery_confirmation', 'delivery_confirmed');
 
             return $delivery->load('goodsIssue:id,code');
         });
@@ -68,6 +73,7 @@ class SalesFulfillmentService
     public function issueInvoice(SalesOrder $order, User $actor, array $data): SalesInvoice
     {
         return DB::transaction(function () use ($order, $actor, $data) {
+            $order = SalesOrder::where('tenant_id', $actor->tenant_id)->whereKey($order->id)->lockForUpdate()->firstOrFail();
             abort_if($order->delivery_status !== 'delivered', 422, 'Chỉ xuất hóa đơn sau khi khách đã nhận hàng.');
 
             $existing = SalesInvoice::where('tenant_id', $order->tenant_id)
@@ -110,11 +116,20 @@ class SalesFulfillmentService
                 ->whereKey($invoice->id)
                 ->lockForUpdate()
                 ->firstOrFail();
-            $amount = (float) $data['amount'];
-            $balance = (float) $invoice->balance_amount;
+            abort_unless(in_array($invoice->status, ['issued', 'partially_paid', 'paid'], true), 422, 'Hóa đơn không cho phép ghi nhận thanh toán.');
+            $amount = bcadd((string) $data['amount'], '0', 2);
+            $balance = (string) $invoice->balance_amount;
+            $reference = trim((string) ($data['reference_no'] ?? ''));
+            if ($reference !== '') {
+                $existing = CustomerPayment::where('tenant_id', $actor->tenant_id)->where('sales_invoice_id', $invoice->id)->where('reference_no', $reference)->first();
+                if ($existing) {
+                    abort_if(bccomp((string) $existing->amount, $amount, 2) !== 0 || $existing->payment_method !== ($data['payment_method'] ?? 'bank_transfer'), 409, 'Mã tham chiếu đã dùng cho khoản thu khác.');
+                    return $existing;
+                }
+            }
 
-            abort_if($balance <= 0, 422, 'Hóa đơn đã được thanh toán đủ.');
-            abort_if($amount <= 0 || $amount > $balance, 422, 'Số tiền thanh toán phải lớn hơn 0 và không vượt số còn phải thu.');
+            abort_if(bccomp($balance, '0', 2) <= 0, 422, 'Hóa đơn đã được thanh toán đủ.');
+            abort_if(bccomp($amount, '0', 2) <= 0 || bccomp($amount, $balance, 2) > 0, 422, 'Số tiền thanh toán phải lớn hơn 0 và không vượt số còn phải thu.');
 
             $payment = CustomerPayment::create([
                 'tenant_id' => $invoice->tenant_id,
@@ -124,14 +139,14 @@ class SalesFulfillmentService
                 'amount' => $amount,
                 'paid_at' => $data['paid_at'] ?? now(),
                 'payment_method' => $data['payment_method'] ?? 'bank_transfer',
-                'reference_no' => $data['reference_no'] ?? null,
+                'reference_no' => $reference !== '' ? $reference : null,
                 'note' => $data['note'] ?? null,
                 'received_by' => $actor->id,
             ]);
 
-            $paid = (float) $invoice->paid_amount + $amount;
-            $remaining = max((float) $invoice->total_amount - $paid, 0);
-            $invoiceStatus = $remaining <= 0.0001 ? 'paid' : 'partially_paid';
+            $paid = bcadd((string) $invoice->paid_amount, $amount, 2);
+            $remaining = bcsub((string) $invoice->total_amount, $paid, 2);
+            $invoiceStatus = bccomp($remaining, '0', 2) === 0 ? 'paid' : 'partially_paid';
             $invoice->update([
                 'paid_amount' => $paid,
                 'balance_amount' => $remaining,
@@ -154,8 +169,20 @@ class SalesFulfillmentService
                 'amount' => $amount,
                 'balance_amount' => $remaining,
             ]);
+            if ($invoiceStatus === 'paid') {
+                $this->completeWork($actor, 'SalesInvoice', $invoice->id, 'payment_follow_up', 'invoice_paid');
+                $this->completeWork($actor, 'SalesOrder', $order->id, 'payment_follow_up', 'invoice_paid');
+            }
 
             return $payment;
         });
+    }
+
+    private function completeWork(User $actor, string $source, int $id, string $type, string $reason): void
+    {
+        foreach (Task::where('tenant_id', $actor->tenant_id)->where('source_type', $source)->where('source_id', $id)
+            ->where('task_type', $type)->whereIn('status', ['new', 'in_progress', 'overdue'])->get() as $task) {
+            $this->tasks->changeStatus($task, $actor, 'completed', $reason);
+        }
     }
 }

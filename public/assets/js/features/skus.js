@@ -1,5 +1,5 @@
 (function () {
-let skuState = { rows: [], q: '', status: '' };
+let skuState = { rows: [], categories: [], brands: [], q: '', status: '' };
 
 document.addEventListener('vk:ready', () => loadSkus());
 document.addEventListener('input', (event) => {
@@ -7,6 +7,9 @@ document.addEventListener('input', (event) => {
     if (event.target.matches('[data-list-search]')) {
         skuState.q = event.target.value.toLowerCase();
         renderSkus();
+    }
+    if (event.target.matches('[data-money-input]')) {
+        formatSkuMoneyInput(event.target);
     }
 });
 document.addEventListener('change', (event) => {
@@ -30,8 +33,10 @@ document.addEventListener('click', (event) => {
 
 async function loadSkus() {
     if (!document.getElementById('skusRoot')) return;
-    const skus = await VKApi.request('/skus');
+    const [skus, categories, brands] = await Promise.all([VKApi.request('/skus'), VKApi.request('/product-categories'), VKApi.request('/product-brands')]);
     skuState.rows = skus.data || [];
+    skuState.categories = categories.data || [];
+    skuState.brands = brands.data || [];
     renderSkus(skus.meta.total);
 }
 
@@ -39,10 +44,10 @@ function renderSkus(total = skuState.rows.length) {
     const rows = filterRows();
     document.getElementById('skusRoot').innerHTML = VKTable.fullList({
         title: 'Danh sách mã hàng',
-        subtitle: 'Dữ liệu dùng cho báo giá, mua hàng, nhập xuất tồn và KPI kho.',
+        subtitle: 'Quản lý danh mục, hãng, hình ảnh và thông tin kỹ thuật của sản phẩm.',
         meta: `${VKTable.money(rows.length)} / ${VKTable.money(total)} mã hàng`,
         filters: VKTable.filterBar({
-            searchPlaceholder: 'Tìm SKU, tên hàng, barcode...',
+            searchPlaceholder: 'Tìm SKU, tên hàng, số serial...',
             status: [
                 { value: 'active', label: 'Hoạt động' },
                 { value: 'inactive', label: 'Không hoạt động' },
@@ -55,8 +60,9 @@ function renderSkus(total = skuState.rows.length) {
 
 function renderSkuTable(rows) {
     return VKTable.renderTable([
-        { label: 'Mã hàng', render: row => renderSku(row) },
-        { label: 'Sản phẩm', render: row => VKTable.escapeHtml(row.product?.name || '-') },
+        { label: 'Mã hàng', render: row => `<strong class="mono">${VKTable.escapeHtml(row.sku_code)}</strong>` },
+        { label: 'Tên hàng', render: row => `<strong>${VKTable.escapeHtml(row.name)}</strong>${row.serial_number ? `<span class="row-note">Serial: ${VKTable.escapeHtml(row.serial_number)}</span>` : ''}` },
+        { label: 'Sản phẩm', render: row => renderProduct(row.product) },
         { label: 'Đơn vị', render: row => VKTable.escapeHtml(row.unit || '-') },
         { label: 'Giá vốn', render: row => VKTable.money(row.cost_price) },
         { label: 'Giá bán', render: row => VKTable.money(row.sale_price) },
@@ -71,7 +77,7 @@ function renderSkuTable(rows) {
 
 function filterRows() {
     return skuState.rows.filter(row => {
-        const haystack = `${row.sku_code || ''} ${row.name || ''} ${row.barcode || ''} ${row.product?.name || ''}`.toLowerCase();
+        const haystack = `${row.sku_code || ''} ${row.name || ''} ${row.serial_number || ''} ${row.product?.name || ''} ${row.product?.category?.name || ''} ${row.product?.brand?.name || ''}`.toLowerCase();
         return (!skuState.q || haystack.includes(skuState.q)) && (!skuState.status || row.status === skuState.status);
     });
 }
@@ -83,43 +89,66 @@ function restoreFilters() {
     if (status) status.value = skuState.status;
 }
 
-function renderSku(row) {
-    return `<strong class="mono">${VKTable.escapeHtml(row.sku_code)}</strong><span class="row-note">${VKTable.escapeHtml(row.name)}</span>`;
+function renderProduct(product) {
+    if (!product) return '-';
+    const image = product.image_path ? `<img class="sku-product-thumb" src="/storage/${VKTable.escapeHtml(product.image_path)}" alt="">` : '<span class="sku-product-thumb placeholder">SP</span>';
+    const details = [product.category?.name, product.brand?.name].filter(Boolean).map(VKTable.escapeHtml).join(' · ');
+    return `${image}<span><strong>${VKTable.escapeHtml(product.name)}</strong><span class="row-note">${details || 'Chưa phân loại'}</span></span>`;
 }
 
 function openSkuModal(id = null) {
     const row = id ? skuState.rows.find(item => item.id === id) : {};
     VKModal.open(id ? 'Sửa mã hàng' : 'Tạo mã hàng', `
-        <div class="form-grid">
-            ${VKModal.field('product_name', 'Tên sản phẩm', 'text', row?.product?.name || '')}
-            ${VKModal.field('name', 'Tên mã hàng', 'text', row?.name || '')}
-            ${VKModal.field('barcode', 'Mã vạch', 'text', row?.barcode || '')}
+        <div class="product-form-step active"><div class="form-grid">
+            <div class="sku-product-form">
+                <div class="sku-image-field"><label for="product_image">Ảnh sản phẩm</label>${row?.product?.image_path ? `<img class="sku-image-preview" src="/storage/${VKTable.escapeHtml(row.product.image_path)}" alt="Ảnh sản phẩm">` : '<div class="sku-image-preview empty">Chưa có ảnh</div>'}<input id="product_image" name="product_image" type="file" accept="image/png,image/jpeg,image/webp"></div>
+                <div class="form-grid">${VKModal.field('product_name', 'Tên sản phẩm', 'text', row?.product?.name || '')}${VKModal.field('name', 'Tên mã hàng', 'text', row?.name || '')}${VKModal.select('category_id', 'Danh mục sản phẩm', [{value:'',label:'Chọn danh mục'}, ...skuState.categories.filter(x=>x.status==='active').map(x=>({value:x.id,label:x.name}))], row?.product?.category_id || '')}${VKModal.select('brand_id', 'Hãng / thương hiệu', [{value:'',label:'Chọn hãng'}, ...skuState.brands.filter(x=>x.status==='active').map(x=>({value:x.id,label:x.name}))], row?.product?.brand_id || '')}</div>
+            </div>
+        </div></div>
+        <div class="product-form-step active"><div class="form-grid">
+            <div class="field"><label for="description">Mô tả sản phẩm</label><textarea id="description" name="description" rows="3" placeholder="Mô tả ngắn về sản phẩm">${VKTable.escapeHtml(row?.product?.description || '')}</textarea></div>
+            <div class="field"><label for="technical_specs">Thông số kỹ thuật</label><textarea id="technical_specs" name="technical_specs" rows="4" placeholder="Màn hình: 10 inch&#10;Kết nối: Wi-Fi, LAN&#10;Bảo hành: 12 tháng">${VKTable.escapeHtml((row?.product?.technical_specs || []).map(item => `${item.name}: ${item.value}`).join('\n'))}</textarea><small>Mỗi dòng một thông số, theo dạng “Tên: Giá trị”.</small></div>
+        </div></div>
+        <div class="product-form-step active">
+            <div class="sku-stock-price-grid">
+            ${VKModal.field('serial_number', 'Số serial', 'text', row?.serial_number || '')}
             ${VKModal.field('unit', 'Đơn vị tính', 'text', row?.unit || 'pcs')}
             ${VKModal.field('min_stock', 'Tồn tối thiểu', 'number', row?.min_stock || '0')}
             ${VKModal.field('max_stock', 'Tồn tối đa', 'number', row?.max_stock || '0')}
-            ${VKModal.field('cost_price', 'Giá vốn', 'number', row?.cost_price || '0')}
-            ${VKModal.field('sale_price', 'Giá bán', 'number', row?.sale_price || '0')}
+            <div class="field"><label for="cost_price">Giá vốn</label><input id="cost_price" name="cost_price" type="text" inputmode="numeric" autocomplete="off" data-money-input value="${formatSkuMoney(row?.cost_price || 0)}"><small>Nhập số, hệ thống tự ngăn cách hàng nghìn.</small></div>
+            <div class="field"><label for="sale_price">Giá bán</label><input id="sale_price" name="sale_price" type="text" inputmode="numeric" autocomplete="off" data-money-input value="${formatSkuMoney(row?.sale_price || 0)}"><small>Nhập số, hệ thống tự ngăn cách hàng nghìn.</small></div>
             ${VKModal.select('status', 'Trạng thái', [
                 { value: 'active', label: 'Hoạt động' },
                 { value: 'inactive', label: 'Không hoạt động' },
             ], row?.status || 'active')}
+            </div>
         </div>
     `, async (form) => {
-        const data = Object.fromEntries(new FormData(form));
+        const data = new FormData(form);
+        ['cost_price', 'sale_price'].forEach(name => data.set(name, String(parseSkuMoney(data.get(name)))));
+        if (id) data.append('_method', 'PUT');
         await VKApi.request(id ? `/skus/${id}` : '/skus', {
-            method: id ? 'PUT' : 'POST',
-            body: JSON.stringify({
-                ...data,
-                min_stock: Number(data.min_stock || 0),
-                max_stock: Number(data.max_stock || 0),
-                cost_price: Number(data.cost_price || 0),
-                sale_price: Number(data.sale_price || 0),
-            }),
+            method: 'POST', body: data,
         });
         VKModal.toast(id ? 'Đã cập nhật mã hàng.' : 'Đã tạo mã hàng.');
         VKModal.close();
         loadSkus();
-    });
+    }, { className: 'modal-wide sku-catalog-modal', submitText: id ? 'Lưu sản phẩm' : 'Tạo sản phẩm' });
+}
+
+function parseSkuMoney(value) {
+    return Number(String(value ?? '').replace(/\D/g, '')) || 0;
+}
+
+function formatSkuMoney(value) {
+    return parseSkuMoney(value).toLocaleString('vi-VN');
+}
+
+function formatSkuMoneyInput(input) {
+    const cursorFromEnd = input.value.length - input.selectionStart;
+    input.value = formatSkuMoney(input.value);
+    const nextPosition = Math.max(0, input.value.length - cursorFromEnd);
+    input.setSelectionRange(nextPosition, nextPosition);
 }
 
 function openSkuDetail(id) {

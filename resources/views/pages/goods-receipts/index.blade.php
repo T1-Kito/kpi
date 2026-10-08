@@ -13,5 +13,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/goods-receipts.js"></script>
+<script src="/assets/js/features/goods-receipts.js?v=20261008-2"></script>
 @endpush

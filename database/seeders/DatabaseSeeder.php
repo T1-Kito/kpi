@@ -26,6 +26,10 @@ use App\Models\Warehouse;
 use App\Models\Lead;
 use App\Models\Quotation;
 use App\Models\SalesOrder;
+use App\Models\SalesPipelineStage;
+use App\Models\SalesOpportunitySource;
+use App\Models\SalesPaymentTerm;
+use App\Models\SalesPriceBook;
 use App\Models\StockTake;
 use App\Models\SupplierQuotation;
 use Illuminate\Database\Seeder;
@@ -39,6 +43,21 @@ class DatabaseSeeder extends Seeder
             ['code' => 'VK-KPI'],
             ['name' => 'VK KPI Demo Company', 'status' => 'active'],
         );
+
+        foreach ([
+            ['new', 'Mới', 10, 10, 'open'], ['qualified', 'Đã xác minh', 25, 20, 'open'], ['proposal', 'Đề xuất', 50, 30, 'open'], ['negotiation', 'Đàm phán', 75, 40, 'open'], ['won', 'Thắng', 100, 50, 'won'], ['lost', 'Mất', 0, 60, 'lost'],
+        ] as [$code, $name, $probability, $sortOrder, $type]) {
+            SalesPipelineStage::updateOrCreate(['tenant_id' => $tenant->id, 'code' => $code], ['name' => $name, 'probability' => $probability, 'sort_order' => $sortOrder, 'type' => $type, 'is_active' => true]);
+        }
+        foreach (['lead' => 'Khách hàng tiềm năng', 'referral' => 'Giới thiệu', 'website' => 'Website', 'campaign' => 'Chiến dịch', 'other' => 'Khác'] as $code => $name) {
+            SalesOpportunitySource::updateOrCreate(['tenant_id' => $tenant->id, 'code' => $code], ['name' => $name, 'is_active' => true]);
+        }
+        foreach ([['STANDARD', 'Giá bán tiêu chuẩn', 0, true], ['PARTNER', 'Giá đối tác', 5, false], ['PROJECT', 'Giá dự án', 10, false]] as [$code, $name, $discount, $default]) {
+            SalesPriceBook::updateOrCreate(['tenant_id' => $tenant->id, 'code' => $code], ['name' => $name, 'discount_percent' => $discount, 'is_default' => $default, 'is_active' => true]);
+        }
+        foreach ([['IMMEDIATE', 'Thanh toán ngay', 0, true], ['NET15', 'Công nợ 15 ngày', 15, false], ['NET30', 'Công nợ 30 ngày', 30, false]] as [$code, $name, $days, $default]) {
+            SalesPaymentTerm::updateOrCreate(['tenant_id' => $tenant->id, 'code' => $code], ['name' => $name, 'due_days' => $days, 'is_default' => $default, 'is_active' => true]);
+        }
 
         foreach ([
             ['KPI-OVERALL', 'KPI tổng công ty', 'system', 'Điểm tổng hợp', 'điểm', 'increase', 1],
@@ -93,15 +112,23 @@ class DatabaseSeeder extends Seeder
             'dashboard.manager.view' => 'Xem dashboard trưởng phòng',
             'master.view' => 'Xem dữ liệu nền',
             'master.manage' => 'Quản lý dữ liệu nền',
+            'master.merge' => 'Xét và gộp khách hàng trùng',
             'task.view' => 'Xem công việc',
             'task.create' => 'Tạo công việc',
             'task.approve' => 'Duyệt công việc',
             'alert.view' => 'Xem cảnh báo',
             'sales.lead.manage' => 'Quản lý khách hàng tiềm năng',
             'sales.quotation.create' => 'Tạo báo giá',
+            'sales.quotation.view' => 'Xem báo giá',
+            'sales.quotation.edit' => 'Sửa báo giá',
+            'sales.quotation.delete' => 'Xóa báo giá nháp',
+            'sales.deal.manage' => 'Quản lý cơ hội bán hàng',
+            'sales.contract.manage' => 'Quản lý hợp đồng',
             'sales.margin.approve' => 'Duyệt biên lợi nhuận thấp',
             'sales.order.view' => 'Xem đơn bán',
             'sales.order.create' => 'Tạo đơn bán',
+            'sales.order.edit' => 'Sửa đơn hàng nháp',
+            'sales.order.delete' => 'Xóa đơn hàng nháp',
             'sales.delivery.view' => 'Xem sổ giao hàng',
             'sales.delivery.confirm' => 'Xác nhận giao hàng',
             'finance.invoice.view' => 'Xem hóa đơn bán hàng',
@@ -115,15 +142,17 @@ class DatabaseSeeder extends Seeder
             'marketing.campaign.manage' => 'Quản lý chiến dịch marketing',
             'kpi.lock' => 'Khóa kỳ KPI',
             'audit.view' => 'Xem nhật ký hệ thống',
+            'service.ticket.view' => 'Xem ticket dịch vụ và bảo hành',
+            'service.ticket.manage' => 'Quản lý ticket dịch vụ và bảo hành',
         ])->mapWithKeys(fn (string $name, string $code) => [
             $code => Permission::updateOrCreate(['code' => $code], ['name' => $name]),
         ]);
 
         $roleDefinitions = [
             'ROLE-ADMIN' => ['name' => 'Quản trị hệ thống', 'scope' => 'company', 'permissions' => $permissions->keys()->all()],
-            'ROLE-DIR' => ['name' => 'Ban giám đốc', 'scope' => 'company', 'permissions' => ['dashboard.executive.view', 'dashboard.manager.view', 'master.view', 'task.view', 'task.approve', 'alert.view', 'audit.view', 'kpi.lock', 'sales.margin.approve', 'procurement.pr.approve', 'procurement.po.approve', 'sales.order.view', 'sales.delivery.view', 'finance.invoice.view', 'finance.payment.view']],
+            'ROLE-DIR' => ['name' => 'Ban giám đốc', 'scope' => 'company', 'permissions' => ['dashboard.executive.view', 'dashboard.manager.view', 'master.view', 'task.view', 'task.approve', 'alert.view', 'audit.view', 'kpi.lock', 'sales.margin.approve', 'procurement.pr.approve', 'procurement.po.approve', 'sales.order.view', 'sales.delivery.view', 'finance.invoice.view', 'finance.payment.view', 'service.ticket.view', 'service.ticket.manage']],
             'ROLE-MGR' => ['name' => 'Trưởng phòng', 'scope' => 'department', 'permissions' => ['dashboard.manager.view', 'master.view', 'task.view', 'task.create', 'task.approve', 'alert.view', 'sales.margin.approve', 'procurement.pr.approve', 'sales.order.view']],
-            'ROLE-SALES' => ['name' => 'Kinh doanh', 'scope' => 'own', 'permissions' => ['master.view', 'task.view', 'task.create', 'alert.view', 'sales.lead.manage', 'sales.quotation.create', 'sales.order.view', 'sales.order.create', 'sales.delivery.view', 'sales.delivery.confirm', 'finance.invoice.view', 'finance.payment.view']],
+            'ROLE-SALES' => ['name' => 'Kinh doanh', 'scope' => 'own', 'permissions' => ['master.view', 'task.view', 'task.create', 'alert.view', 'sales.lead.manage', 'sales.deal.manage', 'sales.contract.manage', 'sales.quotation.view', 'sales.quotation.create', 'sales.quotation.edit', 'sales.order.view', 'sales.order.create', 'sales.order.edit', 'sales.delivery.view', 'sales.delivery.confirm', 'finance.invoice.view', 'finance.payment.view', 'service.ticket.view', 'service.ticket.manage']],
             'ROLE-WH' => ['name' => 'Kho', 'scope' => 'warehouse', 'permissions' => ['master.view', 'task.view', 'task.create', 'alert.view', 'inventory.receipt.confirm', 'inventory.issue.confirm']],
             'ROLE-PUR' => ['name' => 'Mua hàng', 'scope' => 'department', 'permissions' => ['master.view', 'task.view', 'task.create', 'alert.view', 'procurement.pr.approve', 'procurement.po.approve']],
             'ROLE-MKT' => ['name' => 'Marketing', 'scope' => 'department', 'permissions' => ['master.view', 'task.view', 'task.create', 'alert.view', 'marketing.campaign.manage']],

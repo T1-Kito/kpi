@@ -5,8 +5,8 @@
 @section('page_title', 'Tổng quan')
 @section('page_subtitle', 'Theo dõi công việc, cảnh báo, bán hàng, mua hàng và kho trong một màn hình.')
 @section('page_actions')
-    <a class="btn primary" href="/leads">Tạo khách hàng tiềm năng</a>
-    <a class="btn" href="/tasks">Xem công việc</a>
+    <a class="btn primary" href="/leads" data-dashboard-create-lead hidden>Tạo khách hàng tiềm năng</a>
+    <a class="btn" href="/tasks" data-dashboard-work-action>Xem công việc</a>
 @endsection
 
 @section('content')
@@ -14,5 +14,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/dashboard.js?v=20260617-3"></script>
+<script src="/assets/js/features/dashboard.js?v=20261008-2"></script>
 @endpush

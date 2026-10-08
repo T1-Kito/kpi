@@ -3,14 +3,17 @@
 namespace App\Services\Print;
 
 use App\Models\PrintTemplate;
+use App\Models\Contract;
+use App\Models\GoodsIssue;
 use App\Models\Quotation;
+use App\Models\SalesOrder;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use ZipArchive;
 
 class QuotationDocxMergeService
 {
-    public function merge(Quotation $quotation, PrintTemplate $template): string
+    public function merge(Quotation|SalesOrder|GoodsIssue|Contract $quotation, PrintTemplate $template): string
     {
         if (! class_exists(ZipArchive::class)) {
             throw new RuntimeException('May chu chua bat PHP ZipArchive de xu ly file Word.');
@@ -27,7 +30,8 @@ class QuotationDocxMergeService
             throw new RuntimeException('Khong the tao thu muc xuat file Word.');
         }
 
-        $target = $targetDir.'/quotation-'.$quotation->id.'-'.time().'-'.bin2hex(random_bytes(4)).'.docx';
+        $prefix = $quotation instanceof Contract ? 'contract' : ($quotation instanceof GoodsIssue ? 'goods-issue' : ($quotation instanceof SalesOrder ? 'sales-order' : 'quotation'));
+        $target = $targetDir.'/'.$prefix.'-'.$quotation->id.'-'.time().'-'.bin2hex(random_bytes(4)).'.docx';
 
         if (! copy($source, $target)) {
             throw new RuntimeException('Khong the tao ban sao mau Word.');
@@ -38,7 +42,7 @@ class QuotationDocxMergeService
             throw new RuntimeException('Khong the mo file mau Word.');
         }
 
-        $quotation->loadMissing(['customer', 'items.sku', 'salesOwner']);
+        $this->loadRelations($quotation);
         $values = $this->mergeValues($quotation);
 
         for ($index = 0; $index < $zip->numFiles; $index++) {
@@ -53,6 +57,7 @@ class QuotationDocxMergeService
             }
 
             $xml = $this->repeatItemRows($xml, $quotation);
+            $xml = $this->makeMergeFieldValuesRegular($xml);
             $zip->addFromString($name, $this->replaceFields($xml, $values));
         }
 
@@ -77,7 +82,23 @@ class QuotationDocxMergeService
         return $xml;
     }
 
-    private function repeatItemRows(string $xml, Quotation $quotation): string
+    /**
+     * A merge placeholder is commonly copied from a bold label in Word.
+     * Clear bold only on the run that contains a placeholder, leaving labels
+     * and headings in the customer's original template untouched.
+     */
+    private function makeMergeFieldValuesRegular(string $xml): string
+    {
+        return preg_replace_callback('/<w:r\b[^>]*>.*?<\/w:r>/s', function (array $match): string {
+            if (! preg_match('/\{\{\s*[a-zA-Z0-9_]+\s*\}\}/u', $match[0])) {
+                return $match[0];
+            }
+
+            return preg_replace('/<w:b(?:\s+[^>]*)?\/>|<w:b(?:\s+[^>]*)?>.*?<\/w:b>/s', '', $match[0]) ?? $match[0];
+        }, $xml) ?? $xml;
+    }
+
+    private function repeatItemRows(string $xml, Quotation|SalesOrder|GoodsIssue|Contract $quotation): string
     {
         $itemKeys = [
             'stt',
@@ -107,20 +128,78 @@ class QuotationDocxMergeService
                 return $rowXml;
             }
 
-            if ($quotation->items->isEmpty()) {
+            $items = $this->documentItems($quotation);
+            if ($items->isEmpty()) {
                 return $this->replaceFields($rowXml, $this->emptyLineValues());
             }
 
-            return $quotation->items
+            return $items
                 ->values()
                 ->map(fn ($item, int $index): string => $this->replaceFields($rowXml, $this->lineValues($item, $index)))
                 ->implode('');
         }, $xml) ?? $xml;
     }
 
-    private function mergeValues(Quotation $quotation): array
+    private function mergeValues(Quotation|SalesOrder|GoodsIssue|Contract $quotation): array
     {
-        $quotation->loadMissing(['customer', 'items.sku', 'salesOwner']);
+        $this->loadRelations($quotation);
+
+        if ($quotation instanceof GoodsIssue) {
+            $order = $quotation->salesOrder;
+            $customer = $order?->customer;
+
+            return [
+                'ma_chung_tu' => $quotation->code,
+                'ngay_chung_tu' => optional($quotation->created_at)->format('d/m/Y H:i'),
+                'ma_don_ban' => $order?->code ?? '',
+                'ten_khach_hang' => $customer?->name ?? '',
+                'ma_khach_hang' => $customer?->code ?? '',
+                'nguoi_lien_he' => $quotation->recipient_name ?: ($customer?->contact_name ?? ''),
+                'so_dien_thoai' => $quotation->recipient_phone ?: ($customer?->phone ?? ''),
+                'dia_chi_giao_hang' => $quotation->recipient_address ?: ($customer?->address ?? ''),
+                'bang_dong_hang' => $this->itemsText($quotation),
+                'nguoi_lap' => '',
+                'trang_thai' => $this->statusText($quotation->status),
+                'kho_xuat' => $quotation->warehouse?->name ?? '',
+                'ly_do_xuat' => $quotation->issue_reason ?? '',
+                'dia_diem_giao_hang' => $quotation->delivery_location ?? '',
+                'chung_tu_goc' => $quotation->source_document ?? '',
+                'co_tru_ton' => $quotation->affects_stock ? 'Có' : 'Không',
+            ];
+        }
+
+        if ($quotation instanceof Contract) {
+            $customer = $quotation->customer;
+            $amount = (float) ($quotation->total_amount ?? 0);
+            return [
+                'ma_chung_tu' => $quotation->code,
+                'ngay_chung_tu' => optional($quotation->created_at)->format('d/m/Y'),
+                'ma_hop_dong' => $quotation->code,
+                'ten_hop_dong' => $quotation->name,
+                'ngay_hop_dong' => optional($quotation->created_at)->format('d/m/Y'),
+                'ngay_hieu_luc' => optional($quotation->effective_date)->format('d/m/Y'),
+                'ngay_het_han' => optional($quotation->expiry_date)->format('d/m/Y'),
+                'ten_khach_hang' => $customer?->name ?? '',
+                'ma_khach_hang' => $customer?->code ?? '',
+                'nguoi_lien_he' => $customer?->contact_name ?? '',
+                'so_dien_thoai' => $customer?->phone ?? '',
+                'email' => $customer?->email ?? '',
+                'ten_cong_ty' => $customer?->name ?? '',
+                'ma_so_thue' => $customer?->tax_code ?? '',
+                'dia_chi_cong_ty' => $customer?->billing_address ?: ($customer?->address ?? ''),
+                'dia_chi_giao_hang' => $customer?->address ?: ($customer?->billing_address ?? ''),
+                'ma_bao_gia' => $quotation->quotation?->code ?? '',
+                'ma_don_hang' => $quotation->salesOrder?->code ?? '',
+                'gia_tri_hop_dong' => $this->money($amount),
+                'gia_tri_bang_chu' => $this->moneyInWords($amount),
+                'tong_cong' => $this->money($amount),
+                'tong_tien_bang_chu' => $this->moneyInWords($amount),
+                'dieu_khoan' => $quotation->note ?? '',
+                'moc_thanh_toan' => $quotation->milestones->map(fn ($milestone) => sprintf('%s: %s, hạn %s', $milestone->name, $this->money((float) $milestone->amount), optional($milestone->due_date)->format('d/m/Y') ?: 'chưa xác định'))->implode('; '),
+                'bang_dong_hang' => $this->itemsText($quotation),
+                'nguoi_lap' => $quotation->owner?->name ?? '',
+            ];
+        }
 
         $customer = $quotation->customer;
         $subtotal = (float) ($quotation->subtotal_amount ?? 0);
@@ -129,8 +208,12 @@ class QuotationDocxMergeService
         $total = (float) ($quotation->total_amount ?? ($subtotal + $tax - $discount));
 
         return [
-            'ma_bao_gia' => $quotation->code,
+            'ma_chung_tu' => $quotation->code,
+            'ngay_chung_tu' => optional($quotation->created_at)->format('d/m/Y H:i'),
+            'ma_bao_gia' => $quotation instanceof SalesOrder ? ($quotation->quotation?->code ?? '') : $quotation->code,
             'ngay_bao_gia' => optional($quotation->created_at)->format('d/m/Y H:i'),
+            'ma_don_hang' => $quotation instanceof SalesOrder ? $quotation->code : '',
+            'ngay_don_hang' => $quotation instanceof SalesOrder ? optional($quotation->created_at)->format('d/m/Y H:i') : '',
             'ten_khach_hang' => $customer?->name ?? '',
             'ma_khach_hang' => $customer?->code ?? '',
             'nguoi_lien_he' => $customer?->contact_name ?? '',
@@ -139,6 +222,7 @@ class QuotationDocxMergeService
             'ten_cong_ty' => $customer?->name ?? '',
             'ma_so_thue' => $customer?->tax_code ?? '',
             'dia_chi_cong_ty' => $customer?->billing_address ?: ($customer?->address ?? ''),
+            'dia_chi_giao_hang' => $customer?->address ?: ($customer?->billing_address ?? ''),
             'bang_dong_hang' => $this->itemsText($quotation),
             'tam_tinh' => $this->money($subtotal),
             'chiet_khau' => $this->money($discount),
@@ -146,6 +230,7 @@ class QuotationDocxMergeService
             'tong_cong' => $this->money($total),
             'tong_tien_bang_chu' => $this->moneyInWords($total),
             'nguoi_tao' => $quotation->salesOwner?->name ?? '',
+            'nguoi_lap' => $quotation->salesOwner?->name ?? '',
             'trang_thai' => $this->statusText($quotation->status),
         ];
     }
@@ -156,7 +241,7 @@ class QuotationDocxMergeService
 
         return [
             'stt' => (string) ($index + 1),
-            'ma_hang' => $sku?->sku_code ?? '',
+            'ma_hang' => $item->sku_code ?? $sku?->sku_code ?? '',
             'ten_hang' => $item->name ?: ($sku?->name ?? ''),
             'dvt' => $item->unit ?: ($sku?->unit ?? ''),
             'so_luong' => $this->number((float) ($item->quantity ?? 0)),
@@ -184,9 +269,9 @@ class QuotationDocxMergeService
         ];
     }
 
-    private function itemsText(Quotation $quotation): string
+    private function itemsText(Quotation|SalesOrder|GoodsIssue|Contract $quotation): string
     {
-        return $quotation->items
+        return $this->documentItems($quotation)
             ->values()
             ->map(function ($item, int $index): string {
                 $sku = $item->sku;
@@ -198,7 +283,7 @@ class QuotationDocxMergeService
                 return sprintf(
                     '%d. %s - %s - SL %s - Don gia %s - VAT %s%% - Thanh tien %s',
                     $index + 1,
-                    $sku?->sku_code ?? '',
+                    $item->sku_code ?? $sku?->sku_code ?? '',
                     $item->name ?: ($sku?->name ?? ''),
                     $quantity,
                     $unitPrice,
@@ -207,6 +292,29 @@ class QuotationDocxMergeService
                 );
             })
             ->implode('; ');
+    }
+
+    private function loadRelations(Quotation|SalesOrder|GoodsIssue|Contract $document): void
+    {
+        if ($document instanceof Contract) {
+            $document->loadMissing(['customer', 'owner', 'milestones', 'salesOrder.customer', 'salesOrder.items.sku', 'quotation.customer', 'quotation.items.sku']);
+            return;
+        }
+        if ($document instanceof GoodsIssue) {
+            $document->loadMissing(['salesOrder.customer', 'items.sku', 'warehouse']);
+            return;
+        }
+
+        $document->loadMissing(['customer', 'items.sku', 'salesOwner']);
+    }
+
+    private function documentItems(Quotation|SalesOrder|GoodsIssue|Contract $document)
+    {
+        if ($document instanceof Contract) {
+            return $document->salesOrder?->items ?? $document->quotation?->items ?? collect();
+        }
+
+        return $document->items;
     }
 
     private function money(float $value): string
@@ -294,6 +402,7 @@ class QuotationDocxMergeService
             'approved' => 'Đã duyệt',
             'rejected' => 'Từ chối',
             'ready' => 'Sẵn sàng',
+            'confirmed' => 'Đã xác nhận',
             default => $status ?: '',
         };
     }

@@ -3,6 +3,22 @@
     const sidebarStateKey = 'vk.sidebar.groups';
     const sidebarIconKey = 'vk.sidebar.icons.v1';
     const userCacheKey = 'vk.currentUser.v3';
+    const moduleLabels = {
+        work: 'Công việc', sales: 'Kinh doanh', customer: 'Khách hàng', product: 'Sản phẩm', procurement: 'Mua hàng',
+        inventory: 'Kho vận', finance: 'Tài chính', service: 'Dịch vụ khách hàng', kpi: 'KPI', admin: 'Quản trị',
+    };
+    const moduleRoutes = {
+        work: ['dashboard', 'tasks', 'approvals', 'alerts'],
+        sales: ['deals', 'quotations', 'sales-orders', 'contracts', 'deliveries'],
+        customer: ['customers', 'leads', 'customer-contacts'],
+        product: ['skus', 'product-categories', 'product-brands'],
+        procurement: ['purchase-requests', 'supplier-quotations', 'purchase-orders', 'suppliers'],
+        inventory: ['inventory', 'inventory-transactions', 'warehouses', 'goods-receipts', 'goods-issues', 'stock-takes'],
+        finance: ['sales-invoices', 'customer-receivables', 'customer-payments'],
+        service: ['service-tickets', 'warranty-claims'],
+        kpi: ['kpi', 'kpi-adjustments', 'kpi-settings'],
+        admin: ['users', 'roles', 'organization', 'workflows', 'print-templates', 'audit-logs', 'settings', 'sales-master-data'],
+    };
     const defaultSidebarIcons = {
         dashboard: 'home',
         tasks: 'tasks',
@@ -18,38 +34,47 @@
     };
 
     const features = {
-        dashboard: ['dashboard.js?v=20260617-3', 'loadDashboard'],
-        leads: ['leads.js?v=20260615-2', 'loadLeads'],
-        quotations: ['quotations.js?v=20260620-3', 'loadQuotations'],
-        'sales-orders': ['sales-orders.js?v=20260620-1', 'loadSalesOrders'],
+        dashboard: ['dashboard.js?v=20261008-2', 'loadDashboard'],
+        leads: ['leads.js?v=20261008-2', 'loadLeads'],
+        deals: ['deals.js?v=20261005-1', 'loadDeals'],
+        'sales-master-data': ['sales-master-data.js?v=20260923-1', 'loadSalesMasterData'],
+        contracts: ['contracts.js?v=20260923-6', 'loadContracts'],
+        quotations: ['quotations.js?v=20261008-2', 'loadQuotations'],
+        'sales-orders': ['sales-orders.js?v=20261005-1', 'loadSalesOrders'],
         deliveries: ['sales-fulfillment.js?v=20260618-1', 'loadDeliveries'],
         'sales-invoices': ['sales-fulfillment.js?v=20260618-1', 'loadSalesInvoices'],
         'customer-receivables': ['customer-receivables.js?v=20260617-1', 'loadCustomerReceivables'],
         'customer-payments': ['sales-fulfillment.js?v=20260618-1', 'loadCustomerPayments'],
-        customers: ['customers.js?v=20260619-2', 'loadCustomers'],
+        customers: ['customers.js?v=20261008-4', 'loadCustomers'],
+        'customer-contacts': ['customer-contacts.js?v=20261008-1', 'loadCustomerContacts'],
         suppliers: ['suppliers.js?v=20260619-2', 'loadSuppliers'],
-        skus: ['skus.js?v=20260615-2', 'loadSkus'],
+        skus: ['skus.js?v=20260921-4', 'loadSkus'],
+        'product-categories': ['product-catalog.js?v=20260921-1', 'loadProductCatalog'],
+        'product-brands': ['product-catalog.js?v=20260921-1', 'loadProductCatalog'],
         inventory: ['inventory.js?v=20260615-3', 'loadInventory'],
+        'inventory-transactions': ['inventory.js?v=20260615-3', 'loadInventory'],
         warehouses: ['warehouses.js', 'loadWarehouses'],
-        'purchase-requests': ['purchase-requests.js', 'loadPurchaseRequests'],
-        'supplier-quotations': ['supplier-quotations.js?v=20260619-4', 'loadSupplierQuotations'],
-        'purchase-orders': ['purchase-orders.js?v=20260619-2', 'loadPurchaseOrders'],
-        'goods-receipts': ['goods-receipts.js', 'loadGoodsReceipts'],
-        'goods-issues': ['goods-issues.js', 'loadGoodsIssues'],
+        'purchase-requests': ['purchase-requests.js?v=20261005-2', 'loadPurchaseRequests'],
+        'supplier-quotations': ['supplier-quotations.js?v=20261008-3', 'loadSupplierQuotations'],
+        'purchase-orders': ['purchase-orders.js?v=20261008-1', 'loadPurchaseOrders'],
+        'goods-receipts': ['goods-receipts.js?v=20261008-2', 'loadGoodsReceipts'],
+        'goods-issues': ['goods-issues.js?v=20261008-1', 'loadGoodsIssues'],
         'stock-takes': ['stock-takes.js?v=20260619-1', 'loadStockTakes'],
         tasks: ['tasks.js?v=20260617-1', 'loadTasks'],
         approvals: ['approvals.js?v=20260619-1', 'loadApprovals'],
         alerts: ['alerts.js?v=20260615-2', 'loadAlerts'],
-        kpi: ['kpi.js?v=20260619-1', 'loadKpi'],
+        kpi: ['kpi.js?v=20261005-1', 'loadKpi'],
         'kpi-adjustments': ['kpi-adjustments.js?v=20260619-1', 'loadKpiAdjustments'],
-        'kpi-settings': ['kpi-settings.js?v=20260619-3', 'loadKpiSettings'],
+        'kpi-settings': ['kpi-settings.js?v=20261005-1', 'loadKpiSettings'],
         workflows: ['workflows.js?v=20260618-2', 'loadWorkflows'],
         users: ['users.js?v=20260615-2', 'loadUsers'],
-        roles: ['roles.js', 'loadRoles'],
-        organization: ['organization.js', 'loadOrganization'],
-        'print-templates': ['print-templates.js?v=20260618-1', 'loadPrintTemplates'],
+        roles: ['roles.js?v=20261008-1', 'loadRoles'],
+        organization: ['organization.js?v=20260921-1', 'loadOrganization'],
+        'print-templates': ['print-templates.js?v=20260923-5', 'loadPrintTemplates'],
         'audit-logs': ['audit-logs.js', 'loadAuditLogs'],
-        settings: ['settings.js?v=20260618-3', 'loadSettings'],
+        'service-tickets': ['service-desk.js', 'loadServiceTickets'],
+        'warranty-claims': ['service-desk.js', 'loadWarrantyClaims'],
+        settings: ['settings.js?v=20261008-5', 'loadSettings'],
     };
     const routePrefetch = {
         '/dashboard': ['dashboard', [
@@ -67,6 +92,7 @@
             '/notifications?page_size=5',
         ]],
         '/leads': ['leads', ['/leads']],
+        '/deals': ['deals', ['/deals', '/customers?page_size=100', '/leads?page_size=100']],
         '/quotations': ['quotations', ['/quotations']],
         '/sales-orders': ['sales-orders', ['/sales-orders']],
         '/deliveries': ['deliveries', ['/deliveries?page_size=100']],
@@ -76,7 +102,9 @@
         '/customers': ['customers', ['/customers']],
         '/inventory': ['inventory', ['/inventory-balances', '/inventory-transactions']],
         '/warehouses': ['warehouses', ['/warehouses']],
-        '/skus': ['skus', ['/skus']],
+        '/skus': ['skus', ['/skus', '/product-categories', '/product-brands']],
+        '/product-categories': ['product-categories', ['/product-categories']],
+        '/product-brands': ['product-brands', ['/product-brands']],
         '/goods-receipts': ['goods-receipts', ['/goods-receipts']],
         '/goods-issues': ['goods-issues', ['/goods-issues']],
         '/stock-takes': ['stock-takes', ['/stock-takes', '/warehouses', '/skus']],
@@ -116,6 +144,8 @@
         '/print-templates': ['print-templates', ['/print-templates?page_size=100']],
         '/audit-logs': ['audit-logs', ['/audit-logs?page_size=100', '/lookups/users']],
         '/settings': ['settings', ['/me', '/users', '/roles', '/customers', '/suppliers', '/skus', '/warehouses']],
+        '/service-tickets': ['service-tickets', ['/service-tickets', '/customers', '/users']],
+        '/warranty-claims': ['warranty-claims', ['/warranty-claims', '/customers']],
     };
 
     let booted = false;
@@ -134,12 +164,14 @@
         const cachedUser = readJson(userCacheKey);
         const canUseCachedUser = cachedUser
             && Array.isArray(cachedUser.permissions)
-            && cachedUser.permissions.length > 0;
+            && cachedUser.permissions.length > 0
+            && typeof cachedUser.data_scope === 'string';
         if (canUseCachedUser) hydrateUser(cachedUser);
         resolveCurrentPage();
         applyStoredSidebarState();
         applySidebarIcons();
         bindSidebar();
+        bindAppSwitcher();
         bindPjax();
 
         if (!VKApi.token()) {
@@ -208,7 +240,7 @@
     }
 
     function applyNavigation() {
-        document.querySelectorAll('#mainNav a, [data-module-toolbar] a').forEach((link) => {
+        document.querySelectorAll('#mainNav a, [data-module-toolbar] a, [data-module-card]').forEach((link) => {
             const permission = link.dataset.permission || '';
             if (!hasPermission(permission)) {
                 link.remove();
@@ -228,8 +260,57 @@
             }
         });
 
+        document.querySelectorAll('[data-module-card]').forEach((card) => {
+            const section = document.querySelector(`[data-module-section="${card.dataset.moduleCard}"]`);
+            const firstLink = section?.querySelector('a[href]');
+            if (!firstLink) {
+                card.remove();
+                return;
+            }
+            card.href = firstLink.href;
+        });
+
         setActiveUrl(window.location.pathname);
         applySidebarIcons();
+    }
+
+    function bindAppSwitcher() {
+        const root = document.querySelector('[data-app-switcher]');
+        const trigger = root?.querySelector('[data-app-switcher-trigger]');
+        const panel = root?.querySelector('[data-app-switcher-panel]');
+        const search = root?.querySelector('[data-app-switcher-search]');
+        if (!root || !trigger || !panel || trigger.dataset.bound === '1') return;
+        trigger.dataset.bound = '1';
+
+        const close = () => {
+            panel.hidden = true;
+            trigger.setAttribute('aria-expanded', 'false');
+            if (search) search.value = '';
+            root.querySelectorAll('[data-module-card]').forEach(card => card.hidden = false);
+        };
+        const open = () => {
+            panel.hidden = false;
+            trigger.setAttribute('aria-expanded', 'true');
+            window.setTimeout(() => search?.focus(), 0);
+        };
+
+        trigger.addEventListener('click', (event) => {
+            event.stopPropagation();
+            panel.hidden ? open() : close();
+        });
+        root.querySelector('[data-app-switcher-close]')?.addEventListener('click', close);
+        search?.addEventListener('input', () => {
+            const keyword = search.value.trim().toLocaleLowerCase('vi');
+            root.querySelectorAll('[data-module-card]').forEach((card) => {
+                card.hidden = keyword !== '' && !String(card.dataset.moduleSearch || '').includes(keyword);
+            });
+        });
+        document.addEventListener('click', (event) => {
+            if (!root.contains(event.target)) close();
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') close();
+        });
     }
 
     function bindSidebar() {
@@ -326,6 +407,11 @@
             if (!link || !shouldUsePjax(link)) return;
 
             event.preventDefault();
+            const settingsUrl = new URL(link.href, window.location.origin);
+            if (settingsUrl.pathname === '/settings' && !settingsUrl.search && document.getElementById('settingsRoot')) {
+                document.dispatchEvent(new CustomEvent('vk:settings-menu'));
+                return;
+            }
             navigatePjax(link.href);
         });
 
@@ -480,12 +566,30 @@
     }
 
     function setActiveUrl(pathname) {
+        applyModuleForPath(pathname);
         document.querySelectorAll('#mainNav a, [data-module-toolbar] a').forEach((link) => {
             const href = new URL(link.href, window.location.origin);
             const active = linkMatchesPath(link, href.pathname, pathname);
             link.classList.toggle('active', active);
         });
         saveSidebarState();
+    }
+
+    function applyModuleForPath(pathname) {
+        const path = normalizePath(pathname).replace(/^\//, '') || 'dashboard';
+        const module = Object.entries(moduleRoutes).find(([, routes]) => routes.some(route => path === route || path.startsWith(`${route}/`)))?.[0] || 'work';
+        document.querySelectorAll('[data-module-section]').forEach((section) => {
+            section.hidden = true;
+        });
+        document.querySelectorAll('[data-dashboard-shortcuts]').forEach((section) => {
+            section.hidden = false;
+        });
+        document.querySelectorAll('[data-module-card]').forEach((card) => {
+            card.classList.toggle('active', card.dataset.moduleCard === module);
+        });
+        document.querySelectorAll('[data-current-module-label]').forEach((node) => {
+            node.textContent = moduleLabels[module] || 'Công việc';
+        });
     }
 
     function linkMatchesPath(link, hrefPath, currentPath) {

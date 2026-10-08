@@ -16,6 +16,8 @@ use App\Models\SalesInvoice;
 use App\Models\SalesOrder;
 use App\Models\Task;
 use App\Support\DataScope;
+use App\Services\Dashboard\ExecutiveDashboardService;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,6 +25,10 @@ use Illuminate\Support\Facades\DB;
 
 class DashboardSummaryController extends Controller
 {
+    public function __construct(private readonly ExecutiveDashboardService $executive)
+    {
+    }
+
     public function __invoke(Request $request): JsonResponse
     {
         $type = (string) $request->query('type', 'admin');
@@ -51,6 +57,13 @@ class DashboardSummaryController extends Controller
             $data['purchaseRequests'] = $this->purchaseRequests($request);
             $data['purchaseOrders'] = $this->purchaseOrders($request);
             $data['balances'] = $this->balances($request);
+            if ($request->user()->hasPermission('dashboard.executive.view') && $request->user()->dataScope() === 'company') {
+                $request->validate(['month' => ['nullable', 'date_format:Y-m']]);
+                $data['executive'] = $this->executive->summary(
+                    $request->user()->tenant_id,
+                    Carbon::createFromFormat('Y-m-d', ($request->query('month') ?: now()->format('Y-m')).'-01'),
+                );
+            }
         } elseif ($type === 'warehouse') {
             $data['balances'] = $this->balances($request, 50);
             $data['receipts'] = $this->receipts($request);

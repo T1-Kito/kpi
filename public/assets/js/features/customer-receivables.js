@@ -65,19 +65,19 @@ function renderCustomerReceivables() {
 
 function renderReceivableTable(rows) {
     return VKTable.renderTable([
-        { label: 'Khách hàng', render: row => `
-            <strong>${escape(row.name || '-')}</strong>
-            <span class="muted-line">${escape(row.code || '-')} · MST: ${escape(row.tax_code || 'Chưa khai báo')}</span>
-        ` },
-        { label: 'Liên hệ', render: row => `
-            ${escape(row.contact_name || '-')}
-            <span class="muted-line">${escape(row.phone || row.email || '-')}</span>
-        ` },
+        { label: 'Mã khách hàng', render: row => `<span class="mono" style="color:#e60073;font-weight:600">${escape(row.code || '—')}</span>` },
+        { label: 'Tên khách hàng', render: row => `<span style="color:#245a78;font-weight:500">${escape(row.name || '—')}</span>` },
+        { label: 'Mã số thuế', render: row => escape(row.tax_code || '—') },
+        { label: 'Số CCCD', render: row => escape(row.identity_number || '—') },
+        { label: 'Người liên hệ', render: row => escape(row.contact_name || '—') },
+        { label: 'Số điện thoại', render: row => escape(row.phone || '—') },
+        { label: 'Email', render: row => escape(row.email || '—') },
         { label: 'Hạn mức', render: row => money(row.credit_limit) },
         { label: 'Tổng hóa đơn', render: row => money(row.total_amount) },
         { label: 'Đã thu', render: row => money(row.paid_amount) },
         { label: 'Còn nợ', render: row => `<strong class="${Number(row.balance_amount || 0) > 0 ? 'text-warning' : ''}">${money(row.balance_amount)}</strong>` },
         { label: 'Quá hạn', render: row => overdueCell(row) },
+        { label: 'Số hóa đơn quá hạn', render: row => money(row.overdue_count) },
         { label: 'Trạng thái', render: row => receivableBadge(row.status) },
     ], rows, 'Chưa có dữ liệu công nợ');
 }
@@ -99,7 +99,7 @@ function restoreFilters() {
 
 function overdueCell(row) {
     if (Number(row.overdue_amount || 0) <= 0) return '-';
-    return `<strong class="text-danger">${money(row.overdue_amount)}</strong><span class="muted-line">${row.overdue_count || 0} hóa đơn</span>`;
+    return `<strong class="text-danger">${money(row.overdue_amount)}</strong>`;
 }
 
 function receivableBadge(status) {
