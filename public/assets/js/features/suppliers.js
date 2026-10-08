@@ -23,7 +23,7 @@ document.addEventListener('click', (event) => {
         event.stopPropagation();
         openSupplierModal(Number(event.target.dataset.editSupplier));
     }
-    if (event.target.closest('.row-action-menu')) return;
+    if (event.target.closest('.row-action-menu') && !event.target.closest('[data-supplier-detail]')) return;
     const detail = event.target.closest('[data-supplier-detail], tr[data-row-detail]');
     if (detail) openSupplierDetail(detail.dataset.supplierDetail || detail.dataset.rowDetail);
 });

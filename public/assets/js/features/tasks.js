@@ -107,9 +107,9 @@ document.addEventListener('click', (event) => {
         return;
     }
 
-    if (event.target.matches('[data-task-detail]')) {
+    if (event.target.closest('[data-task-detail]')) {
         event.stopPropagation();
-        openTaskDetail(event.target.dataset.taskDetail);
+        openTaskDetail(event.target.closest('[data-task-detail]').dataset.taskDetail);
         return;
     }
 

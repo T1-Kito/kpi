@@ -44,7 +44,7 @@ document.addEventListener('click', (event) => {
         event.stopPropagation();
         downloadSalesOrderWord(event.target.dataset.salesOrderWord);
     }
-    if (event.target.closest('.row-action-menu')) return;
+    if (event.target.closest('.row-action-menu') && !event.target.closest('[data-sales-order-detail]')) return;
     const detail = event.target.closest('[data-sales-order-detail], tr[data-row-detail]');
     if (detail) openSalesOrderDetail(detail.dataset.salesOrderDetail || detail.dataset.rowDetail);
 });

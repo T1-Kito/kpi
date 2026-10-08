@@ -27,7 +27,7 @@ document.addEventListener('click', (event) => {
         event.stopPropagation();
         approvePurchaseRequest(event.target.dataset.approvePurchaseRequest);
     }
-    if (event.target.closest('.row-action-menu')) return;
+    if (event.target.closest('.row-action-menu') && !event.target.closest('[data-purchase-request-detail]')) return;
     const detail = event.target.closest('[data-purchase-request-detail], tr[data-row-detail]');
     if (detail) openPurchaseRequestDetail(detail.dataset.purchaseRequestDetail || detail.dataset.rowDetail);
 });

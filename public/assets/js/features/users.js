@@ -22,9 +22,9 @@ document.addEventListener('click', (event) => {
     if (event.target.matches('[data-update-user-organization]')) openUserOrganizationModal(Number(event.target.dataset.updateUserOrganization));
     if (event.target.matches('[data-sync-user-roles]')) openRoleAssignModal(Number(event.target.dataset.syncUserRoles));
     if (event.target.matches('[data-user-status]')) updateUserStatus(event.target.dataset.userStatus, event.target.dataset.active === '1');
-    if (event.target.closest('.row-action-menu')) return;
+    if (event.target.closest('.row-action-menu') && !event.target.closest('[data-user-detail]')) return;
     const detail = event.target.closest('[data-user-detail], tr[data-row-detail]');
-    if (detail && !event.target.closest('button')) openUserDetail(detail.dataset.userDetail || detail.dataset.rowDetail);
+    if (detail && (event.target.closest('[data-user-detail]') || !event.target.closest('button'))) openUserDetail(detail.dataset.userDetail || detail.dataset.rowDetail);
 });
 
 async function loadUsers() {

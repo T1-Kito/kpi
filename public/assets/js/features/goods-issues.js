@@ -28,7 +28,7 @@ document.addEventListener('click', (event) => {
         event.stopPropagation();
         confirmGoodsIssue(event.target.dataset.confirmGoodsIssue);
     }
-    if (event.target.closest('.row-action-menu')) return;
+    if (event.target.closest('.row-action-menu') && !event.target.closest('[data-goods-issue-detail]')) return;
     const detail = event.target.closest('[data-goods-issue-detail], tr[data-row-detail]');
     if (detail) openGoodsIssueDetail(detail.dataset.goodsIssueDetail || detail.dataset.rowDetail);
 });

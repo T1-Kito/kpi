@@ -26,7 +26,7 @@ document.addEventListener('click', (event) => {
         event.stopPropagation();
         openSkuModal(Number(event.target.dataset.editSku));
     }
-    if (event.target.closest('.row-action-menu')) return;
+    if (event.target.closest('.row-action-menu') && !event.target.closest('[data-sku-detail]')) return;
     const detail = event.target.closest('[data-sku-detail], tr[data-row-detail]');
     if (detail) openSkuDetail(detail.dataset.skuDetail || detail.dataset.rowDetail);
 });

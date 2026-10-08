@@ -65,7 +65,7 @@ document.addEventListener('click', (event) => {
         event.stopPropagation();
         openCustomerModal(Number(event.target.dataset.editCustomer));
     }
-    if (event.target.closest('.row-action-menu')) return;
+    if (event.target.closest('.row-action-menu') && !event.target.closest('[data-customer-detail]')) return;
     const detail = event.target.closest('[data-customer-detail], tr[data-row-detail]');
     if (detail) openCustomerDetail(detail.dataset.customerDetail || detail.dataset.rowDetail);
 });

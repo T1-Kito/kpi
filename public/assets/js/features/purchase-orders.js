@@ -29,7 +29,7 @@ document.addEventListener('click', (event) => {
         event.stopPropagation();
         approvePurchaseOrder(event.target.dataset.approvePurchaseOrder);
     }
-    if (event.target.closest('.row-action-menu')) return;
+    if (event.target.closest('.row-action-menu') && !event.target.closest('[data-purchase-order-detail]')) return;
     const detail = event.target.closest('[data-purchase-order-detail], tr[data-row-detail]');
     if (detail) openPurchaseOrderDetail(detail.dataset.purchaseOrderDetail || detail.dataset.rowDetail);
 });

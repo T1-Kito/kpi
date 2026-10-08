@@ -170,7 +170,7 @@ document.addEventListener('click', (event) => {
         document.querySelectorAll('[data-select-print-template]').forEach(item => item.classList.remove('active'));
         printTemplate.classList.add('active');
     }
-    if (event.target.closest('.row-action-menu')) return;
+    if (event.target.closest('.row-action-menu') && !event.target.closest('[data-quotation-detail]')) return;
     const detail = event.target.closest('[data-quotation-detail], tr[data-row-detail]');
     if (detail) openQuotationDetail(detail.dataset.quotationDetail || detail.dataset.rowDetail);
 });

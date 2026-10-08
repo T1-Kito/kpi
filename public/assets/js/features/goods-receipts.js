@@ -24,7 +24,7 @@ document.addEventListener('click', (event) => {
         event.stopPropagation();
         confirmGoodsReceipt(event.target.dataset.confirmGoodsReceipt);
     }
-    if (event.target.closest('.row-action-menu')) return;
+    if (event.target.closest('.row-action-menu') && !event.target.closest('[data-goods-receipt-detail]')) return;
     const detail = event.target.closest('[data-goods-receipt-detail], tr[data-row-detail]');
     if (detail) openGoodsReceiptDetail(detail.dataset.goodsReceiptDetail || detail.dataset.rowDetail);
 });
