@@ -5,11 +5,15 @@
         const root = document.getElementById('customerContactsRoot');
         if (!root) return;
         const version = ++sequence;
+        if (!root.querySelector('[data-contact-search]')) {
+            root.innerHTML = VKTable.fullList({title:'Người liên hệ',subtitle:'Một khách hàng có thể có nhiều đầu mối; liên hệ chính được đánh dấu riêng.',meta:'Đang tải…',filters:`<div class="field"><input data-contact-search placeholder="Tìm tên, điện thoại, email hoặc khách hàng…" value="${esc(query)}"></div>`,table:'<div data-contact-results></div>'}) + '<div data-contact-pagination></div>';
+        }
         try {
             const response = await VKApi.request(`/customer-contacts?page=${page}&q=${encodeURIComponent(query)}`);
             if (version !== sequence || document.getElementById('customerContactsRoot') !== root) return;
             rows = response.data;
-            root.innerHTML = VKTable.fullList({title:'Người liên hệ',subtitle:'Một khách hàng có thể có nhiều đầu mối; liên hệ chính được đánh dấu riêng.',meta:`${VKTable.money(response.meta.total)} người liên hệ`,filters:`<div class="field"><input data-contact-search placeholder="Tìm tên, điện thoại, email hoặc khách hàng…" value="${esc(query)}"></div>`,table:VKTable.renderTable([
+            root.querySelector('.list-meta').textContent = `${VKTable.money(response.meta.total)} người liên hệ`;
+            root.querySelector('[data-contact-results]').innerHTML = VKTable.renderTable([
                 {label:'Họ tên',render:row => `<span class="customer-name-accent">${esc(row.name) || '—'}</span>`},
                 {label:'Loại liên hệ',render:row => row.is_primary ? '<span class="badge success">Liên hệ chính</span>' : 'Thông thường'},
                 {label:'Mã khách hàng',render:row => `<a class="mono customer-code-accent" href="/customers?open=${encodeURIComponent(row.customer_id)}">${esc(row.customer?.code)}</a>`},
@@ -18,12 +22,19 @@
                 {label:'Điện thoại',render:row => esc(row.phone) || '—'},
                 {label:'Email',render:row => esc(row.email) || '—'},
                 {label:'',render:row => VKLayout.hasPermission('master.manage') ? `<button class="btn secondary small" data-edit-contact="${row.id}">Chỉnh sửa</button>` : ''}
-            ],rows,'Chưa có người liên hệ phù hợp.')}) + `<div class="button-row" style="margin-top:16px"><button class="btn secondary small" data-contact-page="${page-1}" ${page <= 1 ? 'disabled' : ''}>Trước</button><span>Trang ${page} / ${response.meta.last_page}</span><button class="btn secondary small" data-contact-page="${page+1}" ${page >= response.meta.last_page ? 'disabled' : ''}>Sau</button></div>`;
-        } catch(error) { if (version === sequence) root.innerHTML = `<div class="empty"><strong>Không tải được người liên hệ</strong><span>${esc(error.message)}</span><button class="btn secondary" data-contact-retry>Thử lại</button></div>`; }
+            ],rows,'Chưa có người liên hệ phù hợp.');
+            root.querySelector('[data-contact-pagination]').innerHTML = `<div class="button-row" style="margin-top:16px"><button class="btn secondary small" data-contact-page="${page-1}" ${page <= 1 ? 'disabled' : ''}>Trước</button><span>Trang ${page} / ${response.meta.last_page}</span><button class="btn secondary small" data-contact-page="${page+1}" ${page >= response.meta.last_page ? 'disabled' : ''}>Sau</button></div>`;
+        } catch(error) {
+            if (version !== sequence || document.getElementById('customerContactsRoot') !== root) return;
+            root.querySelector('.list-meta').textContent = 'Không tải được kết quả';
+            root.querySelector('[data-contact-results]').innerHTML = `<div class="empty"><strong>Không tải được người liên hệ</strong><span>${esc(error.message)}</span><button class="btn secondary" data-contact-retry>Thử lại</button></div>`;
+            root.querySelector('[data-contact-pagination]').innerHTML = '';
+        }
     };
     document.addEventListener('input', event => {
         if (!event.target.matches('[data-contact-search]')) return;
         query = event.target.value; page = 1; clearTimeout(timer);
+        ++sequence;
         timer = setTimeout(window.loadCustomerContacts,400);
     });
     document.addEventListener('click', event => {

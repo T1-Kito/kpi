@@ -10,5 +10,5 @@
 <div id="customerContactsRoot"></div>
 @endsection
 @push('scripts')
-<script src="/assets/js/features/customer-contacts.js?v=20261008-1"></script>
+<script src="/assets/js/features/customer-contacts.js?v=20261009-1"></script>
 @endpush
