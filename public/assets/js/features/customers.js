@@ -209,11 +209,11 @@ async function openCustomerModal(id = null, readOnly = false, asPage = false) {
             <section class="quick-customer-section">
                 <h4><span aria-hidden="true">${customerFormIcon('user')}</span>Thông tin khách hàng</h4>
                 <div class="quick-customer-grid">
-                    ${customerField('legal_representative', 'Người đại diện pháp luật', 'text', row?.legal_representative || '', 'ĐD')}
+                    <div data-customer-business-field>${customerField('legal_representative', 'Người đại diện pháp luật', 'text', row?.legal_representative || '', 'ĐD')}</div>
                     ${customerField('name', 'Tên khách hàng / tổ chức', 'text', row?.name || '', 'CT')}
                     ${customerSelect('customer_type', 'Loại khách hàng', [
                         { value: 'organization', label: 'Tổ chức / doanh nghiệp' },
-                        { value: 'person', label: 'Cá nhân / khách lẻ' },
+                        { value: 'person', label: 'Cá nhân / khách lẻ / vãng lai' },
                     ], row?.customer_type || 'organization', 'KH')}
                     <div class="customer-primary-combo" data-primary-contact-picker>
                         ${customerField('contact_name', 'Người liên hệ chính (nếu là tổ chức)', 'text', row?.contact_name || '', 'KH')}
@@ -227,6 +227,7 @@ async function openCustomerModal(id = null, readOnly = false, asPage = false) {
                         { value: 'active', label: 'Hoạt động' },
                         { value: 'inactive', label: 'Không hoạt động' },
                     ], row?.status || 'active', 'TT')}
+                    <div data-customer-business-field>${customerField('representative_position', 'Chức vụ đại diện', 'text', row?.representative_position || '', 'CV')}</div>
                     ${customerField('address', 'Địa chỉ liên hệ', 'text', row?.address || '', 'DC', true)}
                 </div>
             </section>
@@ -235,7 +236,6 @@ async function openCustomerModal(id = null, readOnly = false, asPage = false) {
                 <div class="quick-customer-grid">
                     <div data-customer-tax-field>${customerField('tax_code', 'Mã số thuế', 'text', row?.tax_code || '', 'MST')}</div>
                     <div data-customer-identity-field>${customerField('identity_number', 'Số CCCD', 'text', row?.identity_number || '', 'CCCD')}</div>
-                    ${customerField('representative_position', 'Chức vụ đại diện', 'text', row?.representative_position || '', 'CV', true)}
                     ${customerField('billing_address', 'Địa chỉ xuất hóa đơn', 'text', row?.billing_address || '', 'DC', true)}
                 </div>
             </section>
@@ -288,6 +288,7 @@ async function openCustomerModal(id = null, readOnly = false, asPage = false) {
     bindCustomerPrimaryContactPicker(document.getElementById('modalBody'), row?.contacts || [], readOnly);
     const syncIdentityField = () => {
         const person = typeSelect?.value === 'person';
+        syncCustomerBusinessFields(document.getElementById('modalBody'), person, readOnly);
         const pickerField = document.querySelector('#modalBody [data-primary-contact-picker]');
         if (pickerField) {
             pickerField.hidden = person;
@@ -334,6 +335,13 @@ async function openCustomerModal(id = null, readOnly = false, asPage = false) {
             customerState.view = 'detail';
         }
     }
+}
+
+function syncCustomerBusinessFields(body, person, readOnly) {
+    body.querySelectorAll('[data-customer-business-field]').forEach(field => {
+        field.hidden = person;
+        field.querySelectorAll('input').forEach(input => { input.disabled = person || readOnly; });
+    });
 }
 
 function bindCustomerPrimaryContactPicker(body, contacts, readOnly) {

@@ -32,6 +32,30 @@ test('legal representative precedes customer name and appears once in the form',
     assert.equal((form.match(/customerField\('legal_representative'/g) || []).length, 1);
     assert.ok(!form.includes('Gán người liên hệ có sẵn'));
 });
+
+test('representative position appears once in the upper customer section', () => {
+    const form = source.slice(source.indexOf('async function openCustomerModal('), source.indexOf('function syncCustomerBusinessFields('));
+    assert.equal((form.match(/customerField\('representative_position'/g) || []).length, 1);
+    assert.ok(form.indexOf("customerField('representative_position'") < form.indexOf('Thông tin xuất hóa đơn'));
+    assert.match(form, /Cá nhân \/ khách lẻ \/ vãng lai/);
+});
+
+test('business fields are hidden and excluded from submission for individual customers', () => {
+    const inputs = [{ value: 'Giám đốc' }, { value: 'Nguyễn An' }];
+    const fields = inputs.map(input => ({ querySelectorAll: () => [input] }));
+    const body = { querySelectorAll: () => fields };
+    const context = vm.createContext({});
+    vm.runInContext(source.slice(source.indexOf('function syncCustomerBusinessFields('), source.indexOf('function bindCustomerPrimaryContactPicker(')), context);
+    context.syncCustomerBusinessFields(body, true, false);
+    assert.ok(fields.every(field => field.hidden));
+    assert.ok(inputs.every(input => input.disabled));
+    context.syncCustomerBusinessFields(body, false, false);
+    assert.ok(fields.every(field => !field.hidden));
+    assert.ok(inputs.every(input => !input.disabled));
+    assert.equal(inputs[0].value, 'Giám đốc');
+    context.syncCustomerBusinessFields(body, false, true);
+    assert.ok(inputs.every(input => input.disabled));
+});
 test('dropdown opens all contacts and filters by phone or email', () => {
     const s = setup();
     s.input.listeners.focus();
