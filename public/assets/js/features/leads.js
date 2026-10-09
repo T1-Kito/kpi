@@ -1,12 +1,14 @@
 (function () {
 let leadState = { rows: [], q: '', status: '', scope: 'all', page: 1, total: 0, stats: {}, detail: null, detailTab: 'overview' };
 let leadSearchTimer;
+let leadLoadSequence = 0;
 
 document.addEventListener('vk:ready', () => loadLeads());
 document.addEventListener('input', (event) => {
     if (!document.getElementById('leadsRoot')) return;
     if (event.target.matches('[data-list-search]')) {
         leadState.q = event.target.value;
+        ++leadLoadSequence;
         clearTimeout(leadSearchTimer);
         leadSearchTimer = setTimeout(() => { leadState.page = 1; loadLeads(); }, 280);
     }
@@ -45,16 +47,23 @@ document.addEventListener('click', (event) => {
 async function loadLeads() {
     const root = document.getElementById('leadsRoot');
     if (!root) return;
+    const version = ++leadLoadSequence;
     try {
         const query = new URLSearchParams({ page: String(leadState.page), page_size: '20', scope: leadState.scope });
         if (leadState.q) query.set('q', leadState.q);
         if (leadState.status) query.set('status', leadState.status);
         const leads = await VKApi.request(`/leads?${query}`, { cache: false });
+        if (version !== leadLoadSequence || document.getElementById('leadsRoot') !== root) return;
         leadState.rows = leads.data || [];
         leadState.total = leads.meta?.total || 0;
         leadState.stats = leads.meta?.stats || {};
         renderLeads();
     } catch (error) {
+        if (version !== leadLoadSequence || document.getElementById('leadsRoot') !== root) return;
+        if (root.querySelector('[data-list-search]')) {
+            VKModal.toast(error.message || 'Không tải được kết quả. Bạn có thể tìm lại.');
+            return;
+        }
         root.innerHTML = `<section class="list-page"><div class="empty"><strong>Không tải được khách hàng tiềm năng</strong><span>${VKTable.escapeHtml(error.message || 'Vui lòng thử lại.')}</span><button class="btn small" type="button" data-retry-leads>Thử lại</button></div></section>`;
     }
 }
@@ -64,7 +73,7 @@ function renderLeads() {
     const rows = leadState.rows;
     const stats = leadState.stats;
     const canQueue = window.VKUser?.data_scope === 'company';
-    document.getElementById('leadsRoot').innerHTML = `<div class="lead-workbench">
+    VKTable.updateList(document.getElementById('leadsRoot'), `<div class="lead-workbench">
         <div class="lead-overview">
             ${leadMetric('Tất cả lead', stats.all || 0, 'Hồ sơ trong phạm vi của bạn', 'blue')}
             ${leadMetric('Của tôi', stats.mine || 0, 'Đang được giao', 'green')}
@@ -88,7 +97,7 @@ function renderLeads() {
             ],
         }),
         table: renderLeadTable(rows),
-    }) + `<div class="lead-pagination"><button class="btn small" type="button" data-lead-page="${leadState.page - 1}" ${leadState.page <= 1 ? 'disabled' : ''}>← Trước</button><span>Trang ${leadState.page} / ${Math.max(1, Math.ceil(leadState.total / 20))}</span><button class="btn small" type="button" data-lead-page="${leadState.page + 1}" ${leadState.page * 20 >= leadState.total ? 'disabled' : ''}>Sau →</button></div>`;
+    }) + `<div class="lead-pagination"><button class="btn small" type="button" data-lead-page="${leadState.page - 1}" ${leadState.page <= 1 ? 'disabled' : ''}>← Trước</button><span>Trang ${leadState.page} / ${Math.max(1, Math.ceil(leadState.total / 20))}</span><button class="btn small" type="button" data-lead-page="${leadState.page + 1}" ${leadState.page * 20 >= leadState.total ? 'disabled' : ''}>Sau →</button></div>`);
     restoreFilters();
 }
 
@@ -163,12 +172,13 @@ async function openLeadModal() {
                 { value: 'referral', label: 'Giới thiệu' }, { value: 'walk_in', label: 'Khách trực tiếp' },
                 { value: 'campaign', label: 'Chiến dịch' },
             ])}
-            ${VKModal.field('campaign_code', 'Mã chiến dịch')}
-            ${VKModal.select('assigned_to', 'Nhân viên phụ trách', canAssignOthers ? [{ value: '', label: 'Để trong hàng chờ chưa phân công' }, ...(users.data || []).map(user => ({ value: user.id, label: user.name }))] : [{ value: me.data.id, label: me.data.name }])}
+            ${VKModal.select('assigned_to', 'Nhân viên phụ trách', canAssignOthers ? [{ value: '', label: 'Tự phân công theo cấu hình; chưa có thì vào hàng chờ' }, ...(users.data || []).map(user => ({ value: user.id, label: user.name }))] : [{ value: me.data.id, label: me.data.name }])}
         </div>
+        <details class="crm-optional-fields"><summary>Thông tin chiến dịch (không bắt buộc)</summary>${VKModal.field('campaign_code', 'Mã chiến dịch')}</details>
+        <p class="crm-auto-note">Mã hồ sơ tự sinh. Khi có người phụ trách, hệ thống tự tạo việc chăm sóc và đặt hạn theo cấu hình SLA.</p>
     `, async (form) => {
-        await VKApi.request('/leads', { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(form))) });
-        VKModal.toast('Đã tạo khách hàng tiềm năng và công việc chăm sóc.');
+        const response = await VKApi.request('/leads', { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(form))) });
+        VKModal.toast(response.data.assigned_to ? 'Đã tạo hồ sơ, phân công và tạo việc chăm sóc.' : 'Đã tạo hồ sơ trong hàng chờ phân công.');
         VKModal.close();
         loadLeads();
     });
@@ -192,6 +202,7 @@ async function openAssignLeadModal(id) {
 }
 
 async function openLeadDetail(id) {
+    ++leadLoadSequence;
     const root = document.getElementById('leadsRoot');
     root.innerHTML = '<div class="customer360-loading">Đang tải hồ sơ khách hàng tiềm năng…</div>';
     try {
@@ -282,20 +293,29 @@ async function openQualifyModal(id) {
         } while ((page - 1) * 100 < total);
     } catch (error) { VKModal.toast(error.message || 'Không tải được khách hàng.'); return; }
     VKModal.open('Chuyển thành khách hàng & cơ hội', `
-        <p class="modal-intro">Hệ thống sẽ dùng khách hàng trùng số điện thoại nếu đã có; nếu chưa có thì tự tạo khách hàng mới và mở một cơ hội bán hàng.</p>
+        <div class="crm-conversion-summary"><span>Khách hàng tiềm năng → Khách hàng → Cơ hội</span><strong>${VKTable.escapeHtml(lead.name)}</strong><small>${VKTable.escapeHtml([lead.phone, lead.email].filter(Boolean).join(' · '))}</small></div>
+        <p class="crm-auto-note">Tự tìm khách hàng theo điện thoại/email, giữ nguồn và người phụ trách, hoàn tất việc chăm sóc cũ và tạo việc tiếp theo theo SLA. Nếu khớp nhiều khách hàng, hệ thống yêu cầu chọn lại, không tự gộp.</p>
         <div class="form-grid">
-            ${VKModal.select('customer_id', 'Liên kết khách hàng', [{value:'',label:'Tự tìm theo điện thoại/email; chưa có thì tạo mới'}, ...customers.map(customer => ({value:customer.id,label:customer.name}))], lead.customer_id || '')}
             ${VKModal.select('customer_type', 'Loại khách hàng mới', [{value:'person',label:'Cá nhân / khách lẻ'},{value:'organization',label:'Tổ chức / doanh nghiệp'}], 'person')}
             ${VKModal.field('customer_name', 'Tên khách hàng', 'text', lead.name)}
+        </div>
+        <details class="crm-optional-fields"><summary>Tùy chỉnh cơ hội và liên kết khách hàng (không bắt buộc)</summary><div class="form-grid">
+            ${VKModal.select('customer_id', 'Liên kết khách hàng', [{value:'',label:'Tự tìm theo điện thoại/email; chưa có thì tạo mới'}, ...customers.map(customer => ({value:customer.id,label:`${customer.code} · ${customer.name}`}))], lead.customer_id || '')}
             ${VKModal.field('deal_name', 'Tên cơ hội', 'text', `Cơ hội từ ${lead.name}`)}
             ${VKModal.field('amount', 'Giá trị dự kiến', 'number', '0')}
             ${VKModal.field('expected_close_date', 'Ngày dự kiến chốt', 'date')}
             ${VKModal.field('next_activity_at', 'Lần chăm sóc tiếp theo', 'datetime-local')}
-        </div>
+        </div></details>
+        <label class="crm-auto-note"><input type="checkbox" data-open-created-deal checked> Mở cơ hội sau khi chuyển đổi để tiếp tục xử lý</label>
     `, async (form) => {
-        await VKApi.request(`/leads/${id}/qualify`, { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(form))) });
+        const openDeal = form.querySelector('[data-open-created-deal]')?.checked;
+        const response = await VKApi.request(`/leads/${id}/qualify`, { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(form))) });
         VKModal.toast('Đã liên kết khách hàng và tạo cơ hội bán hàng.');
         VKModal.close();
+        if (openDeal && response.data?.deal?.id) {
+            window.location.href = `/deals?open=${encodeURIComponent(response.data.deal.id)}`;
+            return;
+        }
         await loadLeads();
         await openLeadDetail(id);
     }, { submitText: 'Tạo cơ hội' });
@@ -307,6 +327,7 @@ async function openQualifyModal(id) {
         name.readOnly = Boolean(selected);
         type.disabled = Boolean(selected);
         if (selected) { name.value = selected.name; type.value = selected.customer_type; }
+        else { name.value = lead.name; type.value = 'person'; }
     };
     customerSelect.addEventListener('change', syncCustomerChoice);
     syncCustomerChoice();

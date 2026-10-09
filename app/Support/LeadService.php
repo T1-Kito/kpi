@@ -143,13 +143,15 @@ class LeadService
                 'stage' => 'qualified',
             ]);
 
-            $this->tasks->create($actor, [
+            $followUp = $this->tasks->create($actor, [
                 'module' => 'sales', 'task_type' => 'deal_follow_up', 'priority' => 'normal',
                 'title' => 'Theo dõi cơ hội '.$deal->code,
                 'description' => 'Tiếp tục xử lý nhu cầu của '.$lead->name.' sau khi chuyển đổi khách hàng tiềm năng.',
                 'source_type' => 'Deal', 'source_id' => $deal->id,
                 'assignee_id' => $deal->owner_id, 'due_at' => $data['next_activity_at'] ?? null,
             ]);
+            // Use the task's SLA-derived deadline when no manual date was supplied.
+            $deal->update(['next_activity_at' => $followUp->due_at]);
 
             $this->audit->record('lead', $lead->id, 'qualify_lead', $actor, $old, $lead->fresh()->only(['status', 'customer_id']));
             $this->events->publish($lead->tenant_id, 'LeadQualified', 'Lead', $lead->id, ['customer_id' => $customer->id, 'deal_id' => $deal->id]);

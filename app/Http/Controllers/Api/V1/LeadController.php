@@ -54,7 +54,8 @@ class LeadController extends Controller
             $query->where(fn ($q) => $q
                 ->where('code', 'like', "%{$search}%")
                 ->orWhere('name', 'like', "%{$search}%")
-                ->orWhere('phone', 'like', "%{$search}%"));
+                ->orWhere('phone', 'like', "%{$search}%")
+                ->orWhere('email', 'like', "%{$search}%"));
         }
 
         $leads = $query->latest('id')->paginate($pageSize);

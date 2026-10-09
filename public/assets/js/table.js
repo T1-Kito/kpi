@@ -329,6 +329,32 @@
         `;
     }
 
+    function updateList(root, html) {
+        const current = root.querySelector('.list-page');
+        const filter = current?.querySelector('.list-filter');
+        const template = document.createElement('template');
+        template.innerHTML = html;
+        const incoming = template.content.querySelector('.list-page');
+        const newFilter = incoming?.querySelector('.list-filter');
+        if (!current || !filter || !incoming || !newFilter) {
+            root.innerHTML = html;
+            return;
+        }
+        // Never detach the focused filter: only replace its surrounding content.
+        for (const child of [...current.children]) if (child !== filter) child.remove();
+        let before = true;
+        for (const child of [...incoming.children]) {
+            if (child === newFilter) { before = false; continue; }
+            current.insertBefore(child, before ? filter : null);
+        }
+        for (const child of [...root.children]) if (child !== current) child.remove();
+        before = true;
+        for (const child of [...template.content.children]) {
+            if (child === incoming) { before = false; continue; }
+            root.insertBefore(child, before ? current : null);
+        }
+    }
+
     function rowActions(items) {
         const actions = items.filter(Boolean);
         if (!actions.length) return '';
@@ -359,6 +385,7 @@
         translateAction,
         filterBar,
         fullList,
+        updateList,
         rowActions,
         smallButton,
     };

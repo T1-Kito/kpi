@@ -50,7 +50,7 @@ function renderDeals(total = dealState.rows.length) {
         return (!dealState.q || text.includes(dealState.q)) && (!dealState.stage || row.stage === dealState.stage);
     });
     const stages = Object.keys(dealState.stages).map(key => ({ value: key, label: stageLabel(key) }));
-    document.getElementById('dealsRoot').innerHTML = VKTable.fullList({
+    VKTable.updateList(document.getElementById('dealsRoot'), VKTable.fullList({
         title: 'Danh sách cơ hội bán hàng',
         subtitle: 'Mỗi cơ hội có người phụ trách, giá trị dự kiến, giai đoạn và bước tiếp theo.',
         meta: `${VKTable.money(rows.length)} / ${VKTable.money(total)} cơ hội`,
@@ -71,8 +71,8 @@ function renderDeals(total = dealState.rows.length) {
                 VKTable.smallButton('Chuyển giai đoạn', `data-transition-deal="${row.id}"`, 'primary'),
             ].filter(Boolean)) : VKTable.statusBadge(row.status) },
         ], rows, 'Chưa có cơ hội bán hàng'),
-    });
-    const search = document.querySelector('[data-list-search]'); if (search) search.value = dealState.q;
+    }));
+    const search = document.querySelector('[data-list-search]'); if (search && document.activeElement !== search) search.value = dealState.q;
     const stage = document.querySelector('[data-deal-stage]'); if (stage) stage.value = dealState.stage;
 }
 

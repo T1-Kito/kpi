@@ -130,6 +130,12 @@ class TaskService
             ->orderByRaw("case priority when 'urgent' then 0 when 'high' then 1 when 'normal' then 2 else 3 end")
             ->first();
 
+        // Converted opportunities inherit the tenant's lead follow-up SLA unless
+        // a dedicated opportunity policy has been configured.
+        if (!$policy && $taskType === 'deal_follow_up') {
+            return $this->calculateDueAt($tenantId, $module, 'lead_follow_up', $priority);
+        }
+
         return $policy ? now()->addMinutes($policy->duration_minutes) : null;
     }
 }

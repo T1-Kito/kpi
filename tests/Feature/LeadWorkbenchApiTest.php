@@ -10,6 +10,22 @@ class LeadWorkbenchApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_lead_search_finds_email_without_exposing_other_owners(): void
+    {
+        $this->seed();
+        $admin = $this->loginAs('admin@vk-kpi.local');
+        $sales = $this->loginAs('sales@vk-kpi.local');
+        $salesId = $this->withToken($sales)->getJson('/api/v1/me')->json('data.id');
+        $mine = $this->withToken($admin)->postJson('/api/v1/leads', [
+            'name' => 'Email search mine', 'phone' => '0918877701', 'email' => 'unique-search@example.test', 'assigned_to' => $salesId,
+        ])->assertCreated()->json('data');
+        $this->withToken($admin)->postJson('/api/v1/leads', [
+            'name' => 'Email search private', 'phone' => '0918877702', 'email' => 'unique-search@example.test',
+        ])->assertCreated();
+        $this->withToken($sales)->getJson('/api/v1/leads?q=unique-search%40example.test')
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $mine['id']);
+    }
+
     public function test_admin_can_see_unassigned_queue_and_assign_with_follow_up_task(): void
     {
         $this->seed();

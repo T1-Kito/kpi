@@ -205,7 +205,7 @@ async function loadQuotations(options = {}) {
 
 function renderQuotations(total = quotationState.rows.length) {
     const rows = filterRows();
-    document.getElementById('quotationsRoot').innerHTML = VKTable.fullList({
+    VKTable.updateList(document.getElementById('quotationsRoot'), VKTable.fullList({
         title: 'Danh sách báo giá',
         subtitle: 'Theo dõi biên lợi nhuận, trạng thái duyệt và khả năng tạo đơn bán.',
         meta: `${VKTable.money(rows.length)} / ${VKTable.money(total)} báo giá`,
@@ -225,7 +225,7 @@ function renderQuotations(total = quotationState.rows.length) {
             ],
         }),
         table: renderQuotationTable(rows),
-    });
+    }));
     restoreFilters();
 }
 
@@ -259,7 +259,7 @@ function filterRows() {
 function restoreFilters() {
     const search = document.querySelector('[data-list-search]');
     const status = document.querySelector('[data-list-status]');
-    if (search) search.value = quotationState.q;
+    if (search && document.activeElement !== search) search.value = quotationState.q;
     if (status) status.value = quotationState.status;
 }
 

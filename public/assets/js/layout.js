@@ -35,11 +35,11 @@
 
     const features = {
         dashboard: ['dashboard.js?v=20261008-2', 'loadDashboard'],
-        leads: ['leads.js?v=20261008-2', 'loadLeads'],
-        deals: ['deals.js?v=20261005-1', 'loadDeals'],
+        leads: ['leads.js?v=20261009-flow1', 'loadLeads'],
+        deals: ['deals.js?v=20261009-flow1', 'loadDeals'],
         'sales-master-data': ['sales-master-data.js?v=20260923-1', 'loadSalesMasterData'],
         contracts: ['contracts.js?v=20260923-6', 'loadContracts'],
-        quotations: ['quotations.js?v=20261008-menu1', 'loadQuotations'],
+        quotations: ['quotations.js?v=20261009-flow1', 'loadQuotations'],
         'sales-orders': ['sales-orders.js?v=20261008-menu1', 'loadSalesOrders'],
         deliveries: ['sales-fulfillment.js?v=20260618-1', 'loadDeliveries'],
         'sales-invoices': ['sales-fulfillment.js?v=20260618-1', 'loadSalesInvoices'],

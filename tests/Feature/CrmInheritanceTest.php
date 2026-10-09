@@ -44,6 +44,48 @@ class CrmInheritanceTest extends TestCase
         $this->assertSame($customer->id, $service->qualify($lead, $actor, [])['customer']->id);
     }
 
+    public function test_conversion_sets_next_activity_from_generated_follow_up_without_manual_date(): void
+    {
+        $this->seed();
+        $actor = User::where('email', 'sales@vk-kpi.local')->firstOrFail();
+        $service = app(LeadService::class);
+        $lead = $service->create($actor, ['name' => 'Automatic follow up', 'phone' => '0918877665', 'assigned_to' => $actor->id]);
+        $result = $service->qualify($lead, $actor, []);
+        $task = \App\Models\Task::where('source_type', 'Deal')->where('source_id', $result['deal']->id)->firstOrFail();
+        $this->assertNotNull($result['deal']->next_activity_at);
+        $this->assertTrue($task->due_at->equalTo($result['deal']->next_activity_at));
+        $this->assertSame($actor->id, $task->assignee_id);
+        $duration = \App\Models\SlaPolicy::where('tenant_id', $actor->tenant_id)->where('task_type', 'lead_follow_up')->where('priority', 'normal')->value('duration_minutes');
+        $this->assertEqualsWithDelta($duration, now()->diffInMinutes($task->due_at), 1);
+        $again = $service->qualify($lead, $actor, []);
+        $this->assertSame($result['deal']->id, $again['deal']->id);
+        $this->assertSame(1, \App\Models\Task::where('source_type', 'Deal')->where('source_id', $result['deal']->id)->count());
+    }
+
+    public function test_conversion_keeps_explicit_follow_up_date_on_task_and_deal(): void
+    {
+        $this->seed();
+        $actor = User::where('email', 'sales@vk-kpi.local')->firstOrFail();
+        $service = app(LeadService::class);
+        $lead = $service->create($actor, ['name' => 'Explicit follow up', 'phone' => '0918877666']);
+        $due = now()->addDays(3)->startOfMinute();
+        $result = $service->qualify($lead, $actor, ['next_activity_at' => $due->toDateTimeString()]);
+        $task = \App\Models\Task::where('source_type', 'Deal')->where('source_id', $result['deal']->id)->firstOrFail();
+        $this->assertTrue($due->equalTo($result['deal']->next_activity_at));
+        $this->assertTrue($due->equalTo($task->due_at));
+    }
+
+    public function test_dedicated_opportunity_sla_takes_priority_over_lead_sla(): void
+    {
+        $this->seed();
+        $actor = User::where('email', 'sales@vk-kpi.local')->firstOrFail();
+        \App\Models\SlaPolicy::create(['tenant_id' => $actor->tenant_id, 'module' => 'sales', 'task_type' => 'deal_follow_up', 'priority' => 'normal', 'duration_minutes' => 90, 'warning_before_minutes' => 15]);
+        $service = app(LeadService::class);
+        $lead = $service->create($actor, ['name' => 'Custom SLA', 'phone' => '0918877667']);
+        $result = $service->qualify($lead, $actor, []);
+        $this->assertEqualsWithDelta(90, now()->diffInMinutes($result['deal']->next_activity_at), 1);
+    }
+
     public function test_pipeline_uses_master_probability_and_rejects_inactive_stage(): void
     {
         $this->seed();
