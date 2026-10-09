@@ -45,7 +45,7 @@
         'sales-invoices': ['sales-fulfillment.js?v=20260618-1', 'loadSalesInvoices'],
         'customer-receivables': ['customer-receivables.js?v=20260617-1', 'loadCustomerReceivables'],
         'customer-payments': ['sales-fulfillment.js?v=20260618-1', 'loadCustomerPayments'],
-        customers: ['customers.js?v=20261008-menu1', 'loadCustomers'],
+        customers: ['customers.js?v=20261009-contacts1', 'loadCustomers'],
         'customer-contacts': ['customer-contacts.js?v=20261009-1', 'loadCustomerContacts'],
         suppliers: ['suppliers.js?v=20261008-menu1', 'loadSuppliers'],
         skus: ['skus.js?v=20261008-menu1', 'loadSkus'],

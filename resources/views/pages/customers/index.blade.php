@@ -14,5 +14,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/customers.js?v=20261008-menu1"></script>
+<script src="/assets/js/features/customers.js?v=20261009-contacts1"></script>
 @endpush

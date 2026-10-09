@@ -209,13 +209,18 @@ async function openCustomerModal(id = null, readOnly = false, asPage = false) {
             <section class="quick-customer-section">
                 <h4><span aria-hidden="true">${customerFormIcon('user')}</span>Thông tin khách hàng</h4>
                 <div class="quick-customer-grid">
-                    ${id && !readOnly ? `<div data-primary-contact-picker>${customerSelect('primary_contact_id', 'Gán người liên hệ có sẵn', [{value:'',label:'Giữ liên hệ chính / sửa thông tin bên dưới'}, ...(row?.contacts || []).map(contact => ({value:contact.id,label:contact.name}))], '', 'KH')}</div>` : ''}
+                    ${customerField('legal_representative', 'Người đại diện pháp luật', 'text', row?.legal_representative || '', 'ĐD')}
                     ${customerField('name', 'Tên khách hàng / tổ chức', 'text', row?.name || '', 'CT')}
                     ${customerSelect('customer_type', 'Loại khách hàng', [
                         { value: 'organization', label: 'Tổ chức / doanh nghiệp' },
                         { value: 'person', label: 'Cá nhân / khách lẻ' },
                     ], row?.customer_type || 'organization', 'KH')}
-                    ${customerField('contact_name', 'Người liên hệ chính (nếu là tổ chức)', 'text', row?.contact_name || '', 'KH')}
+                    <div class="customer-primary-combo" data-primary-contact-picker>
+                        ${customerField('contact_name', 'Người liên hệ chính (nếu là tổ chức)', 'text', row?.contact_name || '', 'KH')}
+                        <input type="hidden" name="primary_contact_id" value="">
+                        <button type="button" class="customer-contact-toggle" aria-label="Chọn người liên hệ chính" aria-expanded="false">▾</button>
+                        <div class="customer-contact-options" role="listbox" id="customerPrimaryContacts" hidden></div>
+                    </div>
                     ${customerField('phone', 'Số điện thoại', 'text', row?.phone || '', 'SDT')}
                     ${customerField('email', 'Email', 'email', row?.email || '', '@')}
                     ${customerSelect('status', 'Trạng thái', [
@@ -230,7 +235,6 @@ async function openCustomerModal(id = null, readOnly = false, asPage = false) {
                 <div class="quick-customer-grid">
                     <div data-customer-tax-field>${customerField('tax_code', 'Mã số thuế', 'text', row?.tax_code || '', 'MST')}</div>
                     <div data-customer-identity-field>${customerField('identity_number', 'Số CCCD', 'text', row?.identity_number || '', 'CCCD')}</div>
-                    ${customerField('legal_representative', 'Người đại diện pháp luật', 'text', row?.legal_representative || '', 'ĐD')}
                     ${customerField('representative_position', 'Chức vụ đại diện', 'text', row?.representative_position || '', 'CV', true)}
                     ${customerField('billing_address', 'Địa chỉ xuất hóa đơn', 'text', row?.billing_address || '', 'DC', true)}
                 </div>
@@ -281,18 +285,18 @@ async function openCustomerModal(id = null, readOnly = false, asPage = false) {
     document.getElementById('modalSubmit').innerHTML = `${customerFormIcon('save')}<span>${id ? 'Cập nhật' : 'Lưu khách hàng'}</span>`;
     const typeSelect = document.querySelector('#modalBody [name="customer_type"]');
     const contactPicker = document.querySelector('#modalBody [name="primary_contact_id"]');
-    contactPicker?.addEventListener('change', () => {
-        const selected = (row?.contacts || []).find(contact => String(contact.id) === contactPicker.value);
-        ['contact_name', 'phone', 'email'].forEach(name => {
-            const input = document.querySelector(`#modalBody [name="${name}"]`);
-            if (selected) input.value = selected[name === 'contact_name' ? 'name' : name] || '';
-            input.readOnly = Boolean(selected);
-        });
-    });
+    bindCustomerPrimaryContactPicker(document.getElementById('modalBody'), row?.contacts || [], readOnly);
     const syncIdentityField = () => {
         const person = typeSelect?.value === 'person';
         const pickerField = document.querySelector('#modalBody [data-primary-contact-picker]');
-        if (pickerField) { pickerField.hidden = person; contactPicker.disabled = person; }
+        if (pickerField) {
+            pickerField.hidden = person;
+            pickerField.querySelectorAll('input, button').forEach(input => { input.disabled = person || readOnly; });
+            if (person) {
+                pickerField.querySelector('.customer-contact-options').hidden = true;
+                contactPicker.value = '';
+            }
+        }
         const taxField = document.querySelector('#modalBody [data-customer-tax-field]');
         const identityField = document.querySelector('#modalBody [data-customer-identity-field]');
         taxField.hidden = person;
@@ -330,6 +334,71 @@ async function openCustomerModal(id = null, readOnly = false, asPage = false) {
             customerState.view = 'detail';
         }
     }
+}
+
+function bindCustomerPrimaryContactPicker(body, contacts, readOnly) {
+    const combo = body.querySelector('[data-primary-contact-picker]');
+    const input = combo.querySelector('[name="contact_name"]');
+    const selectedId = combo.querySelector('[name="primary_contact_id"]');
+    const toggle = combo.querySelector('.customer-contact-toggle');
+    const options = combo.querySelector('.customer-contact-options');
+    input.autocomplete = 'off';
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-controls', 'customerPrimaryContacts');
+    input.setAttribute('aria-autocomplete', 'list');
+    const close = () => {
+        options.hidden = true;
+        input.setAttribute('aria-expanded', 'false');
+        toggle.setAttribute('aria-expanded', 'false');
+    };
+    const show = (all = false) => {
+        if (readOnly || input.disabled) return;
+        const term = all ? '' : input.value.trim().toLocaleLowerCase('vi');
+        const matches = contacts.filter(contact => `${contact.name || ''} ${contact.phone || ''} ${contact.email || ''}`.toLocaleLowerCase('vi').includes(term));
+        options.innerHTML = matches.map(contact => `<button type="button" role="option" data-primary-contact-option="${VKTable.escapeHtml(String(contact.id))}" aria-selected="${String(contact.id) === selectedId.value}"><strong>${VKTable.escapeHtml(contact.name || '')}</strong><small>${VKTable.escapeHtml([contact.phone, contact.email].filter(Boolean).join(' · '))}</small></button>`).join('') || '<span class="customer-contact-empty">Chưa có liên hệ phù hợp. Bạn có thể nhập tên trực tiếp.</span>';
+        options.hidden = false;
+        input.setAttribute('aria-expanded', 'true');
+        toggle.setAttribute('aria-expanded', 'true');
+    };
+    input.addEventListener('focus', () => show(true));
+    input.addEventListener('input', () => {
+        selectedId.value = '';
+        ['phone', 'email'].forEach(name => { body.querySelector(`[name="${name}"]`).readOnly = false; });
+        show();
+    });
+    toggle.addEventListener('click', () => { if (options.hidden) show(true); else close(); });
+    options.addEventListener('click', event => {
+        const button = event.target.closest('[data-primary-contact-option]');
+        const contact = contacts.find(item => String(item.id) === button?.dataset.primaryContactOption);
+        if (!contact) return;
+        selectedId.value = String(contact.id);
+        input.value = contact.name || '';
+        ['phone', 'email'].forEach(name => {
+            const field = body.querySelector(`[name="${name}"]`);
+            field.value = contact[name] || '';
+            field.readOnly = true;
+        });
+        input.focus();
+        close();
+    });
+    combo.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && !options.hidden) { event.stopPropagation(); close(); return; }
+        const buttons = [...options.querySelectorAll('button')];
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            if (options.hidden) show(true);
+            const items = [...options.querySelectorAll('button')];
+            const index = items.indexOf(document.activeElement);
+            const next = index < 0 ? (event.key === 'ArrowDown' ? 0 : items.length - 1) : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+            items[next]?.focus();
+        } else if (event.key === 'Enter' && !options.hidden && document.activeElement === input && buttons.length) {
+            event.preventDefault();
+            buttons[0].click();
+        }
+    });
+    combo.addEventListener('focusout', event => { if (!combo.contains(event.relatedTarget)) close(); });
+    body.addEventListener('click', event => { if (!combo.contains(event.target)) close(); });
+    close();
 }
 
 async function openCustomerTransactions(id) {
