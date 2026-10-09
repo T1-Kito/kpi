@@ -60,7 +60,7 @@
         'goods-receipts': ['goods-receipts.js?v=20261008-menu1', 'loadGoodsReceipts'],
         'goods-issues': ['goods-issues.js?v=20261008-menu1', 'loadGoodsIssues'],
         'stock-takes': ['stock-takes.js?v=20260619-1', 'loadStockTakes'],
-        tasks: ['tasks.js?v=20261008-menu1', 'loadTasks'],
+        tasks: ['tasks.js?v=20261009-compact1', 'loadTasks'],
         approvals: ['approvals.js?v=20260619-1', 'loadApprovals'],
         alerts: ['alerts.js?v=20260615-2', 'loadAlerts'],
         kpi: ['kpi.js?v=20261005-1', 'loadKpi'],

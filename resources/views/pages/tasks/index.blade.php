@@ -13,5 +13,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/tasks.js?v=20261008-menu1"></script>
+<script src="/assets/js/features/tasks.js?v=20261009-compact1"></script>
 @endpush

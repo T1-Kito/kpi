@@ -433,30 +433,11 @@ function renderTaskDetailPage() {
 
     root.innerHTML = `
         <section class="record-page task-record-page">
-            ${renderTaskDetailHead(row)}
             ${renderTaskDetailTabs(row)}
             <div class="record-page-body">
                 ${renderTaskDetailContent(row)}
             </div>
         </section>
-    `;
-}
-
-function renderTaskDetailHead(row) {
-    return `
-        <div class="record-page-head">
-            <button class="btn small" type="button" data-back-task-list>Quay lại danh sách</button>
-            <div class="record-page-title">
-                <span>Công việc</span>
-                <h2>${VKTable.escapeHtml(row.code || '-')} ${VKTable.statusBadge(row.status || 'new')}</h2>
-                <p><strong>${VKTable.escapeHtml(row.title || '-')}</strong></p>
-            </div>
-            <div class="record-page-meta">
-                <div><span>Ngày tạo</span><strong>${formatTaskDate(row.created_at)}</strong></div>
-                <div><span>Hạn xử lý</span><strong>${formatTaskDate(row.due_at)}</strong></div>
-            </div>
-            <div class="record-page-actions">${renderTaskPageActions(row)}</div>
-        </div>
     `;
 }
 
@@ -480,12 +461,14 @@ function renderTaskDetailTabs(row) {
     ];
 
     return `
-        <div class="record-tabs">
+        <div class="record-tabs task-detail-toolbar">
+            <button class="btn small" type="button" data-back-task-list>← Danh sách</button>
             ${tabs.map(([key, label]) => `
                 <button class="${taskState.detailTab === key ? 'active' : ''}" type="button" data-task-page-tab="${key}">
                     ${VKTable.escapeHtml(label)}
                 </button>
             `).join('')}
+            <div class="task-detail-actions">${renderTaskPageActions(row)}</div>
         </div>
     `;
 }

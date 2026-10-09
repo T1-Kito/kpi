@@ -2242,6 +2242,8 @@
 .crm-follow-up.overdue{border-left:3px solid #e96c6c;padding-left:12px}
 .crm-next-choice{display:flex;align-items:center;gap:10px;font-size:13px;margin:16px 0}
 .crm-next-choice input{width:16px;height:16px;accent-color:#2563eb}
+.task-detail-toolbar{align-items:center;flex-wrap:wrap}
+.task-detail-actions{display:flex;gap:8px;margin-left:auto;padding:4px 0}
 @media(max-width:600px){.crm-follow-up{flex-direction:column}}
 :is(#customersRoot,#leadsRoot,#customerContactsRoot) .list-page{border:1px solid #e4eaf3;border-radius:12px;background:#fff;box-shadow:0 3px 16px rgba(29,49,81,.025);overflow:hidden}
 :is(#customersRoot,#leadsRoot,#customerContactsRoot) .list-page-head{padding:22px 24px 18px;border-bottom:0;background:linear-gradient(110deg,#f6f9ff,#fff 65%);gap:16px}
