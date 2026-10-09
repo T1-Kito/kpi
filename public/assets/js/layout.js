@@ -36,7 +36,7 @@
     const features = {
         dashboard: ['dashboard.js?v=20261008-2', 'loadDashboard'],
         leads: ['leads.js?v=20261009-flow1', 'loadLeads'],
-        deals: ['deals.js?v=20261009-flow1', 'loadDeals'],
+        deals: ['deals.js?v=20261009-care1', 'loadDeals'],
         'sales-master-data': ['sales-master-data.js?v=20260923-1', 'loadSalesMasterData'],
         contracts: ['contracts.js?v=20260923-6', 'loadContracts'],
         quotations: ['quotations.js?v=20261009-flow1', 'loadQuotations'],

@@ -1,7 +1,5 @@
 <?php
 
-use Illuminate\Foundation\Inspiring;
-use Illuminate\Support\Facades\Artisan;
 use App\Models\Alert;
 use App\Models\BusinessEvent;
 use App\Models\PurchaseOrder;
@@ -10,6 +8,9 @@ use App\Models\Tenant;
 use App\Models\VkNotification;
 use App\Services\Kpi\KpiService;
 use App\Support\BusinessEventPublisher;
+use Illuminate\Foundation\Inspiring;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
@@ -26,51 +27,58 @@ Artisan::command('tasks:check-overdue', function (BusinessEventPublisher $events
         ->with('assignee')
         ->chunkById(100, function ($tasks) use (&$count, $events) {
             foreach ($tasks as $task) {
-                $old = $task->status;
-                $task->update(['status' => 'overdue']);
-                $task->history()->create([
-                    'from_status' => $old,
-                    'to_status' => 'overdue',
-                    'changed_by' => null,
-                    'reason' => 'scheduler_overdue',
-                ]);
+                DB::transaction(function () use ($task, &$count, $events) {
+                    $task = Task::whereKey($task->id)->lockForUpdate()->firstOrFail();
+                    if (! in_array($task->status, ['new', 'in_progress'], true) || ! $task->due_at || $task->due_at->gte(now())) {
+                        return;
+                    }
+                    $old = $task->status;
+                    $task->update(['status' => 'overdue']);
+                    $task->history()->create([
+                        'from_status' => $old,
+                        'to_status' => 'overdue',
+                        'changed_by' => null,
+                        'reason' => 'scheduler_overdue',
+                    ]);
 
-                if ($task->assignee_id) {
-                    Alert::firstOrCreate(
-                        [
-                            'tenant_id' => $task->tenant_id,
-                            'recipient_id' => $task->assignee_id,
-                            'alert_type' => 'task_overdue',
-                            'source_type' => 'Task',
-                            'source_id' => $task->id,
-                        ],
-                        [
-                            'level' => 'high',
-                            'title' => 'Task quá hạn: '.$task->title,
-                            'message' => 'Task '.$task->code.' đã quá SLA và cần xử lý ngay.',
-                            'action_url' => '/tasks/'.$task->id,
-                            'status' => 'open',
-                        ],
-                    );
+                    if ($task->assignee_id) {
+                        Alert::firstOrCreate(
+                            [
+                                'tenant_id' => $task->tenant_id,
+                                'recipient_id' => $task->assignee_id,
+                                'alert_type' => 'task_overdue',
+                                'source_type' => 'Task',
+                                'source_id' => $task->id,
+                            ],
+                            [
+                                'level' => 'high',
+                                'title' => 'Task quá hạn: '.$task->title,
+                                'message' => 'Task '.$task->code.' đã quá SLA và cần xử lý ngay.',
+                                'action_url' => '/tasks',
+                                'status' => 'open',
+                            ],
+                        );
 
-                    VkNotification::firstOrCreate(
-                        [
-                            'tenant_id' => $task->tenant_id,
-                            'recipient_id' => $task->assignee_id,
-                            'source_type' => 'Task',
-                            'source_id' => $task->id,
-                        ],
-                        [
-                            'title' => 'Task quá hạn',
-                            'message' => $task->code.' - '.$task->title,
-                            'action_url' => '/tasks/'.$task->id,
-                            'status' => 'unread',
-                        ],
-                    );
-                }
+                        VkNotification::firstOrCreate(
+                            [
+                                'tenant_id' => $task->tenant_id,
+                                'recipient_id' => $task->assignee_id,
+                                'source_type' => 'Task',
+                                'source_id' => $task->id,
+                                'title' => 'Task quá hạn',
+                            ],
+                            [
+                                'title' => 'Task quá hạn',
+                                'message' => $task->code.' - '.$task->title,
+                                'action_url' => '/tasks',
+                                'status' => 'unread',
+                            ],
+                        );
+                    }
 
-                $events->publish($task->tenant_id, 'TaskOverdue', 'Task', $task->id, ['code' => $task->code]);
-                $count++;
+                    $events->publish($task->tenant_id, 'TaskOverdue', 'Task', $task->id, ['code' => $task->code]);
+                    $count++;
+                });
             }
         });
 
@@ -136,6 +144,7 @@ Artisan::command('procurement:check-late-po', function (BusinessEventPublisher $
 Artisan::command('events:retry-failed', function () {
     $count = BusinessEvent::whereIn('status', ['pending', 'failed'])->count();
     $this->error("Retry dispatcher is not configured. Preserved {$count} pending/failed event(s); no business action was replayed.");
+
     return 1;
 })->purpose('Report unavailable event retry without falsely marking events processed');
 

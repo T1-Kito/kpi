@@ -204,6 +204,7 @@ Route::prefix('v1')->group(function () {
     Route::post('/deals/{deal}/transition', [DealController::class, 'transition']);
     Route::put('/deals/{deal}/items', [DealController::class, 'syncItems']);
     Route::post('/deals/{deal}/activities', [DealController::class, 'addActivity']);
+    Route::post('/deals/{deal}/activities/{task}/complete', [DealController::class, 'completeActivity']);
         });
 
         Route::middleware('permission:sales.contract.manage')->group(function () {

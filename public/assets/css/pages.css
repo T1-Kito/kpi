@@ -2231,6 +2231,18 @@
 .crm-optional-fields{margin-top:16px;border:1px solid #e0e8f3;border-radius:10px;padding:12px 16px}
 .crm-optional-fields>summary{cursor:pointer;color:#315b87;font-size:13px;font-weight:500}
 .crm-optional-fields[open]>summary{margin-bottom:16px}
+.crm-follow-up{display:flex;justify-content:space-between;gap:16px;padding:16px 0;border-bottom:1px solid #e6edf5}
+.crm-follow-up:last-child{border-bottom:0}
+.crm-follow-up>div:first-child{min-width:0;flex:1}
+.crm-follow-up>div:last-child{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.crm-follow-up strong{font-size:14px;font-weight:600;color:#243d59}
+.crm-follow-up small{display:block;color:#73869b;margin-top:5px;font-size:12px}
+.crm-follow-up p,.crm-history-note{white-space:pre-wrap;overflow-wrap:anywhere}
+.crm-follow-up p{font-size:13px;line-height:1.6;background:#f6f9fd;padding:10px 12px;border-radius:8px;color:#46617e}
+.crm-follow-up.overdue{border-left:3px solid #e96c6c;padding-left:12px}
+.crm-next-choice{display:flex;align-items:center;gap:10px;font-size:13px;margin:16px 0}
+.crm-next-choice input{width:16px;height:16px;accent-color:#2563eb}
+@media(max-width:600px){.crm-follow-up{flex-direction:column}}
 :is(#customersRoot,#leadsRoot,#customerContactsRoot) .list-page{border:1px solid #e4eaf3;border-radius:12px;background:#fff;box-shadow:0 3px 16px rgba(29,49,81,.025);overflow:hidden}
 :is(#customersRoot,#leadsRoot,#customerContactsRoot) .list-page-head{padding:22px 24px 18px;border-bottom:0;background:linear-gradient(110deg,#f6f9ff,#fff 65%);gap:16px}
 :is(#customersRoot,#leadsRoot,#customerContactsRoot) .list-page-head h2{font-size:18px;font-weight:500;color:#273c59;letter-spacing:-.2px;margin-bottom:6px}

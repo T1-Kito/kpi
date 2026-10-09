@@ -215,6 +215,7 @@
         }
         if (state.tab === 'items') return `${renderItems(row.items || [])}${renderTotals(row)}`;
         if (state.tab === 'history') return renderTimeline(row.timeline || []);
+        if (state.type === 'deal' && state.tab === 'tasks') return renderDealFollowUps(row);
         if (state.tab === 'tasks') return renderRelated('Công việc liên quan', row.tasks || []);
         if (state.tab === 'notes') return renderNotes();
 
@@ -226,6 +227,7 @@
                 ${renderFlow(row)}
             </div>
             ${renderLinkedDocuments(row.related_documents || [])}
+            ${state.type === 'deal' ? renderDealFollowUps(row) : ''}
             ${renderItems(row.items || [])}
             ${renderTotals(row)}
         `;
@@ -1129,6 +1131,17 @@
         `;
     }
 
+    function renderDealFollowUps(row) {
+        const tasks = row.tasks || [];
+        const active = tasks.filter(task => !['completed', 'cancelled'].includes(task.status));
+        return `<section class="record-panel crm-follow-ups"><h3>Chăm sóc & bước tiếp theo</h3><p class="crm-auto-note">${active.length} việc đang mở. Ghi nhận kết quả để lưu lịch sử và đặt việc tiếp theo.</p>${tasks.map(task => {
+            const finished = ['completed', 'cancelled'].includes(task.status);
+            const result = (task.history || []).filter(entry => entry.to_status === 'completed').at(-1);
+            const late = !finished && task.due_at && new Date(task.due_at).getTime() < Date.now();
+            return `<article class="crm-follow-up ${late ? 'overdue' : ''}"><div><strong>${escape(task.title)}</strong><small>${escape(task.assignee?.name || 'Chưa phân công')} · ${task.due_at ? formatDateTime(task.due_at) : 'Chưa cấu hình hạn SLA'}</small>${result ? `<p>${escape(result.reason || 'Đã hoàn tất')}<small>${escape(result.changed_by?.name || '')} · ${formatDateTime(result.created_at)}</small></p>` : ''}</div><div>${VKTable.statusBadge(late ? 'overdue' : task.status)}${!finished && row.status === 'open' ? `<button type="button" class="btn secondary small" data-deal-complete-activity="${task.id}" data-deal-id="${row.id}">Ghi nhận kết quả</button>` : ''}</div></article>`;
+        }).join('') || '<div class="empty compact">Chưa có công việc chăm sóc. Bấm “+ Chăm sóc” để bắt đầu.</div>'}</section>`;
+    }
+
     function renderTimeline(rows) {
         if (!rows.length) return `<div class="empty compact"><strong>Chưa có lịch sử</strong><span>Lịch sử xử lý sẽ hiển thị tại đây.</span></div>`;
         return `
@@ -1139,6 +1152,8 @@
                         <span>
                             <strong>${escape(item.label || '-')}</strong>
                             <small>${formatDateTime(item.at)}</small>
+                            ${item.actor ? `<small>${escape(item.actor)}</small>` : ''}
+                            ${item.details ? `<small class="crm-history-note">${escape(item.details)}</small>` : ''}
                         </span>
                         <em>${escape(VKTable.translateStatus(item.status || '-'))}</em>
                     </div>

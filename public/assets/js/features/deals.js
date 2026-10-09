@@ -18,6 +18,8 @@ document.addEventListener('click', event => {
     const quotation = event.target.closest('[data-deal-create-quotation]');
     const editItems = event.target.closest('[data-deal-edit-items]');
     const addActivity = event.target.closest('[data-deal-add-activity]');
+    const completeActivity = event.target.closest('[data-deal-complete-activity]');
+    if (completeActivity) { openDealActivityResultModal(completeActivity.dataset.dealId, completeActivity.dataset.dealCompleteActivity); return; }
     const addLine = event.target.closest('[data-deal-add-line]');
     const removeLine = event.target.closest('[data-deal-remove-line]');
     if (create) openDealModal();
@@ -191,8 +193,39 @@ async function openDealActivityModal(id) {
 }
 
 async function reloadDealDetail(id) {
+    VKApi.clearCache();
     await loadDeals();
     openDealDetail(id);
+}
+
+async function openDealActivityResultModal(dealId, taskId) {
+    const detail = await VKApi.request(`/deals/${dealId}`, { cache: false });
+    const deal = detail.data;
+    const task = (deal.tasks || []).find(item => String(item.id) === String(taskId));
+    if (!task || ['completed', 'cancelled'].includes(task.status)) { VKModal.toast('Công việc đã kết thúc. Hãy tải lại hồ sơ.'); return; }
+    VKModal.open('Ghi nhận kết quả chăm sóc', `
+        <div class="crm-conversion-summary"><span>${VKTable.escapeHtml(deal.code)}</span><strong>${VKTable.escapeHtml(task.title)}</strong><small>Người phụ trách: ${VKTable.escapeHtml(task.assignee?.name || deal.owner?.name || '')}</small></div>
+        ${VKModal.select('outcome', 'Kết quả', [{value:'contacted',label:'Đã trao đổi'},{value:'no_answer',label:'Chưa liên lạc được'},{value:'meeting',label:'Đã gặp / demo'},{value:'information_sent',label:'Đã gửi thông tin'},{value:'waiting',label:'Khách cần thêm thời gian'}])}
+        <div class="field"><label for="careNote">Nội dung trao đổi (không bắt buộc)</label><textarea id="careNote" name="note" rows="3" placeholder="Thông tin cần nhớ cho lần chăm sóc tiếp theo..."></textarea></div>
+        <label class="crm-next-choice"><input type="checkbox" name="create_next" checked> Tạo việc chăm sóc tiếp theo cho người phụ trách</label>
+        <div data-next-care-fields><p class="crm-auto-note">Tên việc được điền sẵn, hạn tự tính theo SLA. Bạn có thể thay đổi nếu đã hẹn giờ cụ thể với khách.</p>
+        ${VKModal.field('next_title', 'Việc tiếp theo', 'text', `Tiếp tục chăm sóc ${deal.name}`)}
+        ${VKModal.field('next_due_at', 'Giờ đã hẹn với khách (không bắt buộc)', 'datetime-local')}</div>
+    `, async form => {
+        const data = Object.fromEntries(new FormData(form));
+        data.create_next = form.querySelector('[name="create_next"]').checked;
+        if (!data.create_next) { delete data.next_title; delete data.next_due_at; }
+        await VKApi.request(`/deals/${dealId}/activities/${taskId}/complete`, { method: 'POST', body: JSON.stringify(data) });
+        VKModal.close();
+        VKModal.toast(data.create_next ? 'Đã lưu kết quả và tạo việc tiếp theo.' : 'Đã lưu kết quả chăm sóc.');
+        await reloadDealDetail(dealId);
+    }, { submitText: 'Lưu kết quả', className: 'crm-care-modal' });
+    const checkbox = document.querySelector('#modalBody [name="create_next"]');
+    checkbox.addEventListener('change', () => {
+        const fields = document.querySelector('#modalBody [data-next-care-fields]');
+        fields.hidden = !checkbox.checked;
+        fields.querySelectorAll('input').forEach(input => { input.disabled = !checkbox.checked; });
+    });
 }
 
 function stageLabel(stage) { return ({ new: 'Mới', qualified: 'Đã xác minh', proposal: 'Đề xuất', negotiation: 'Đàm phán', won: 'Thắng', lost: 'Mất' })[stage] || stage || '-'; }
