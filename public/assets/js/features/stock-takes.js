@@ -1,7 +1,9 @@
 (function () {
+    const can = (permission) => window.VKLayout?.hasPermission?.(permission) === true;
     let data = { stockTakes: [], warehouses: [], skus: [] };
 
     window.loadStockTakes = loadStockTakes;
+    document.addEventListener('vk:ready', loadStockTakes);
 
     document.addEventListener('click', (event) => {
         if (!document.getElementById('stockTakesRoot')) return;
@@ -23,22 +25,29 @@
         }
     });
 
-    function loadStockTakes() {
-        readData();
-    }
-
-    function readData() {
-        const node = document.getElementById('stockTakesData');
-        if (!node) return;
+    async function loadStockTakes() {
+        const root = document.getElementById('stockTakesRoot');
+        if (!root) return;
         try {
-            data = JSON.parse(node.textContent || '{}');
+            const [stockTakes, warehouses, skus] = await Promise.all([
+                VKApi.request('/stock-takes?page_size=100', {cache:false}),
+                VKApi.request('/warehouses?page_size=100', {cache:false}),
+                VKApi.request('/skus?page_size=100', {cache:false}),
+            ]);
+            data = {stockTakes:stockTakes.data||[],warehouses:(warehouses.data||[]).filter(row=>row.status==='active'),skus:(skus.data||[]).filter(row=>row.status==='active')};
+            root.innerHTML = renderList(stockTakes.meta?.total || data.stockTakes.length);
         } catch (error) {
             data = { stockTakes: [], warehouses: [], skus: [] };
+            root.innerHTML = `<section class="module-panel"><p class="form-note">${escape(error.message || 'Không thể tải dữ liệu kiểm kê.')}</p></section>`;
         }
     }
 
+    function renderList(total) {
+        const rows=data.stockTakes.map(row=>`<tr><td><span class="record-code-chip">${escape(row.code)}</span></td><td>${escape(row.warehouse?.name||'-')}</td><td>${formatDate(row.counted_at)}</td><td>${formatNumber(row.lines_count||0)}</td><td>—</td><td><span class="badge ${row.status==='confirmed'?'success':'info'}">${row.status==='confirmed'?'Đã xác nhận':'Nháp'}</span></td><td>${escape(row.confirmer?.name||'-')}</td><td class="actions-cell"><details class="row-action-menu"><summary aria-label="Mở thao tác">⋮</summary><div class="row-action-menu-list"><button class="btn" type="button" data-open-stock-take="${row.id}">Mở</button>${row.status==='draft'&&can('inventory.stocktake.confirm')?`<button class="btn primary" type="button" data-confirm-stock-take="${row.id}">Xác nhận</button>`:''}</div></details></td></tr>`).join('');
+        return `<section class="module-panel"><div class="panel-head"><div><h2>Danh sách phiếu kiểm kê</h2><span>Phiếu nháp chưa ảnh hưởng tồn kho. Chỉ khi xác nhận mới tạo giao dịch điều chỉnh.</span></div><span class="badge info">${total} phiếu</span></div><div class="table-wrap"><table class="list-table"><thead><tr><th>Mã phiếu</th><th>Kho</th><th>Ngày kiểm kê</th><th>Số dòng</th><th>Lệch tồn</th><th>Trạng thái</th><th>Người xác nhận</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="8"><div class="empty-state"><strong>Chưa có phiếu kiểm kê</strong><span>Tạo phiếu để đối chiếu tồn thực tế với tồn hệ thống.</span></div></td></tr>'}</tbody></table></div></section>`;
+    }
+
     function openCreateModal() {
-        readData();
         if (!data.warehouses.length || !data.skus.length) {
             VKModal.toast('Cần có kho và mã hàng trước khi tạo phiếu kiểm kê.', 'warning');
             return;
@@ -70,7 +79,8 @@
                 body: JSON.stringify(payload),
             });
             VKModal.toast('Đã tạo phiếu kiểm kê.');
-            window.setTimeout(() => window.location.reload(), 450);
+            VKModal.close();
+            await loadStockTakes();
         }, { className: 'wide-modal stock-take-modal', submitText: 'Lưu phiếu' });
     }
 
@@ -134,13 +144,10 @@
         return rows;
     }
 
-    function openDetail(id) {
-        readData();
-        const row = data.stockTakes.find(item => String(item.id) === String(id));
-        if (!row) {
-            VKModal.toast('Không tìm thấy phiếu kiểm kê.', 'warning');
-            return;
-        }
+    async function openDetail(id) {
+        let row;
+        try { row=(await VKApi.request(`/stock-takes/${id}`,{cache:false})).data; }
+        catch(error){ VKModal.toast(error.message,'danger');return; }
 
         const rows = (row.lines || []).map((line, index) => `
             <tr>
@@ -167,7 +174,7 @@
                     <tbody>${rows}</tbody>
                 </table>
             </div>
-            ${row.status === 'draft' ? `<button class="btn primary" type="button" data-confirm-stock-take="${row.id}">Xác nhận điều chỉnh kho</button>` : ''}
+            ${row.status === 'draft' && can('inventory.stocktake.confirm') ? `<button class="btn primary" type="button" data-confirm-stock-take="${row.id}">Xác nhận điều chỉnh kho</button>` : ''}
         `, null, { className: 'wide-modal', hideSubmit: true, cancelText: 'Đóng' });
     }
 
@@ -176,7 +183,8 @@
 
         await VKApi.request(`/stock-takes/${id}/confirm`, { method: 'POST' });
         VKModal.toast('Đã xác nhận kiểm kê và cập nhật tồn kho.');
-        window.setTimeout(() => window.location.reload(), 450);
+        VKModal.close();
+        await loadStockTakes();
     }
 
     function detailItem(label, value) {

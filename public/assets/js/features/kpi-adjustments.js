@@ -6,10 +6,10 @@ let state = {
     status: '',
     periodType: 'month',
 };
+let ledgerLoadVersion = 0;
 
 window.loadKpiAdjustments = loadKpiAdjustments;
 
-document.addEventListener('vk:ready', openRequestedAdjustment);
 
 document.addEventListener('change', (event) => {
     if (!document.getElementById('kpiAdjustmentsRoot')) return;
@@ -43,9 +43,6 @@ document.addEventListener('click', (event) => {
     }
 });
 
-if (document.readyState !== 'loading') {
-    window.setTimeout(openRequestedAdjustment, 0);
-}
 
 function getServerAdjustmentRows() {
     const node = document.getElementById('kpiAdjustmentRecords');
@@ -79,7 +76,7 @@ function openAdjustmentDetail(id) {
     const status = row.status || '-';
     const statusLabel = row.status_label || statusBadgeText(status);
     const typeLabel = row.type || (row.adjustment_type === 'bonus' ? 'Cộng điểm' : 'Trừ điểm');
-    const pendingActions = status === 'pending' ? `
+    const pendingActions = status === 'pending' && canManagePoints() ? `
         <div class="kpi-adjustment-detail-actions">
             <button class="btn primary" type="button" data-review-kpi-adjustment="${row.id}" data-status="approved">Duyệt phiếu</button>
             <button class="btn danger" type="button" data-review-kpi-adjustment="${row.id}" data-status="rejected">Từ chối</button>
@@ -129,7 +126,12 @@ function openAdjustmentDetail(id) {
 async function loadKpiAdjustments(options = {}) {
     const root = document.getElementById('kpiAdjustmentsRoot');
     if (!root) return;
-    if (root.dataset.serverRendered === '1') return;
+    const version = ++ledgerLoadVersion;
+    if (!options.keepView) {
+        const params = new URLSearchParams(window.location.search);
+        state.periodType = params.get('period_type') || 'month';
+        state.status = params.get('status') || '';
+    }
     if (!options.keepView) {
         root.innerHTML = renderLoading();
     }
@@ -137,16 +139,26 @@ async function loadKpiAdjustments(options = {}) {
     const query = new URLSearchParams({ page_size: '100', period_type: state.periodType });
     if (state.status) query.set('status', state.status);
 
-    const [adjustments, summary, users] = await Promise.all([
-        safeRequest(`/kpi/adjustments?${query.toString()}`),
-        safeRequest(`/kpi/adjustments/summary?period_type=${encodeURIComponent(state.periodType)}`),
-        safeRequest('/lookups/users'),
-    ]);
+    try {
+        const [adjustments, summary, users] = await Promise.all([
+            VKApi.request(`/kpi/adjustments?${query.toString()}`, {cache:false}),
+            VKApi.request(`/kpi/adjustments/summary?period_type=${encodeURIComponent(state.periodType)}`, {cache:false}),
+            canManagePoints() ? safeRequest('/lookups/users') : Promise.resolve({data:[]}),
+        ]);
+        if (version !== ledgerLoadVersion || document.getElementById('kpiAdjustmentsRoot') !== root) return;
+        state.rows = adjustments.data || [];
+        state.summary = summary.data || [];
+        state.users = users?.data || [];
+        root.innerHTML = renderPage();
+        openRequestedAdjustment();
+    } catch (error) {
+        if (version !== ledgerLoadVersion || document.getElementById('kpiAdjustmentsRoot') !== root) return;
+        root.innerHTML = `<section class="module-panel"><p class="form-note">${VKTable.escapeHtml(error.message || 'Không thể tải sổ điểm.')}</p></section>`;
+    }
+}
 
-    state.rows = adjustments?.data || [];
-    state.summary = summary?.data || [];
-    state.users = users?.data || [];
-    root.innerHTML = renderPage();
+function canManagePoints() {
+    return Array.isArray(window.VKUser?.permissions) && window.VKUser.permissions.includes('kpi.lock');
 }
 
 async function safeRequest(path) {
@@ -171,7 +183,7 @@ function renderPage() {
                         <h2>Bảng điểm điều chỉnh</h2>
                         <span>Cộng/trừ điểm có lý do, trạng thái duyệt và người phê duyệt để tránh sửa KPI trực tiếp.</span>
                     </div>
-                    <button class="btn primary" type="button" data-create-kpi-adjustment>Tạo phiếu điểm</button>
+                    ${canManagePoints() ? '<button class="btn primary" type="button" data-create-kpi-adjustment>Tạo phiếu điểm</button>' : ''}
                 </div>
                 <div class="toolbar">
                     <select data-kpi-adjustment-period>
@@ -252,7 +264,7 @@ function renderTable() {
 }
 
 function renderRow(row) {
-    const pending = row.status === 'pending';
+    const pending = row.status === 'pending' && canManagePoints();
     return `
         <tr>
             <td>
@@ -276,6 +288,7 @@ function renderRow(row) {
 }
 
 async function openAdjustmentModal() {
+    if (!canManagePoints()) return VKModal.toast('Bạn không có quyền tạo phiếu điểm.', 'warning');
     if (!state.users.length) {
         const users = await safeRequest('/lookups/users');
         state.users = users?.data || [];
@@ -322,11 +335,12 @@ async function openAdjustmentModal() {
         });
         VKModal.close();
         VKModal.toast('Đã tạo phiếu điểm, đang chờ duyệt.');
-        window.setTimeout(() => window.location.reload(), 500);
+        await loadKpiAdjustments({ keepView: true });
     }, { className: 'wide-modal', submitText: 'Lưu phiếu' });
 }
 
 async function reviewAdjustment(id, status) {
+    if (!canManagePoints()) return VKModal.toast('Bạn không có quyền duyệt phiếu điểm.', 'warning');
     const label = status === 'approved' ? 'duyệt' : 'từ chối';
     if (!confirm(`Bạn chắc chắn muốn ${label} phiếu điểm này?`)) return;
 
@@ -338,7 +352,8 @@ async function reviewAdjustment(id, status) {
         }),
     });
     VKModal.toast(status === 'approved' ? 'Đã duyệt phiếu điểm.' : 'Đã từ chối phiếu điểm.');
-    window.setTimeout(() => window.location.reload(), 500);
+    VKModal.close();
+    await loadKpiAdjustments({ keepView: true });
 }
 
 function option(value, label, selected) {

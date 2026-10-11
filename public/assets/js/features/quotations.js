@@ -137,7 +137,7 @@ document.addEventListener('click', (event) => {
     }
     if (event.target.matches('[data-open-sales-order]')) {
         event.preventDefault();
-        window.location.href = event.target.dataset.openSalesOrder;
+        VKLayout.navigatePjax(event.target.dataset.openSalesOrder);
     }
     if (event.target.matches('[data-quotation-preview]')) {
         event.preventDefault();
@@ -976,8 +976,8 @@ function renderQuotationDetailPage() {
     if (!root || !row) return;
 
     root.innerHTML = `
-        <section class="record-page record-page-quotation quotation-detail-page quotation-detail-redesign">
-            ${renderQuotationPageHeader(row)}
+        <section class="record-page record-page-quotation quotation-detail-page quotation-detail-redesign quotation-reference">
+            <nav class="quote-breadcrumb" aria-label="Đường dẫn"><span>Bán hàng</span><span>/</span><button type="button" data-back-quotation-list>Báo giá</button><span>/</span><strong>${VKTable.escapeHtml(row.code || '-')}</strong></nav>
             ${renderQuotationPageTabs(row)}
             <div class="record-page-body ${quotationState.detailTab === 'overview' ? 'quote-form-body' : ''}">
                 ${renderQuotationPageTabContent(row)}
@@ -1048,27 +1048,13 @@ function renderQuotationSplitHeader(row) {
 }
 
 function renderQuotationPageHeader(row) {
-    const customer = row.customer || {};
-    const contact = [customer.contact_name, customer.phone, customer.email].filter(Boolean).join(' · ');
-
     return `
-        <header class="quotation-hero">
+        <footer class="quotation-hero quote-bottom-actions" aria-label="Thao tác báo giá">
             <div class="quotation-hero-tools">
                 <button class="btn small" type="button" data-back-quotation-list>← Danh sách báo giá</button>
                 <div class="record-page-actions">${renderQuotationPageActions(row)}</div>
             </div>
-            <div class="quotation-hero-content">
-                <div class="quotation-hero-title">
-                    <span>Báo giá</span>
-                    <h2>${VKTable.escapeHtml(row.code || '-')} ${VKTable.statusBadge(row.status || 'draft')}</h2>
-                    <p><strong>${VKTable.escapeHtml(customer.name || 'Chưa có khách hàng')}</strong>${contact ? ` · ${VKTable.escapeHtml(contact)}` : ''}</p>
-                </div>
-                <div class="quotation-hero-meta">
-                    <div><span>Ngày tạo</span><strong>${formatDate(row.created_at)}</strong></div>
-                    <div><span>Cập nhật</span><strong>${formatDate(row.updated_at)}</strong></div>
-                </div>
-            </div>
-        </header>
+        </footer>
     `;
 }
 
@@ -1118,6 +1104,7 @@ function renderQuotationPageTabs(row) {
             ${tabs.map(([key, label]) => `
                 <button class="${quotationState.detailTab === key ? 'active' : ''}" type="button" data-quotation-page-tab="${key}">${label}</button>
             `).join('')}
+            <div class="record-page-actions quote-tab-actions">${renderQuotationPageActions(row)}</div>
         </div>
     `;
 }
@@ -1132,9 +1119,14 @@ function renderQuotationPageTabContent(row) {
         ${row.is_expired ? '<p class="form-note quote-expired-note">Báo giá đã hết hiệu lực. Hãy tạo phiên bản mới trước khi tiếp tục chốt đơn.</p>' : ''}
         ${renderQuotationWorkflow(row)}
         <div class="quote-overview-layout">
-            ${renderQuotationQuickInfo(row)}
-            ${renderQuotationPageItems(row.items || [], true)}
-            ${renderQuotationCompactTotals(row)}
+            <div class="quote-reference-main">
+                ${renderQuotationQuickInfo(row)}
+                ${renderQuotationPageItems(row.items || [], true)}
+            </div>
+            <div class="quote-reference-side">
+                <section class="quote-value-card"><h3>Giá trị báo giá</h3>${renderQuotationCompactTotals(row)}</section>
+                ${renderQuotationDetailCard('Thông tin chung', 'doc', [['Trạng thái', VKTable.translateStatus(row.status || 'draft')], ['Ngày tạo', formatDate(row.created_at)], ['Cập nhật', formatDate(row.updated_at)], ['Phiên bản', String(row.revision_number || 1)]])}
+            </div>
         </div>
     `;
 }
@@ -1231,16 +1223,15 @@ function renderQuotationPageInfo(row) {
 
 function renderQuotationQuickInfo(row) {
     const customer = row.customer || {};
-    const contact = [customer.contact_name, customer.phone].filter(Boolean).join(' - ') || customer.email || '-';
     const customerFields = [
-        ['Tên khách hàng', customer.name || '-'],
-        ['Người liên hệ', contact],
+        ['Tên khách hàng', customer.name || 'Chưa có khách hàng'],
+        ['Người liên hệ', customer.contact_name || 'Chưa khai báo'],
         ['SĐT', customer.phone || 'Chưa khai báo'],
+        ['Email', customer.email || 'Chưa khai báo'],
         ['Mã khách hàng', customer.code || '-'],
     ];
     const invoiceFields = [
-        ['Tên công ty', customer.name || 'Chưa khai báo'],
-        ['Mã số thuế', customer.tax_code || 'Chưa khai báo'],
+        [customer.customer_type === 'person' ? 'Số CCCD' : 'Mã số thuế', (customer.customer_type === 'person' ? customer.identity_number : customer.tax_code) || 'Chưa khai báo'],
         ['Địa chỉ', customer.billing_address || customer.address || 'Chưa khai báo'],
     ];
 
@@ -1260,7 +1251,7 @@ function renderQuotationDetailCard(title, icon, fields) {
                 ${fields.map(([label, value]) => `
                     <div>
                         <span>${VKTable.escapeHtml(label)}</span>
-                        <strong>${VKTable.escapeHtml(value)}</strong>
+                        <strong class="${['Mã khách hàng', 'Mã số thuế', 'Số CCCD'].includes(label) && value !== 'Chưa khai báo' && value !== '-' ? 'quote-code-text' : ''}">${VKTable.escapeHtml(value)}</strong>
                     </div>
                 `).join('')}
             </div>
@@ -1466,7 +1457,7 @@ async function createSalesOrderFromQuotation(id) {
     });
     VKModal.toast('Đã tạo đơn bán từ báo giá.');
     if (response.data?.id) {
-        window.location.href = `/sales-orders?open=${response.data.id}`;
+        await VKLayout.navigatePjax(`/sales-orders?open=${response.data.id}`);
         return;
     }
     await openQuotationDetail(id);

@@ -1,5 +1,5 @@
 (function () {
-let userState = { rows: [], departments: [], positions: [], roles: [], q: '', status: '' };
+let userState = { rows: [], departments: [], positions: [], roles: [], canAssignRoles: false, q: '', status: '' };
 
 document.addEventListener('vk:ready', () => loadUsers());
 document.addEventListener('input', (event) => {
@@ -34,6 +34,7 @@ async function loadUsers() {
     userState.departments = users.meta.departments || [];
     userState.positions = users.meta.positions || [];
     userState.roles = users.meta.roles || [];
+    userState.canAssignRoles = users.meta.can_assign_roles === true;
     renderUsers(users.meta.total);
 }
 
@@ -99,7 +100,7 @@ function renderRoles(roles = []) {
 function renderActions(row) {
     return VKTable.rowActions([
         VKTable.smallButton('Tổ chức', `data-update-user-organization="${row.id}"`),
-        VKTable.smallButton('Vai trò', `data-sync-user-roles="${row.id}"`),
+        userState.canAssignRoles ? VKTable.smallButton('Vai trò', `data-sync-user-roles="${row.id}"`) : '',
         VKTable.smallButton(row.is_active ? 'Khóa' : 'Mở', `data-user-status="${row.id}" data-active="${row.is_active ? '0' : '1'}"`, row.is_active ? 'danger' : 'primary'),
     ]);
 }
@@ -109,10 +110,10 @@ function openUserModal() {
         <div class="form-grid">
             ${VKModal.field('name', 'Họ tên')}
             ${VKModal.field('email', 'Email', 'email')}
-            ${VKModal.field('password', 'Mật khẩu', 'password', 'Admin@123')}
+            ${VKModal.field('password', 'Mật khẩu riêng cho tài khoản (ít nhất 8 ký tự)', 'password')}
             ${VKModal.select('department_id', 'Phòng ban', blankOption().concat(userState.departments.map(item => ({ value: item.id, label: `${item.code} - ${item.name}` }))))}
             ${VKModal.select('position_id', 'Chức vụ', blankOption().concat(userState.positions.map(item => ({ value: item.id, label: `${item.code} - ${item.name}` }))))}
-            <div class="field full"><label>Vai trò</label>${renderCheckboxList('role_ids', userState.roles, [])}</div>
+            ${userState.canAssignRoles ? `<div class="field full"><label>Vai trò</label>${renderCheckboxList('role_ids', userState.roles, [])}</div>` : '<p class="form-note">Tài khoản mới chưa có vai trò. Người có quyền quản lý vai trò cần cấp quyền trước khi sử dụng.</p>'}
         </div>
     `, async (form) => {
         const data = Object.fromEntries(new FormData(form));
@@ -121,7 +122,7 @@ function openUserModal() {
             body: JSON.stringify({
                 name: data.name,
                 email: data.email,
-                password: data.password || 'Admin@123',
+                password: data.password,
                 department_id: data.department_id ? Number(data.department_id) : null,
                 position_id: data.position_id ? Number(data.position_id) : null,
                 role_ids: checkedValues(form, 'role_ids'),
@@ -160,6 +161,7 @@ function openUserOrganizationModal(userId) {
 }
 
 function openRoleAssignModal(userId) {
+    if (!userState.canAssignRoles) return VKModal.toast('Bạn cần quyền quản lý vai trò để cấp quyền.', 'warning');
     const user = userState.rows.find(row => row.id === userId);
     if (!user) return;
     const selected = (user.roles || []).map(role => role.id);

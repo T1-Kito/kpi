@@ -79,6 +79,15 @@ class DealService
                 'version' => $deal->version + 1,
             ]);
             $deal->stageHistory()->create(['from_stage' => $old['stage'], 'to_stage' => $stage, 'changed_by' => $actor->id, 'reason' => $reason, 'changed_at' => now()]);
+            if (in_array($type, ['won', 'lost'], true)) {
+                $pendingCare = \App\Models\Task::where('tenant_id', $deal->tenant_id)
+                    ->where('source_type', 'Deal')->where('source_id', $deal->id)->where('task_type', 'deal_follow_up')
+                    ->whereIn('status', ['new', 'in_progress', 'overdue'])->orderBy('id')->get();
+                foreach ($pendingCare as $task) {
+                    app(TaskService::class)->changeStatus($task, $actor, 'cancelled', 'Tự động dừng chăm sóc do cơ hội đã kết thúc.');
+                }
+                $deal->update(['next_activity_at' => null]);
+            }
             $this->audit->record('deal', $deal->id, 'transition_deal', $actor, $old, $deal->fresh()->only(['stage', 'status', 'probability', 'version', 'lost_reason']), null, $reason);
             $this->events->publish($deal->tenant_id, $stage === 'won' ? 'DealWon' : 'DealStageChanged', 'Deal', $deal->id, ['from' => $old['stage'], 'to' => $stage, 'amount' => $deal->amount]);
             return $deal->refresh();

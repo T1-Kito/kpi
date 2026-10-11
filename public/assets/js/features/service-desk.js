@@ -1,9 +1,55 @@
 (function () {
-    function data() { try { return JSON.parse(document.getElementById('serviceDeskData')?.textContent || '{}'); } catch (_) { return {}; } }
+    let sourceData = { customers: [], users: [] };
+    let loadVersion = 0;
+    const escape = (value) => VKTable.escapeHtml(String(value ?? ''));
+    const formatDate = (value, withTime = false) => value ? new Intl.DateTimeFormat('vi-VN', withTime ? {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'} : {day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date(value)) : '—';
+    function data() { return sourceData; }
     function options(rows, label) { return (rows || []).map(row => ({ value: row.id, label: label(row) })); }
     function value(form, name) { return new FormData(form).get(name) || null; }
     function select(name, label, rows) { return VKModal.select(name, label, rows); }
-    async function send(url, payload) { await VKApi.request(url, { method: 'POST', body: JSON.stringify(payload) }); VKModal.close(); window.location.reload(); }
+    async function send(url, payload) {
+        await VKApi.request(url, { method: 'POST', body: JSON.stringify(payload) });
+        VKModal.close();
+        await loadPage(true);
+    }
+
+    async function loadPage(silent = false) {
+        const root = document.querySelector('[data-service-desk-page]');
+        if (!root) return;
+        const version = ++loadVersion;
+        if (!silent) root.innerHTML = '<section class="module-panel"><p class="form-note">Đang tải dữ liệu…</p></section>';
+        try {
+            const page = root.dataset.serviceDeskPage;
+            const [records, lookups] = await Promise.all([
+                VKApi.request(page === 'tickets' ? '/service-tickets?page_size=100' : '/warranty-claims?page_size=100', {cache:false}),
+                VKApi.request('/service-desk/lookups', {cache:false}),
+            ]);
+            if (version !== loadVersion || !document.body.contains(root)) return;
+            sourceData = lookups.data || {customers:[], users:[]};
+            root.innerHTML = page === 'tickets' ? renderTickets(records.data || []) : renderWarranties(records.data || []);
+            if (page === 'warranties') bindWarrantyFilters();
+        } catch (error) {
+            if (version !== loadVersion || !document.body.contains(root)) return;
+            root.innerHTML = `<section class="module-panel"><div class="empty-state"><strong>Không tải được dữ liệu</strong><span>${escape(error.message || 'Vui lòng thử lại.')}</span><button class="btn" type="button" data-service-retry>Thử lại</button></div></section>`;
+        }
+    }
+
+    function renderTickets(rows) {
+        const body = rows.length ? rows.map(row => `<tr><td><span class="record-code-chip">${escape(row.code)}</span></td><td>${escape(row.customer?.name || '—')}</td><td>${escape(row.subject)}</td><td>${escape(row.category)}</td><td><span class="badge ${['high','urgent'].includes(row.priority)?'danger':'info'}">${escape(row.priority)}</span></td><td>${formatDate(row.resolution_due_at,true)}</td><td><span class="badge ${['resolved','closed'].includes(row.status)?'success':'warning'}">${escape(row.status)}</span></td></tr>`).join('') : '<tr><td colspan="7"><div class="empty-state"><strong>Chưa có ticket</strong><span>Tạo ticket khi khách hàng cần hỗ trợ hoặc bảo hành.</span></div></td></tr>';
+        return `<section class="module-panel"><div class="panel-head"><div><h2>Hàng đợi dịch vụ</h2><span>Ticket đang mở, đang xử lý và chờ phản hồi khách hàng.</span></div><span class="badge info">${rows.length} ticket</span></div><div class="table-wrap"><table class="list-table"><thead><tr><th>Mã</th><th>Khách hàng</th><th>Tiêu đề</th><th>Loại</th><th>Ưu tiên</th><th>SLA xử lý</th><th>Trạng thái</th></tr></thead><tbody>${body}</tbody></table></div></section>`;
+    }
+
+    function renderWarranties(rows) {
+        const now = new Date();
+        const active = rows.filter(row => row.warranty_end_at && new Date(row.warranty_end_at) >= now).length;
+        const today = new Date().toISOString().slice(0,10);
+        const body = rows.length ? rows.map(row => {
+            const isActive = row.warranty_end_at && new Date(row.warranty_end_at) >= now;
+            const customer = row.customer_name || row.customer?.name || '—';
+            return `<tr data-serial="${escape(String(row.serial_number||'').toLowerCase())}" data-product="${escape(String(row.product_name||'').toLowerCase())}" data-customer="${escape(String(customer).toLowerCase())}" data-purchase="${escape(String(row.purchase_date||'').slice(0,10))}"><td><span class="record-code-chip">${escape(row.code)}</span></td><td><strong>${escape(row.serial_number)}</strong></td><td>${escape(row.product_name)}</td><td><strong>${escape(customer)}</strong><br><small>${escape(row.customer_email || '')}</small></td><td>${formatDate(row.purchase_date)}</td><td>${formatDate(row.warranty_end_at)}<br><small>${isActive?'Còn hiệu lực':'Đã hết hạn'}</small></td><td><span class="badge ${isActive?'success':'warning'}">${isActive?'Còn hiệu lực':'Hết hạn'}</span></td></tr>`;
+        }).join('') : '<tr><td colspan="7"><div class="empty-state"><strong>Chưa có đăng ký bảo hành</strong><span>Thêm serial đầu tiên để bắt đầu quản lý.</span></div></td></tr>';
+        return `<section class="service-warranty-stats"><article><span>Tổng bảo hành</span><strong>${rows.length}</strong></article><article><span>Còn hiệu lực</span><strong>${active}</strong></article><article><span>Hết hạn</span><strong>${rows.length-active}</strong></article><article><span>Đăng ký hôm nay</span><strong>${rows.filter(row=>String(row.created_at||'').slice(0,10)===today).length}</strong></article></section><section class="module-panel"><div class="panel-head"><div><h2>Danh sách bảo hành</h2><span>Tìm nhanh theo serial, sản phẩm hoặc khách hàng.</span></div></div><div class="warranty-filter-grid" data-warranty-filter><div class="field"><label>Số serial</label><input id="warrantyFilterSerial" placeholder="Nhập số serial cần tìm..."></div><div class="field"><label>Sản phẩm / Model</label><input id="warrantyFilterProduct" placeholder="Nhập model / tên sản phẩm..."></div><div class="field"><label>Khách hàng</label><input id="warrantyFilterCustomer" placeholder="Nhập tên khách hàng..."></div><div class="field"><label>Ngày mua</label><input id="warrantyFilterPurchase" type="date"></div><div class="warranty-filter-actions"><button class="btn primary" type="button" data-warranty-search>Tìm kiếm</button><button class="btn secondary" type="button" data-warranty-reset>Làm mới</button></div></div><div class="table-wrap"><table class="list-table"><thead><tr><th>Mã</th><th>Số serial</th><th>Sản phẩm / Model</th><th>Khách hàng</th><th>Ngày bán</th><th>Hết hạn</th><th>Trạng thái</th></tr></thead><tbody data-warranty-list>${body}</tbody></table></div></section>`;
+    }
     function createTicket() {
         const source = data(); const customers = options(source.customers, r => `${r.code} - ${r.name}`); const users = [{ value: '', label: 'Chưa phân công' }, ...options(source.users, r => r.name)];
         VKModal.open('Tạo ticket hỗ trợ', [select('customer_id', 'Khách hàng', customers), VKModal.field('serial_number', 'Số serial (nếu có)'), VKModal.field('product_name', 'Tên sản phẩm / thiết bị'), select('assignee_id', 'Người xử lý', users), VKModal.field('subject', 'Tiêu đề'), '<div class="field"><label for="description">Mô tả yêu cầu</label><textarea id="description" name="description" rows="4"></textarea></div>', select('category', 'Loại yêu cầu', [{value:'support',label:'Hỗ trợ'}, {value:'warranty',label:'Bảo hành'}, {value:'installation',label:'Lắp đặt'}, {value:'maintenance',label:'Bảo trì'}]), select('priority', 'Ưu tiên', [{value:'normal',label:'Bình thường'}, {value:'low',label:'Thấp'}, {value:'high',label:'Cao'}, {value:'urgent',label:'Khẩn cấp'}])].join(''), async form => send('/service-tickets', { customer_id: Number(value(form,'customer_id')), serial_number:value(form,'serial_number'), product_name:value(form,'product_name'), assignee_id:value(form,'assignee_id') ? Number(value(form,'assignee_id')) : null, subject:value(form,'subject'), description:value(form,'description'), category:value(form,'category'), priority:value(form,'priority'), source:'manual' }));
@@ -34,6 +80,11 @@
         const search = () => document.querySelectorAll('[data-warranty-list] tr[data-serial]').forEach(row => { const show = ['serial','product','customer'].every(key => !fields[key].value || row.dataset[key].includes(fields[key].value.trim().toLowerCase())) && (!fields.purchase.value || row.dataset.purchase === fields.purchase.value); row.hidden = !show; });
         root.querySelector('[data-warranty-search]').addEventListener('click', search); root.querySelector('[data-warranty-reset]').addEventListener('click', () => { Object.values(fields).forEach(input => input.value = ''); search(); }); Object.values(fields).forEach(input => input.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); search(); } }));
     }
-    function bind() { document.querySelectorAll('[data-service-create]').forEach(button => { if (button.dataset.bound) return; button.dataset.bound = '1'; button.addEventListener('click', () => ({ticket:createTicket,warranty:createWarranty}[button.dataset.serviceCreate] || (()=>{}))()); }); bindWarrantyFilters(); }
+    function bind() {
+        document.querySelectorAll('[data-service-create]').forEach(button => { if (button.dataset.bound) return; button.dataset.bound = '1'; button.addEventListener('click', () => ({ticket:createTicket,warranty:createWarranty}[button.dataset.serviceCreate] || (()=>{}))()); });
+        const root = document.querySelector('[data-service-desk-page]');
+        if (root && !root.dataset.loaded) { root.dataset.loaded = '1'; loadPage(); }
+    }
+    document.addEventListener('click', event => { if (event.target.closest('[data-service-retry]')) loadPage(); });
     window.loadServiceTickets = bind; window.loadWarrantyClaims = bind; document.addEventListener('vk:ready', bind); bind();
 })();

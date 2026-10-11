@@ -5,7 +5,7 @@
 @section('page_title', 'Xuất kho')
 @section('page_subtitle', 'Tạo phiếu xuất từ đơn bán đã giữ hàng và ghi nhận giao dịch kho.')
 @section('page_actions')
-    <button class="btn primary" type="button" data-create-goods-issue>Tạo phiếu xuất</button>
+    <button class="btn primary" type="button" data-permission="inventory.issue.create" data-create-goods-issue>Tạo phiếu xuất</button>
 @endsection
 
 @section('content')

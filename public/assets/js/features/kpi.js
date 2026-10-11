@@ -1,4 +1,5 @@
 (function () {
+let kpiLoadVersion = 0;
 document.addEventListener('vk:ready', () => loadKpi());
 document.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-kpi-calculate]');
@@ -9,7 +10,7 @@ document.addEventListener('click', async (event) => {
 
     try {
         await VKApi.request('/kpi/snapshots/calculate', { method: 'POST', body: JSON.stringify({ period_type: 'day' }) });
-        await loadKpi();
+        await loadKpi({fresh: true});
     } catch (error) {
         button.disabled = false;
         button.textContent = 'Tính lại KPI';
@@ -20,60 +21,42 @@ document.addEventListener('click', async (event) => {
 async function loadKpi(options = {}) {
     const root = document.getElementById('kpiRoot');
     if (!root) return;
+    if (typeof window !== 'undefined' && window.VKUser?.data_scope && window.VKUser.data_scope !== 'company') {
+        await window.VKLayout.navigatePjax(window.VKUser.data_scope === 'department' ? '/kpi-reports' : '/my-kpi');
+        return;
+    }
+    const version = ++kpiLoadVersion;
     if (options.source !== 'pjax') {
         root.innerHTML = renderLoading();
     }
 
-    const fallback = { data: [], meta: { total: 0 } };
-    const [
-        kpiOverview,
-        snapshots,
-        leads,
-        quotations,
-        salesOrders,
-        purchaseRequests,
-        purchaseOrders,
-        balances,
-        receipts,
-        issues,
-        tasks,
-        alerts,
-    ] = await Promise.all([
-        safeRequest('/kpi/overview'),
-        safeRequest('/kpi/snapshots?period_type=day&page_size=30'),
-        safeRequest('/leads?page_size=100'),
-        safeRequest('/quotations?page_size=100'),
-        safeRequest('/sales-orders?page_size=100'),
-        safeRequest('/purchase-requests?page_size=100'),
-        safeRequest('/purchase-orders?page_size=100'),
-        safeRequest('/inventory-balances?page_size=100'),
-        safeRequest('/goods-receipts?page_size=100'),
-        safeRequest('/goods-issues?page_size=100'),
-        safeRequest('/tasks?page_size=100'),
-        safeRequest('/alerts?page_size=100'),
-    ]);
-
-    const pageData = {
-        kpiOverview: kpiOverview || null,
-        snapshots: snapshots?.data || [],
-        leads: leads || fallback,
-        quotations: quotations || fallback,
-        salesOrders: salesOrders || fallback,
-        purchaseRequests: purchaseRequests || fallback,
-        purchaseOrders: purchaseOrders || fallback,
-        balances: balances || fallback,
-        receipts: receipts || fallback,
-        issues: issues || fallback,
-        tasks: tasks || fallback,
-        alerts: alerts || fallback,
-    };
-    root.innerHTML = renderKpi(pageData);
-    openRequestedKpiException(pageData.kpiOverview?.data?.exceptions || []);
+    const requestOptions = options.fresh ? {cache: false} : {};
+    try {
+        // Render the summary immediately; historical snapshots do not block it.
+        const kpiOverview = await VKApi.request('/kpi/overview', requestOptions);
+        if (version !== kpiLoadVersion || document.getElementById('kpiRoot') !== root) return;
+        if (!kpiOverview?.data?.metrics) throw new Error('Không nhận được số liệu KPI.');
+        const counts = kpiOverview.data.metrics.counts || {};
+        const pageData = {kpiOverview, snapshots: [], historyLoading: true};
+        for (const key of ['leads','quotations','salesOrders','purchaseRequests','purchaseOrders','balances','receipts','issues','tasks','alerts']) {
+            pageData[key] = {data: [], meta: {total: counts[key] || 0}};
+        }
+        root.innerHTML = renderKpi(pageData);
+        openRequestedKpiException(kpiOverview.data.exceptions || []);
+        const history = await safeRequest('/kpi/snapshots?period_type=day&page_size=30', requestOptions);
+        if (version !== kpiLoadVersion || document.getElementById('kpiRoot') !== root) return;
+        const chart = root.querySelector('[data-kpi-history]');
+        if (chart) chart.innerHTML = history ? trendChart(history.data || []) : '<p class="form-note">Không thể tải lịch sử điểm. Số liệu tổng quan vẫn được hiển thị.</p>';
+    } catch (error) {
+        if (version !== kpiLoadVersion || document.getElementById('kpiRoot') !== root) return;
+        root.innerHTML = `<section class="module-panel"><div class="panel-head"><h2>Chưa tải được tổng quan KPI</h2></div><p class="form-note">${VKTable.escapeHtml(error.message || 'Vui lòng thử lại.')}</p><button type="button" class="btn secondary" data-kpi-retry>Thử lại</button></section>`;
+        root.querySelector('[data-kpi-retry]')?.addEventListener('click', () => loadKpi({fresh: true}));
+    }
 }
 
-async function safeRequest(path) {
+async function safeRequest(path, options = {}) {
     try {
-        return await VKApi.request(path);
+        return await VKApi.request(path, options);
     } catch (error) {
         return null;
     }
@@ -83,15 +66,15 @@ function renderKpi(data) {
     const backend = data.kpiOverview?.data || null;
     const metrics = backend?.metrics || buildMetrics(data);
     const bestRows = [
-        ['Doanh số', metrics.salesScore, delta(metrics.salesScore, 74), 'success'],
-        ['Tồn kho khả dụng', metrics.inventoryScore, delta(metrics.inventoryScore, 72), 'success'],
-        ['Tỷ lệ xử lý mua hàng', metrics.procurementScore, delta(metrics.procurementScore, 70), 'info'],
-        ['SLA công việc', metrics.workflowScore, delta(metrics.workflowScore, 58), 'warning'],
+['Doanh số', metrics.salesScore, '', 'success'],
+        ['Tồn kho khả dụng', metrics.inventoryScore, '', 'success'],
+        ['Tỷ lệ xử lý mua hàng', metrics.procurementScore, '', 'info'],
+        ['Hiệu quả công việc', metrics.workflowScore, '', 'warning'],
     ].sort((a, b) => b[1] - a[1]);
     const cautionRows = [
-        ['Workflow', metrics.workflowScore, delta(metrics.workflowScore, 58), 'danger'],
+        ['Workflow', metrics.workflowScore, '', 'danger'],
         ['Công việc quá hạn', Math.max(0, 100 - metrics.overdueTasks * 10), metrics.overdueTasks ? `-${metrics.overdueTasks} việc` : 'Ổn định', 'danger'],
-        ['Tỷ lệ duyệt PO', metrics.poApprovalRate, delta(metrics.poApprovalRate, 65), 'warning'],
+        ['Tỷ lệ duyệt PO', metrics.poApprovalRate, '', 'warning'],
         ['Tồn dưới mức tối thiểu', Math.max(0, 100 - metrics.lowStockRows * 12), metrics.lowStockRows ? `-${metrics.lowStockRows} mã` : 'Ổn định', 'warning'],
     ].sort((a, b) => a[1] - b[1]);
 
@@ -103,7 +86,7 @@ function renderKpi(data) {
                     title: 'Kinh doanh',
                     tone: 'green',
                     score: metrics.salesScore,
-                    change: delta(metrics.salesScore, 76),
+                    change: '',
                     href: '/sales-orders',
                     rows: [
                         ['Khách hàng tiềm năng', total(data.leads)],
@@ -116,7 +99,7 @@ function renderKpi(data) {
                     title: 'Kho vận',
                     tone: 'blue',
                     score: metrics.inventoryScore,
-                    change: delta(metrics.inventoryScore, 72),
+                    change: '',
                     href: '/inventory',
                     rows: [
                         ['Dòng tồn', total(data.balances)],
@@ -129,7 +112,7 @@ function renderKpi(data) {
                     title: 'Mua hàng',
                     tone: 'orange',
                     score: metrics.procurementScore,
-                    change: delta(metrics.procurementScore, 70),
+                    change: '',
                     href: '/purchase-orders',
                     rows: [
                         ['Yêu cầu mua', total(data.purchaseRequests)],
@@ -142,13 +125,13 @@ function renderKpi(data) {
                     title: 'Workflow',
                     tone: 'red',
                     score: metrics.workflowScore,
-                    change: delta(metrics.workflowScore, 58),
+                    change: '',
                     href: '/tasks',
                     rows: [
                         ['Công việc quá hạn', metrics.overdueTasks],
                         ['Hoàn thành', metrics.completedTasks],
                         ['Cảnh báo mở', metrics.openAlerts],
-                        ['SLA đạt', `${metrics.slaRate}%`],
+                        ['Tỷ lệ hoàn thành', `${metrics.completionRate ?? metrics.slaRate}%`],
                     ],
                 })}
             </div>
@@ -163,7 +146,7 @@ function renderKpi(data) {
                             <span>Chỉ hiển thị các lần tính KPI đã lưu; không dùng dữ liệu mô phỏng.</span>
                         </div>
                     </div>
-                    ${trendChart(data.snapshots)}
+                    <div data-kpi-history>${data.historyLoading ? '<p class="form-note">Đang tải lịch sử điểm…</p>' : trendChart(data.snapshots)}</div>
                 </section>
 
                 ${rankPanel('KPI tốt nhất', bestRows.slice(0, 4), 'success')}
@@ -275,7 +258,7 @@ function renderOverview(metrics) {
                 <small>Xếp hạng tham khảo theo điểm hiện tại</small>
                 <div class="score-bar"><span style="width:${Math.min(metrics.totalScore, 100)}%"></span></div>
             </div>
-            <div class="kpi-mini-chart"><small>Điểm hiện tại được tổng hợp từ bốn nhóm: bán hàng, kho vận, mua hàng và công việc.</small></div>
+            <div class="kpi-mini-chart"><small>Điểm tham khảo từ bốn nhóm: bán hàng, kho vận, mua hàng và công việc. Chưa sử dụng để chốt thưởng nhân viên.</small></div>
         </section>
     `;
 }
@@ -331,16 +314,22 @@ function renderBackendKpiPanel(backend) {
 }
 
 function moduleCard({ title, tone, score, change, rows, href }) {
+    const icons = {
+        green: '<path d="M4 20h16M7 16v-4m5 4V8m5 8V4"/>',
+        blue: '<path d="m3 8 9-5 9 5v13H3V8Zm0 0 9 5 9-5M12 13v8"/>',
+        orange: '<path d="M3 3h2l3 12h10l3-9H6M9 20h.01M18 20h.01"/>',
+        red: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3v3h6V3M8 14l3 3 5-6"/>',
+    };
     return `
         <section class="kpi-module-card ${tone}">
             <div class="kpi-module-top">
-                <span class="kpi-module-icon"></span>
+                <span class="kpi-module-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[tone] || icons.green}</svg></span>
                 <h2>${title}</h2>
                 <a href="${href}" aria-label="Xem chi tiết ${title}">›</a>
             </div>
             <div class="kpi-module-score">
                 <strong>${score}<small>/100</small></strong>
-                <span class="${change.startsWith('-') ? 'down' : 'up'}">${change}</span>
+                ${change ? `<span class="${change.startsWith('-') ? 'down' : 'up'}">${change}</span>` : ''}
             </div>
             <div class="score-bar"><span style="width:${score}%"></span></div>
             <div class="kpi-module-list">
@@ -374,7 +363,7 @@ function rankItem(label, value, change, tone) {
             <span class="rank-dot"></span>
             <strong>${label}</strong>
             <b>${value}/100</b>
-            <small class="${String(change).startsWith('-') ? 'down' : 'up'}">${change}</small>
+            ${change ? `<small class="${String(change).startsWith('-') ? 'down' : 'up'}">${change}</small>` : ''}
         </div>
     `;
 }

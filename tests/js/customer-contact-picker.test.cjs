@@ -25,18 +25,19 @@ function setup() {
     ], false);
     return { input, id, toggle, options, fields, combo };
 }
-test('legal representative precedes customer name and appears once in the form', () => {
+test('legal representative appears once inside invoice information', () => {
     const start = source.indexOf('async function openCustomerModal(');
     const form = source.slice(start, source.indexOf('function bindCustomerPrimaryContactPicker('));
-    assert.ok(form.indexOf("customerField('legal_representative'") < form.indexOf("customerField('name'"));
+    assert.ok(form.indexOf("customerField('legal_representative'") > form.indexOf('Thông tin xuất hóa đơn'));
     assert.equal((form.match(/customerField\('legal_representative'/g) || []).length, 1);
     assert.ok(!form.includes('Gán người liên hệ có sẵn'));
 });
 
-test('representative position appears once in the upper customer section', () => {
+test('representative position appears once in customer information', () => {
     const form = source.slice(source.indexOf('async function openCustomerModal('), source.indexOf('function syncCustomerBusinessFields('));
     assert.equal((form.match(/customerField\('representative_position'/g) || []).length, 1);
     assert.ok(form.indexOf("customerField('representative_position'") < form.indexOf('Thông tin xuất hóa đơn'));
+    assert.ok(form.indexOf("customerField('representative_position'") > form.indexOf("customerSelect('status'"));
     assert.match(form, /Cá nhân \/ khách lẻ \/ vãng lai/);
 });
 

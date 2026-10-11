@@ -16,7 +16,7 @@
         inventory: ['inventory', 'inventory-transactions', 'warehouses', 'goods-receipts', 'goods-issues', 'stock-takes'],
         finance: ['sales-invoices', 'customer-receivables', 'customer-payments'],
         service: ['service-tickets', 'warranty-claims'],
-        kpi: ['kpi', 'kpi-adjustments', 'kpi-settings'],
+        kpi: ['kpi', 'my-kpi', 'kpi-reports', 'kpi-adjustments', 'kpi-settings'],
         admin: ['users', 'roles', 'organization', 'workflows', 'print-templates', 'audit-logs', 'settings', 'sales-master-data'],
     };
     const defaultSidebarIcons = {
@@ -35,46 +35,48 @@
 
     const features = {
         dashboard: ['dashboard.js?v=20261008-2', 'loadDashboard'],
-        leads: ['leads.js?v=20261009-flow1', 'loadLeads'],
-        deals: ['deals.js?v=20261009-care1', 'loadDeals'],
+        leads: ['leads.js?v=20261011-permissions1', 'loadLeads'],
+        deals: ['deals.js?v=20261011-permissions1', 'loadDeals'],
         'sales-master-data': ['sales-master-data.js?v=20260923-1', 'loadSalesMasterData'],
         contracts: ['contracts.js?v=20260923-6', 'loadContracts'],
-        quotations: ['quotations.js?v=20261009-flow1', 'loadQuotations'],
+        quotations: ['quotations.js?v=20261011-navigation1', 'loadQuotations'],
         'sales-orders': ['sales-orders.js?v=20261008-menu1', 'loadSalesOrders'],
-        deliveries: ['sales-fulfillment.js?v=20260618-1', 'loadDeliveries'],
-        'sales-invoices': ['sales-fulfillment.js?v=20260618-1', 'loadSalesInvoices'],
+        deliveries: ['sales-fulfillment.js?v=20261009-codes1', 'loadDeliveries'],
+        'sales-invoices': ['sales-fulfillment.js?v=20261009-codes1', 'loadSalesInvoices'],
         'customer-receivables': ['customer-receivables.js?v=20260617-1', 'loadCustomerReceivables'],
-        'customer-payments': ['sales-fulfillment.js?v=20260618-1', 'loadCustomerPayments'],
-        customers: ['customers.js?v=20261009-business1', 'loadCustomers'],
+        'customer-payments': ['sales-fulfillment.js?v=20261009-codes1', 'loadCustomerPayments'],
+        customers: ['customers.js?v=20261011-position1', 'loadCustomers'],
         'customer-contacts': ['customer-contacts.js?v=20261009-1', 'loadCustomerContacts'],
         suppliers: ['suppliers.js?v=20261008-menu1', 'loadSuppliers'],
-        skus: ['skus.js?v=20261008-menu1', 'loadSkus'],
+        skus: ['skus.js?v=20261009-input-code2', 'loadSkus'],
         'product-categories': ['product-catalog.js?v=20260921-1', 'loadProductCatalog'],
         'product-brands': ['product-catalog.js?v=20260921-1', 'loadProductCatalog'],
         inventory: ['inventory.js?v=20260615-3', 'loadInventory'],
         'inventory-transactions': ['inventory.js?v=20260615-3', 'loadInventory'],
         warehouses: ['warehouses.js', 'loadWarehouses'],
         'purchase-requests': ['purchase-requests.js?v=20261008-menu1', 'loadPurchaseRequests'],
-        'supplier-quotations': ['supplier-quotations.js?v=20261008-3', 'loadSupplierQuotations'],
-        'purchase-orders': ['purchase-orders.js?v=20261008-menu1', 'loadPurchaseOrders'],
+        'supplier-quotations': ['supplier-quotations.js?v=20261011-4', 'loadSupplierQuotations'],
+        'purchase-orders': ['purchase-orders.js?v=20261009-workflow1', 'loadPurchaseOrders'],
         'goods-receipts': ['goods-receipts.js?v=20261008-menu1', 'loadGoodsReceipts'],
         'goods-issues': ['goods-issues.js?v=20261008-menu1', 'loadGoodsIssues'],
         'stock-takes': ['stock-takes.js?v=20260619-1', 'loadStockTakes'],
-        tasks: ['tasks.js?v=20261009-compact1', 'loadTasks'],
-        approvals: ['approvals.js?v=20260619-1', 'loadApprovals'],
+        tasks: ['tasks.js?v=20261009-codes1', 'loadTasks'],
+        approvals: ['approvals.js?v=20261011-2', 'loadApprovals'],
         alerts: ['alerts.js?v=20260615-2', 'loadAlerts'],
-        kpi: ['kpi.js?v=20261005-1', 'loadKpi'],
-        'kpi-adjustments': ['kpi-adjustments.js?v=20260619-1', 'loadKpiAdjustments'],
-        'kpi-settings': ['kpi-settings.js?v=20261005-1', 'loadKpiSettings'],
+        kpi: ['kpi.js?v=20261011-scope1', 'loadKpi'],
+        'kpi-reports': ['kpi-reports.js?v=20261011-live1', 'loadKpiReports'],
+        'my-kpi': ['my-kpi.js?v=20261011-assign2', 'loadMyKpi'],
+        'kpi-adjustments': ['kpi-adjustments.js?v=20261009-permissions1', 'loadKpiAdjustments'],
+        'kpi-settings': ['kpi-settings.js?v=20261011-modal1', 'loadKpiSettings'],
         workflows: ['workflows.js?v=20260618-2', 'loadWorkflows'],
-        users: ['users.js?v=20261008-menu1', 'loadUsers'],
+        users: ['users.js?v=20261009-permissions1', 'loadUsers'],
         roles: ['roles.js?v=20261008-1', 'loadRoles'],
-        organization: ['organization.js?v=20260921-1', 'loadOrganization'],
-        'print-templates': ['print-templates.js?v=20260923-5', 'loadPrintTemplates'],
+        organization: ['organization.js?v=20261011-master1', 'loadOrganization'],
+        'print-templates': ['print-templates.js?v=20261010-workspace2', 'loadPrintTemplates'],
         'audit-logs': ['audit-logs.js', 'loadAuditLogs'],
         'service-tickets': ['service-desk.js', 'loadServiceTickets'],
         'warranty-claims': ['service-desk.js', 'loadWarrantyClaims'],
-        settings: ['settings.js?v=20261008-5', 'loadSettings'],
+        settings: ['settings.js?v=20261009-icons2', 'loadSettings'],
     };
     const routePrefetch = {
         '/dashboard': ['dashboard', [
@@ -627,6 +629,10 @@
 
         const [file, fn] = feature;
         await loadScript(`/assets/js/features/${file}`);
+        if (page === 'dashboard' && document.getElementById('myKpiRoot')) {
+            await loadScript('/assets/js/features/my-kpi.js?v=20261011-assign2');
+            window.loadMyKpi?.();
+        }
         if (typeof window[fn] === 'function') {
             await window[fn]({ source: 'pjax' });
             return;

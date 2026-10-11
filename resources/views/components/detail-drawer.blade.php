@@ -5,7 +5,7 @@
                 <span data-detail-kicker>Chi tiết</span>
                 <h2 data-detail-title>Đang tải...</h2>
             </div>
-            <button class="icon-btn" type="button" data-detail-close aria-label="Đóng">×</button>
+            <button class="icon-btn ui-close-button" type="button" data-detail-close aria-label="Đóng chi tiết" title="Đóng"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         </header>
         <div data-detail-body></div>
     </aside>

@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Department;
+use App\Models\Tenant;
+use App\Support\OrganizationHierarchy;
 use App\Support\AuditLogger;
 use App\Support\CodeGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class DepartmentController extends Controller
@@ -64,11 +67,17 @@ class DepartmentController extends Controller
             'manager_id' => ['nullable', Rule::exists('users', 'id')->where('tenant_id', $tenantId)],
         ]);
 
-        abort_if(($data['parent_id'] ?? null) === $department->id, 422, 'Phòng ban cha không được trùng chính nó.');
-        $old = $department->toArray();
-        $department->update($data);
-        $this->audit->record('department', $department->id, 'update_department', $request->user(), $old, $department->fresh()->toArray(), $request);
+        return DB::transaction(function () use ($data, $department, $tenantId, $request) {
+            Tenant::whereKey($tenantId)->lockForUpdate()->firstOrFail();
+            $department->refresh();
+            if (array_key_exists('parent_id', $data)) {
+                OrganizationHierarchy::assertAcyclic($department, 'parent_id', isset($data['parent_id']) ? (int) $data['parent_id'] : null);
+            }
+            $old = $department->toArray();
+            $department->update($data);
+            $this->audit->record('department', $department->id, 'update_department', $request->user(), $old, $department->fresh()->toArray(), $request);
 
-        return response()->json(['data' => $department->refresh()->loadCount('users')]);
+            return response()->json(['data' => $department->refresh()->loadCount('users')]);
+        });
     }
 }

@@ -91,7 +91,7 @@
     }
 
     function renderHead(key, state, row) {
-        if (['sku', 'purchaseOrder', 'goodsReceipt'].includes(state.type)) return '';
+        if (['sku', 'purchaseOrder', 'goodsReceipt', 'alert'].includes(state.type)) return '';
         if (state.type === 'purchaseRequest') {
             return renderPurchaseRequestHead(key, state, row);
         }
@@ -116,7 +116,7 @@
                 <button class="btn small" type="button" data-record-page-back="${key}">Quay lại danh sách</button>
                 <div class="record-page-title">
                     <span>${escape(title)}</span>
-                    <h2>${escape(row.code || row.sku_code || row.name || row.title || '-')} ${VKTable.statusBadge(row.status || (row.is_active === false ? 'inactive' : 'active'))}</h2>
+                    <h2><span class="${row.code || row.sku_code ? 'record-code-text' : ''}">${escape(row.code || row.sku_code || row.name || row.title || '-')}</span> ${VKTable.statusBadge(row.status || (row.is_active === false ? 'inactive' : 'active'))}</h2>
                     <p><strong>${escape(primary)}</strong>${row.stock_status ? ` · ${escape(VKTable.translateStatus(row.stock_status))}` : ''}</p>
                 </div>
                 <div class="record-page-meta">
@@ -135,7 +135,7 @@
                     <button type="button" data-record-page-back="${key}" aria-label="Quay lại danh sách">‹</button>
                     <span>Yêu cầu mua</span>
                     <i>›</i>
-                    <strong>${escape(row.code || '-')}</strong>
+                    <strong class="record-code-text">${escape(row.code || '-')}</strong>
                 </div>
                 <div class="record-page-actions">${state.actions ? state.actions(row) : ''}</div>
             </div>
@@ -193,13 +193,13 @@
         ];
         return `
             <div class="record-tabs">
-                ${['salesOrder', 'purchaseOrder', 'goodsReceipt'].includes(state.type) ? `<button class="btn small" type="button" data-record-page-back="${key}">← Quay lại</button>` : ''}
+                ${['salesOrder', 'purchaseOrder', 'goodsReceipt', 'alert'].includes(state.type) ? `<button class="btn small" type="button" data-record-page-back="${key}">← Quay lại</button>` : ''}
                 ${tabs.map(([tab, label]) => `
                     <button class="${state.tab === tab ? 'active' : ''}" type="button" data-record-page-key="${key}" data-record-page-tab="${tab}">
                         ${escape(label)}
                     </button>
                 `).join('')}
-                ${['sku', 'salesOrder', 'purchaseOrder', 'goodsReceipt'].includes(state.type) ? `<div class="record-page-actions" style="margin-left:auto">${state.actions ? state.actions(row) : ''}</div>` : ''}
+                ${['sku', 'salesOrder', 'purchaseOrder', 'goodsReceipt', 'alert'].includes(state.type) ? `<div class="record-page-actions" style="margin-left:auto">${state.actions ? state.actions(row) : ''}</div>` : ''}
             </div>
         `;
     }
@@ -294,7 +294,7 @@
                 <h3>Thông tin chứng từ</h3>
                 <div class="goods-receipt-detail-list">
                     ${fields.map(([label, value, html]) => `
-                        <div><span>${escape(label)}</span><strong>${html ? value : escape(value)}</strong></div>
+                        <div><span>${escape(label)}</span><strong class="${/^Mã(?:\s|$)/i.test(label) ? 'record-code-text' : ''}">${html ? value : escape(value)}</strong></div>
                     `).join('')}
                 </div>
             </section>
@@ -400,7 +400,7 @@
                         <div>
                             <span>${escape(label)}</span>
                             <i>:</i>
-                            <strong>${html ? value : escape(value)}</strong>
+                            <strong class="${/^Mã(?:\s|$)/i.test(label) ? 'record-code-text' : ''}">${html ? value : escape(value)}</strong>
                         </div>
                     `).join('')}
                 </div>
@@ -427,7 +427,7 @@
                         <div>
                             <span>${escape(label)}</span>
                             <i>:</i>
-                            <strong>${html ? value : escape(value)}</strong>
+                            <strong class="${/^Mã(?:\s|$)/i.test(label) ? 'record-code-text' : ''}">${html ? value : escape(value)}</strong>
                         </div>
                     `).join('')}
                 </div>
@@ -599,6 +599,7 @@
             alert: [
                 ['Tiêu đề', row.title || '-'],
                 ['Ngày tạo', formatDateTime(row.created_at)],
+                ['Cập nhật', formatDateTime(row.updated_at)],
                 ['Loại cảnh báo', VKTable.translateType(row.alert_type || '-')],
                 ['Trạng thái', VKTable.statusBadge(row.status || 'open'), true],
                 ['Mức độ', VKTable.statusBadge(row.level || 'info'), true],
@@ -616,7 +617,7 @@
                     ${(fields[type] || []).map(([label, value, html]) => `
                         <div>
                             <span>${escape(label)}</span>
-                            <strong>${html ? value : escape(value)}</strong>
+                            <strong class="${/^Mã(?:\s|$)/i.test(label) ? 'record-code-text' : ''}">${html ? value : escape(value)}</strong>
                         </div>
                     `).join('')}
                 </div>
@@ -657,7 +658,7 @@
                         <div>
                             <span>${escape(label)}</span>
                             <i>:</i>
-                            <strong>${html ? value : escape(value)}</strong>
+                            <strong class="${/^Mã(?:\s|$)/i.test(label) ? 'record-code-text' : ''}">${html ? value : escape(value)}</strong>
                         </div>
                     `).join('')}
                 </div>
@@ -796,7 +797,7 @@
                     ${fields.map(([label, value, html]) => `
                         <div>
                             <span>${escape(label)}</span>
-                            <strong>${html ? value : escape(value ?? '-')}</strong>
+                            <strong class="${/^Mã(?:\s|$)/i.test(label) ? 'record-code-text' : ''}">${html ? value : escape(value ?? '-')}</strong>
                         </div>
                     `).join('')}
                 </div>
@@ -874,7 +875,7 @@
                     ${fields.map(([label, value, html]) => `
                         <div>
                             <span>${escape(label)}</span>
-                            <strong>${html ? value : escape(value)}</strong>
+                            <strong class="${/^Mã(?:\s|$)/i.test(label) ? 'record-code-text' : ''}">${html ? value : escape(value)}</strong>
                         </div>
                     `).join('')}
                 </div>
@@ -921,7 +922,7 @@
                     ${fields.map(([label, value, html]) => `
                         <div>
                             <span>${escape(label)}</span>
-                            <strong>${html ? value : escape(value)}</strong>
+                            <strong class="${/^Mã(?:\s|$)/i.test(label) ? 'record-code-text' : ''}">${html ? value : escape(value)}</strong>
                         </div>
                     `).join('')}
                 </div>
@@ -1071,7 +1072,7 @@
                     ${fields.map(([label, value, html]) => `
                         <div>
                             <span>${escape(label)}</span>
-                            <strong>${html ? value : escape(value ?? '-')}</strong>
+                            <strong class="${/^Mã(?:\s|$)/i.test(label) ? 'record-code-text' : ''}">${html ? value : escape(value ?? '-')}</strong>
                         </div>
                     `).join('')}
                 </div>

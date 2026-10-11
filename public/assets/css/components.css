@@ -386,27 +386,41 @@ button {
     width: 40px;
     height: 40px;
     flex: 0 0 40px;
-    border-radius: 8px;
+    border-radius: 12px;
+    border-color: #e8edf5;
+    background: #f8fafd;
+    color: #52627a;
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.notification-trigger:hover,
+.notification-trigger[aria-expanded="true"] {
+    background: #edf4ff;
+    border-color: #d6e5ff;
+    color: #2563eb;
+}
+
+.notification-trigger:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 3px;
 }
 
 .notification-icon {
-    width: 22px;
-    height: 22px;
+    width: 21px;
+    height: 21px;
     display: block;
-    background-color: currentColor;
-    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10.268 21a2 2 0 0 0 3.464 0'/%3E%3Cpath d='M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8a6 6 0 0 0-12 0c0 4.499-1.411 5.956-2.738 7.326'/%3E%3C/svg%3E") center / contain no-repeat;
-    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10.268 21a2 2 0 0 0 3.464 0'/%3E%3Cpath d='M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8a6 6 0 0 0-12 0c0 4.499-1.411 5.956-2.738 7.326'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 
 .notification-count {
     position: absolute;
-    top: -6px;
-    right: -6px;
+    top: -4px;
+    right: -4px;
     min-width: 18px;
     height: 18px;
     border: 2px solid #fff;
     border-radius: 999px;
-    background: var(--danger-text);
+    background: #ef4444;
     color: #fff;
     display: inline-flex;
     align-items: center;
@@ -805,6 +819,11 @@ tbody tr[data-row-detail] {
 
 .modal-wide {
     width: min(980px, 100%);
+}
+
+/* Backward-compatible wide dialog used by KPI, stock take and adjustment forms. */
+.wide-modal {
+    width: min(1080px, calc(100vw - 32px));
 }
 
 .role-permission-modal { width:min(1100px,calc(100vw - 32px)); height:min(820px,calc(100dvh - 48px)); max-height:calc(100dvh - 48px); display:flex; flex-direction:column; overflow:hidden; }
@@ -2280,15 +2299,46 @@ tbody tr[data-row-detail] {
 }
 
 .modal-close-button {
-    width: 34px;
-    min-width: 34px;
+    display: inline-grid;
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    place-items: center;
+    flex: none;
     padding: 0;
-    border: 0;
-    background: transparent;
-    color: #6B7280;
-    font-size: 22px;
-    font-weight: 400;
+    border: 1px solid #CBD5E1;
+    border-radius: 9px;
+    background: #F8FAFC;
+    color: #334155;
 }
+
+.modal-close-button svg {
+    width: 19px;
+    height: 19px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+}
+
+.ui-close-button {
+    display:inline-grid;
+    width:38px;
+    min-width:38px;
+    height:38px;
+    padding:0;
+    place-items:center;
+    flex:none;
+    border:1px solid #CBD5E1;
+    border-radius:9px;
+    background:#F8FAFC;
+    color:#334155;
+    box-shadow:none;
+}
+
+.ui-close-button svg { width:19px; height:19px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; pointer-events:none; }
+.ui-close-button:hover { border-color:#FCA5A5; background:#FEF2F2; color:#DC2626; }
+.ui-close-button:focus-visible { outline:3px solid rgba(37,99,235,.2); outline-offset:2px; border-color:#2563EB; }
 
 .notice-modal {
     width: min(440px, calc(100vw - 32px));
@@ -3379,6 +3429,8 @@ tbody tr[data-row-detail] {
     cursor: pointer;
 }
 
+.toast-close svg { width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; pointer-events:none; }
+
 .toast-close:hover {
     color: #FFFFFF;
     background: rgba(255, 255, 255, .12);
@@ -3568,11 +3620,22 @@ tbody tr[data-row-detail] {
     box-shadow: none;
 }
 
-.modal-close-button,
+.modal-close-button {
+    background: #F8FAFC;
+    border-color: #CBD5E1;
+    color: #334155;
+}
+
 .modal-close-button:hover {
-    background: transparent;
-    border-color: transparent;
-    color: #6B7280;
+    background: #FEF2F2;
+    border-color: #FCA5A5;
+    color: #DC2626;
+}
+
+.modal-close-button:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, .2);
+    outline-offset: 2px;
+    border-color: #2563EB;
 }
 
 .row-action-menu summary {

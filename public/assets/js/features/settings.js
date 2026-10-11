@@ -104,6 +104,8 @@ function settingsIcon(key) {
     const paths = {
         company:'<path d="M5 21V5l7-3 7 3v16M3 21h18M9 7h1m4 0h1M9 11h1m4 0h1M10 21v-6h4v6"/>',
         appearance:'<path d="M12 3a9 9 0 1 0 0 18h1a2 2 0 0 0 1-4 2 2 0 0 1 1-4h3a3 3 0 0 0 3-3c0-4-4-7-9-7Z"/><path d="M7 9h.01M10 6h.01M15 7h.01M6 14h.01"/>',
+        assignment:'<circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><path d="M12 8v4M5 16v-4h14v4"/>',
+        salesApproval:'<path d="M5 3h10l4 4v14H5V3Zm10 0v5h4M8 14l2 2 5-5"/>',
         approval:'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2h6v2M8 13l3 3 5-6"/>',
         sla:'<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/>',
         users:'<circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M17 5a3 3 0 0 1 0 6m1 4a5 5 0 0 1 3 5"/>',
@@ -249,17 +251,43 @@ async function saveWorkAssignment() {
     finally { button.disabled = false; }
 }
 
+function renderSettingsMenu() {
+    const groups = [
+        ['Doanh nghiệp & nhân sự','Thông tin nền, cơ cấu tổ chức và quyền truy cập.',[
+            ['company','Thông tin công ty','Xem thông tin doanh nghiệp và tài khoản hiện tại.','section'],
+            ['company','Phòng ban & chức vụ','Quản lý cơ cấu tổ chức và chức danh nhân viên.','/organization'],
+            ['users','Người dùng','Quản lý tài khoản và trạng thái hoạt động.','/users'],
+            ['roles','Vai trò & phân quyền','Quy định quyền truy cập theo từng vai trò.','/roles']]],
+        ['Quy trình & tự động hóa','Cấu hình người phụ trách, phê duyệt và thời hạn xử lý.',[
+            ['assignment','Tự động phân công','Luân phiên giao việc cho nhóm người có quyền phù hợp.','section'],
+            ['salesApproval','Duyệt báo giá bán','Thiết lập người duyệt và ngưỡng kiểm soát báo giá.','section'],
+            ['approval','Duyệt mua hàng & kho','Thiết lập luồng duyệt mua hàng, nhập kho và xuất kho.','section'],
+            ['sla','Thời hạn công việc','Thiết lập thời hạn xử lý theo loại công việc.','section'],
+            ['approval','Hướng dẫn quy trình','Tra cứu các bước thao tác và màn hình theo luồng nghiệp vụ.','/workflows']]],
+        ['Dữ liệu & đo lường','Danh mục dùng chung, chỉ tiêu và lịch sử thay đổi.',[
+            ['data','Dữ liệu nền bán hàng','Quản lý danh mục dùng chung cho hoạt động bán hàng.','/sales-master-data'],
+            ['kpi','Thiết lập KPI','Cấu hình chỉ tiêu và cách tính điểm; cần đối soát trước khi dùng tính thưởng.','/kpi-settings'],
+            ['audit','Nhật ký hệ thống','Tra cứu lịch sử thao tác và thay đổi dữ liệu.','/audit-logs']]],
+        ['Thương hiệu & tài liệu','Nhận diện giao diện và mẫu chứng từ.',[
+            ['appearance','Giao diện & thương hiệu','Cập nhật logo và biểu tượng của từng phân hệ.','section'],
+            ['audit','Mẫu in','Quản lý mẫu tài liệu và chứng từ xuất từ hệ thống.','/print-templates']]]
+    ];
+    return `<section class="settings-launcher settings-icon-menu" id="settingsLauncher" role="dialog" aria-modal="true" aria-label="Menu thiết lập"><header><button class="ui-close-button" type="button" data-settings-launcher-close aria-label="Đóng menu" title="Đóng"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header><div class="settings-launcher-grid">${groups.flatMap(([, ,items]) => items).map(([key,label,description,target]) => {
+        const content = `<span class="settings-tile-icon">${settingsIcon(key)}</span><span>${label}</span>`;
+        return target === 'section' ? `<button type="button" data-settings-nav="${key}" title="${description}">${content}</button>` : `<a href="${target}" title="${description}">${content}</a>`;
+    }).join('')}</div></section>`;
+}
+
 function renderSettings(data) {
     window.__slaPolicies = data.slaPolicies.data || [];
-    const sections = [['company','Công ty','Thông tin doanh nghiệp'],['appearance','Giao diện','Logo và biểu tượng'],['assignment','Tự động phân công','Chia đều việc cho người có quyền'],['approval','Duyệt mua hàng','Người duyệt và mức tiền'],['salesApproval','Duyệt báo giá bán','Luồng duyệt tự động'],['sla','Thời hạn công việc','SLA và cảnh báo']];
     const panel = (title, description, body, tools = '') => `<section class="module-panel settings-section"><div class="panel-head"><div><h2>${title}</h2><span>${description}</span></div>${tools}</div>${body}</section>`;
-    return `<div class="settings-launcher-workspace"><div class="settings-page-toolbar"><div><span>Thiết lập</span><strong data-settings-current-title>Thông tin công ty</strong></div><button type="button" class="btn secondary" data-settings-launcher-open aria-expanded="false" aria-controls="settingsLauncher">${settingsIcon('data')} Menu thiết lập</button></div><div class="settings-launcher-layer" data-settings-launcher-layer hidden><section class="settings-launcher" id="settingsLauncher" role="dialog" aria-modal="true" aria-labelledby="settingsLauncherTitle"><header><div><h2 id="settingsLauncherTitle">Menu thiết lập</h2><small>Chọn chức năng cần sử dụng</small></div><button type="button" data-settings-launcher-close aria-label="Đóng menu">×</button></header><div class="settings-launcher-group">Hệ thống & quy trình</div><div class="settings-launcher-grid">${sections.map(([key,title,note]) => `<button type="button" data-settings-nav="${key}" title="${note}"><span class="settings-tile-icon">${settingsIcon(key)}</span><span>${title}</span></button>`).join('')}</div><div class="settings-launcher-group">Danh mục & quản trị</div><div class="settings-launcher-grid">${[['users','Người dùng','/users'],['roles','Phân quyền','/roles'],['data','Dữ liệu nền','/sales-master-data'],['kpi','Thiết lập KPI','/kpi-settings'],['audit','Nhật ký','/audit-logs']].map(([key,title,href]) => `<a href="${href}"><span class="settings-tile-icon">${settingsIcon(key)}</span><span>${title}</span></a>`).join('')}</div><footer>Mỗi chức năng mở một màn hình riêng</footer></section></div><div class="settings-content">
+    return `<div class="settings-launcher-workspace"><div class="settings-page-toolbar"><div><span>Thiết lập doanh nghiệp</span><strong data-settings-current-title>Thông tin công ty</strong></div><button type="button" class="btn secondary" data-settings-launcher-open aria-expanded="false" aria-controls="settingsLauncher">${settingsIcon('data')} Tất cả thiết lập</button></div><div class="settings-launcher-layer" data-settings-launcher-layer hidden>${renderSettingsMenu()}</div><div class="settings-content">
         <div data-settings-section="company" hidden>${panel('Thông tin công ty','Thông tin doanh nghiệp và tài khoản đang sử dụng.',renderCompany(data.me))}</div>
         <div data-settings-section="appearance" hidden class="settings-stack">${panel('Logo hệ thống','Nhận diện thương hiệu trên phần mềm.',renderLogoSetting(data.me))}${panel('Biểu tượng menu','Tùy chỉnh biểu tượng cho từng phân hệ.',renderSidebarIconSetting())}</div>
         <div data-settings-section="approval" hidden>${procurementApproval ? renderProcurementApproval() + renderOperationalApproval() : panel('Duyệt mua hàng','Không thể tải cấu hình.', '<p class="form-note">Bạn cần quyền quản lý người dùng để thiết lập. Nếu đã có quyền, vui lòng thử lại.</p>')}</div>
         <div data-settings-section="salesApproval" hidden>${renderSalesQuotationApproval()}</div>
         <div data-settings-section="assignment" hidden>${renderWorkAssignment()}</div>
-        <div data-settings-section="sla" hidden>${panel('Thời hạn xử lý công việc','Cấu hình thời hạn, nhắc việc và leo thang cho từng loại công việc.',renderSlaPolicies(data.slaPolicies.data || []),'<button class="btn primary small" data-create-sla-policy>Thêm SLA</button>')}</div>
+        <div data-settings-section="sla" hidden>${panel('Thời hạn xử lý công việc','Cấu hình thời hạn xử lý theo loại công việc. Nhắc quá hạn chỉ hoạt động khi tiến trình nhắc việc đã được bật.',renderSlaPolicies(data.slaPolicies.data || []),'<button class="btn primary small" data-create-sla-policy>Thêm SLA</button>')}</div>
     </div></div>`;
 }
 
@@ -267,10 +295,6 @@ function showSettingsSection(key, updateUrl = false) {
     const root = document.getElementById('settingsRoot');
     if (!root) return;
     if (!['company','appearance','approval','salesApproval','assignment','sla'].includes(key)) key = 'company';
-    const grid = root.querySelector('.settings-launcher-grid:last-of-type');
-    if (grid && !grid.querySelector('[data-settings-admin-extra]')) {
-        grid.insertAdjacentHTML('beforeend', [['company','Phòng ban & chức vụ','/organization'],['audit','Mẫu in','/print-templates'],['approval','Quy trình','/workflows']].map(([icon,title,href]) => `<a href="${href}" data-settings-admin-extra><span class="settings-tile-icon">${settingsIcon(icon)}</span><span>${title}</span></a>`).join(''));
-    }
     const title = root.querySelector('[data-settings-current-title]');
     if (title) title.textContent = {company:'Thông tin công ty',appearance:'Giao diện',approval:'Luồng duyệt mua hàng',salesApproval:'Duyệt báo giá bán hàng',assignment:'Tự động phân công',sla:'Thời hạn công việc'}[key];
     root.querySelectorAll('[data-settings-section]').forEach(node => { node.hidden = node.dataset.settingsSection !== key; });

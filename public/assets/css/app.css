@@ -684,16 +684,9 @@ button {
 .app-switcher-head strong { color: #0F172A; font-size: 15px; }
 .app-switcher-head small { color: var(--muted); font-size: 12px; }
 .app-switcher-head > button {
-    width: 28px;
-    height: 28px;
-    border: 0;
-    border-radius: 6px;
-    background: transparent;
-    color: #64748B;
-    font-size: 22px;
-    line-height: 1;
+    width: 38px;
+    height: 38px;
 }
-.app-switcher-head > button:hover { background: #F1F5F9; }
 
 .app-switcher-search { margin-bottom: 12px; }
 .app-switcher-search input {

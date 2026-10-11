@@ -1,15 +1,23 @@
 (function () {
     let submitHandler = null;
     let toastTimer = null;
+    const closeIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 
     function open(title, bodyHtml, handler, options = {}) {
         const modal = document.querySelector('#modalBackdrop .modal');
         const submit = document.getElementById('modalSubmit');
         const cancel = document.querySelector('#modalForm [data-modal-close]');
+        const closeButton = document.querySelector('#modalBackdrop .modal-head [data-modal-close]');
 
         document.getElementById('modalTitle').textContent = title;
         document.getElementById('modalBody').innerHTML = bodyHtml;
         document.getElementById('modalBackdrop').classList.add('open');
+        document.getElementById('modalBackdrop').setAttribute('aria-hidden', 'false');
+        if (closeButton) {
+            closeButton.innerHTML = closeIcon;
+            closeButton.title = 'Đóng';
+            closeButton.setAttribute('aria-label', 'Đóng cửa sổ');
+        }
 
         if (modal) modal.className = `modal ${options.className || ''}`.trim();
         if (submit) {
@@ -27,6 +35,7 @@
         const cancel = document.querySelector('#modalForm [data-modal-close]');
 
         document.getElementById('modalBackdrop').classList.remove('open');
+        document.getElementById('modalBackdrop').setAttribute('aria-hidden', 'true');
         if (form) form.reset();
         if (modal) modal.className = 'modal';
         if (submit) {
@@ -58,7 +67,7 @@
         node.innerHTML = `
             <span class="toast-icon" aria-hidden="true">${icon}</span>
             <span class="toast-message">${VKTable.escapeHtml(message)}</span>
-            <button class="toast-close" type="button" data-toast-close aria-label="Đóng">×</button>
+            <button class="toast-close" type="button" data-toast-close aria-label="Đóng thông báo">${closeIcon}</button>
         `;
         node.classList.add('show');
         toastTimer = window.setTimeout(hideToast, duration);
@@ -92,7 +101,7 @@
             hideToast();
             return;
         }
-        if (event.target.matches('[data-modal-close]') || event.target.id === 'modalBackdrop') {
+        if (event.target.closest('[data-modal-close]') || event.target.id === 'modalBackdrop') {
             close();
         }
     });

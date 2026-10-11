@@ -391,7 +391,7 @@
                 <button class="btn small" type="button" data-fulfillment-back="invoices">Quay lại danh sách</button>
                 <div class="invoice-title">
                     <span>Hóa đơn bán hàng</span>
-                    <h2>${escape(row.code || '-')} ${status(row.status)}</h2>
+                    <h2><span class="record-code-text">${escape(row.code || '-')}</span> ${status(row.status)}</h2>
                     <div class="invoice-tags">
                         <span>Khách hàng: ${escape(customer.name || '-')}</span>
                         <span>MST: ${escape(customer.tax_code || 'Chưa khai báo')}</span>
@@ -455,7 +455,7 @@
                     <div>
                         <i class="${icon}" aria-hidden="true"></i>
                         <span>${escape(label)}</span>
-                        <strong>${html ? value : escape(value || '-')}</strong>
+                        <strong class="${/^Mã(?:\s|$)/i.test(label) ? 'record-code-text' : ''}">${html ? value : escape(value || '-')}</strong>
                     </div>
                 `).join('')}
             </div>
@@ -527,7 +527,7 @@
         return `<section class="record-panel fulfillment-info-panel">
             <h3>${escape(title)}</h3>
             <div class="fulfillment-info-grid">${fields.map(([label, value, html]) => `
-                <div><span>${escape(label)}</span><strong>${html ? value : escape(value || '-')}</strong></div>
+                <div><span>${escape(label)}</span><strong class="${/^Mã(?:\s|$)/i.test(label) ? 'record-code-text' : ''}">${html ? value : escape(value || '-')}</strong></div>
             `).join('')}</div>
         </section>`;
     }

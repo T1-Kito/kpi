@@ -504,7 +504,7 @@ function renderTaskDetailContent(row) {
                 ${fields.map(([label, value, html]) => `
                     <div>
                         <span>${VKTable.escapeHtml(label)}</span>
-                        <strong>${html ? value : VKTable.escapeHtml(value)}</strong>
+                        <strong class="${/^Mã(?:\s|$)/i.test(label) ? 'record-code-text' : ''}">${html ? value : VKTable.escapeHtml(value)}</strong>
                     </div>
                 `).join('')}
             </div>

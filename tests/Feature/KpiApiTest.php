@@ -13,10 +13,28 @@ class KpiApiTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_logged_in_user_can_view_kpi_overview(): void
+    public function test_overview_supplies_card_counts_without_loading_document_items(): void
     {
         $this->seed();
-        $token = $this->loginAs('sales@vk-kpi.local');
+        $tenantId = User::where('email', 'admin@vk-kpi.local')->value('tenant_id');
+        \Illuminate\Support\Facades\DB::enableQueryLog();
+        \Illuminate\Support\Facades\DB::flushQueryLog();
+        $metrics = app(\App\Services\Kpi\KpiService::class)->buildMetrics($tenantId);
+        $queries = collect(\Illuminate\Support\Facades\DB::getQueryLog())->pluck('query')->implode("\n");
+        \Illuminate\Support\Facades\DB::disableQueryLog();
+        $this->assertSame(\App\Models\InventoryBalance::where('tenant_id', $tenantId)->count(), $metrics['counts']['balances']);
+        $this->assertSame(\App\Models\PurchaseOrder::where('tenant_id', $tenantId)->count(), $metrics['counts']['purchaseOrders']);
+        $this->assertStringNotContainsString('quotation_items', $queries);
+        $this->assertStringNotContainsString('sales_order_items', $queries);
+    }
+
+    public function test_company_scope_user_can_view_kpi_overview_but_employee_cannot_view_company_data(): void
+    {
+        $this->seed();
+        $salesToken = $this->loginAs('sales@vk-kpi.local');
+        $this->withToken($salesToken)->getJson('/api/v1/kpi/overview')->assertForbidden();
+        $this->withToken($salesToken)->getJson('/api/v1/kpi/snapshots')->assertForbidden();
+        $token = $this->loginAs('admin@vk-kpi.local');
 
         $this->withToken($token)
             ->getJson('/api/v1/kpi/overview')

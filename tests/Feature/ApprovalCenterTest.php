@@ -11,16 +11,22 @@ class ApprovalCenterTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_approval_center_renders_pending_business_documents(): void
+    public function test_approval_center_is_public_shell_and_api_returns_scoped_business_documents(): void
     {
         $this->seed();
 
         $this->get('/approvals')
             ->assertOk()
             ->assertSee('Duyệt tập trung')
-            ->assertSee('QUO-DEMO-LOW')
-            ->assertSee('PR-DEMO-APPROVAL')
-            ->assertSee('PO-DEMO-APPROVAL');
+            ->assertDontSee('QUO-DEMO-LOW')
+            ->assertDontSee('PR-DEMO-APPROVAL')
+            ->assertDontSee('PO-DEMO-APPROVAL');
+
+        $token = $this->loginAs('admin@vk-kpi.local');
+        $this->withToken($token)->getJson('/api/v1/approval-center')
+            ->assertOk()
+            ->assertJsonFragment(['code' => 'PR-DEMO-APPROVAL'])
+            ->assertJsonFragment(['code' => 'PO-DEMO-APPROVAL']);
     }
 
     public function test_admin_can_reject_purchase_request_and_purchase_order(): void

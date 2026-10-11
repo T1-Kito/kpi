@@ -2,12 +2,13 @@
 
 namespace App\Services\Print;
 
-use App\Models\PrintTemplate;
 use App\Models\Contract;
 use App\Models\GoodsIssue;
+use App\Models\PrintTemplate;
 use App\Models\Quotation;
 use App\Models\SalesOrder;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 use ZipArchive;
 
@@ -15,15 +16,20 @@ class QuotationDocxMergeService
 {
     public function merge(Quotation|SalesOrder|GoodsIssue|Contract $quotation, PrintTemplate $template): string
     {
+        $module = $quotation instanceof Contract ? 'contract' : ($quotation instanceof GoodsIssue ? 'goods_issue' : ($quotation instanceof SalesOrder ? 'sales_order' : 'quotation'));
+        if ($template->tenant_id !== $quotation->tenant_id || $template->module !== $module || $template->status !== 'active') {
+            throw ValidationException::withMessages(['template_file' => 'Mẫu không thuộc công ty, sai loại chứng từ hoặc đã ngưng sử dụng.']);
+        }
         if (! class_exists(ZipArchive::class)) {
             throw new RuntimeException('May chu chua bat PHP ZipArchive de xu ly file Word.');
         }
 
-        if (! $template->file_path || ! Storage::disk('public')->exists($template->file_path)) {
-            throw new RuntimeException('Mau Word goc khong ton tai hoac da bi xoa.');
+        if (! $template->file_path || (! Storage::disk('local')->exists($template->file_path) && ! Storage::disk('public')->exists($template->file_path))) {
+            throw ValidationException::withMessages(['template_file' => 'Mẫu Word gốc không tồn tại hoặc đã bị xóa.']);
         }
 
-        $source = Storage::disk('public')->path($template->file_path);
+        $disk = Storage::disk('local')->exists($template->file_path) ? 'local' : 'public';
+        $source = Storage::disk($disk)->path($template->file_path);
         $targetDir = storage_path('app/generated/print-templates');
 
         if (! is_dir($targetDir) && ! mkdir($targetDir, 0775, true) && ! is_dir($targetDir)) {
@@ -37,33 +43,130 @@ class QuotationDocxMergeService
             throw new RuntimeException('Khong the tao ban sao mau Word.');
         }
 
-        $zip = new ZipArchive();
+        $zip = new ZipArchive;
         if ($zip->open($target) !== true) {
-            throw new RuntimeException('Khong the mo file mau Word.');
-        }
-
-        $this->loadRelations($quotation);
-        $values = $this->mergeValues($quotation);
-
-        for ($index = 0; $index < $zip->numFiles; $index++) {
-            $name = $zip->getNameIndex($index);
-            if (! $name || ! $this->shouldMergeXml($name)) {
-                continue;
+            if (is_file($target)) {
+                unlink($target);
             }
-
-            $xml = $zip->getFromName($name);
-            if ($xml === false) {
-                continue;
-            }
-
-            $xml = $this->repeatItemRows($xml, $quotation);
-            $xml = $this->makeMergeFieldValuesRegular($xml);
-            $zip->addFromString($name, $this->replaceFields($xml, $values));
+            throw ValidationException::withMessages(['template_file' => 'Không mở được mẫu Word. Hãy tải lại file .docx hợp lệ.']);
         }
+        try {
+            $this->loadRelations($quotation);
+            $values = $this->mergeValues($quotation);
+            for ($index = 0; $index < $zip->numFiles; $index++) {
+                $name = $zip->getNameIndex($index);
+                if (! $name || ! $this->shouldMergeXml($name)) {
+                    continue;
+                }
 
-        $zip->close();
+                $xml = $zip->getFromName($name);
+                if ($xml === false) {
+                    continue;
+                }
+
+                $xml = $this->normalizeSplitFields($xml);
+                $xml = $this->repeatItemRows($xml, $quotation);
+                $xml = $this->makeMergeFieldValuesRegular($xml);
+                $xml = $this->replaceFields($xml, $values);
+                if (preg_match_all('/\{\{\s*([^{}]+?)\s*\}\}/u', strip_tags($xml), $unresolved)) {
+                    throw ValidationException::withMessages(['template_file' => 'Trường trộn chưa được hỗ trợ hoặc đặt sai vị trí: '.implode(', ', array_unique($unresolved[1])).'.']);
+                }
+                $zip->addFromString($name, $xml);
+            }
+            $zip->close();
+        } catch (\Throwable $error) {
+            $zip->close();
+            if (is_file($target)) {
+                unlink($target);
+            }
+            throw $error;
+        }
 
         return $target;
+    }
+
+    /** Word may split a placeholder into runs when formatting or spell-checking. */
+    private function normalizeSplitFields(string $xml): string
+    {
+        $dom = new \DOMDocument;
+        $previous = libxml_use_internal_errors(true);
+        try {
+            if (stripos($xml, '<!DOCTYPE') !== false || stripos($xml, '<!ENTITY') !== false) {
+                throw ValidationException::withMessages(['template_file' => 'Không hỗ trợ mẫu có khai báo thực thể XML.']);
+            }
+            if (! $dom->loadXML($xml, LIBXML_NONET)) {
+                throw ValidationException::withMessages(['template_file' => 'Nội dung Word không hợp lệ. Hãy lưu lại thành .docx.']);
+            }
+            $dom->encoding = 'UTF-8';
+            $xpath = new \DOMXPath($dom);
+            $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+            foreach ($xpath->query('//w:p') as $paragraph) {
+                $nodes = iterator_to_array($xpath->query('.//w:t', $paragraph));
+                $text = implode('', array_map(fn ($node) => $node->textContent, $nodes));
+                if (! preg_match_all('/\{\{\s*[a-zA-Z0-9_]+\s*\}\}/u', $text, $matches, PREG_OFFSET_CAPTURE)) {
+                    continue;
+                }
+                foreach (array_reverse($matches[0]) as [$field, $start]) {
+                    $end = $start + strlen($field);
+                    $offset = 0;
+                    foreach ($nodes as $node) {
+                        $value = $node->textContent;
+                        $next = $offset + strlen($value);
+                        if ($offset < $end && $next > $start) {
+                            $left = max(0, $start - $offset);
+                            $right = min(strlen($value), $end - $offset);
+                            $node->textContent = substr($value, 0, $left).($offset <= $start ? $field : '').substr($value, $right);
+                        }
+                        $offset = $next;
+                    }
+                }
+            }
+
+            return $dom->saveXML();
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
+    }
+
+    public function validateTemplateFile(string $path, array $allowedFields): void
+    {
+        $zip = new ZipArchive;
+        if ($zip->open($path) !== true) {
+            throw ValidationException::withMessages(['template_file' => 'Không đọc được mẫu Word. Hãy lưu thành .docx trước khi tải lên.']);
+        }
+        try {
+            if ($zip->locateName('word/document.xml') === false) {
+                throw ValidationException::withMessages(['template_file' => 'File không phải tài liệu Word .docx hợp lệ.']);
+            }
+            $size = 0;
+            $unknown = [];
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $entry = $zip->statIndex($i);
+                if (str_ends_with(strtolower($entry['name']), 'vbaproject.bin')) {
+                    throw ValidationException::withMessages(['template_file' => 'Không hỗ trợ mẫu Word chứa macro.']);
+                }
+                $size += $entry['size'];
+                if ($size > 50 * 1024 * 1024 || $zip->numFiles > 2000) {
+                    throw ValidationException::withMessages(['template_file' => 'Mẫu quá lớn sau khi giải nén. Hãy giảm ảnh hoặc số trang.']);
+                }
+                if (! $this->shouldMergeXml($entry['name'])) {
+                    continue;
+                }
+                $xml = $this->normalizeSplitFields($zip->getFromIndex($i));
+                preg_match_all('/\{\{\s*([^{}]+?)\s*\}\}/u', strip_tags($xml), $matches);
+                foreach ($matches[1] as $key) {
+                    if (! in_array(trim($key), $allowedFields, true)) {
+                        $unknown[] = trim($key);
+                    }
+                }
+            }
+            if ($unknown) {
+                throw ValidationException::withMessages(['template_file' => 'Mẫu chứa trường không được hỗ trợ: '.implode(', ', array_unique($unknown)).'.']);
+            }
+        } finally {
+            $zip->close();
+        }
     }
 
     private function shouldMergeXml(string $name): bool
@@ -171,6 +274,7 @@ class QuotationDocxMergeService
         if ($quotation instanceof Contract) {
             $customer = $quotation->customer;
             $amount = (float) ($quotation->total_amount ?? 0);
+
             return [
                 'ma_chung_tu' => $quotation->code,
                 'ngay_chung_tu' => optional($quotation->created_at)->format('d/m/Y'),
@@ -196,6 +300,9 @@ class QuotationDocxMergeService
                 'tong_tien_bang_chu' => $this->moneyInWords($amount),
                 'dieu_khoan' => $quotation->note ?? '',
                 'moc_thanh_toan' => $quotation->milestones->map(fn ($milestone) => sprintf('%s: %s, hạn %s', $milestone->name, $this->money((float) $milestone->amount), optional($milestone->due_date)->format('d/m/Y') ?: 'chưa xác định'))->implode('; '),
+                'nguoi_dai_dien_phap_luat' => $customer?->customer_type === 'person' ? '' : ($customer?->legal_representative ?? ''),
+                'chuc_vu_dai_dien' => $customer?->customer_type === 'person' ? '' : ($customer?->representative_position ?? ''),
+                'trang_thai' => $this->statusText($quotation->status),
                 'bang_dong_hang' => $this->itemsText($quotation),
                 'nguoi_lap' => $quotation->owner?->name ?? '',
             ];
@@ -213,6 +320,9 @@ class QuotationDocxMergeService
             'ma_bao_gia' => $quotation instanceof SalesOrder ? ($quotation->quotation?->code ?? '') : $quotation->code,
             'ngay_bao_gia' => optional($quotation->created_at)->format('d/m/Y H:i'),
             'ma_don_hang' => $quotation instanceof SalesOrder ? $quotation->code : '',
+            'ma_don_ban' => $quotation instanceof SalesOrder ? $quotation->code : '',
+            'hinh_thuc_giao_hang' => $quotation instanceof SalesOrder ? ($quotation->fulfillment_type ?? '') : '',
+            'ghi_chu_giao_hang' => $quotation instanceof SalesOrder ? ($quotation->supplier_delivery_note ?? '') : '',
             'ngay_don_hang' => $quotation instanceof SalesOrder ? optional($quotation->created_at)->format('d/m/Y H:i') : '',
             'ten_khach_hang' => $customer?->name ?? '',
             'ma_khach_hang' => $customer?->code ?? '',
@@ -231,6 +341,11 @@ class QuotationDocxMergeService
             'tong_tien_bang_chu' => $this->moneyInWords($total),
             'nguoi_tao' => $quotation->salesOwner?->name ?? '',
             'nguoi_lap' => $quotation->salesOwner?->name ?? '',
+            'nguoi_dai_dien_phap_luat' => $customer?->customer_type === 'person' ? '' : ($customer?->legal_representative ?? ''),
+            'chuc_vu_dai_dien' => $customer?->customer_type === 'person' ? '' : ($customer?->representative_position ?? ''),
+            'dieu_khoan_thanh_toan' => $quotation->payment_terms ?? '',
+            'dieu_khoan_giao_hang' => $quotation instanceof Quotation ? ($quotation->delivery_terms ?? '') : '',
+            'ngay_het_hieu_luc' => $quotation instanceof Quotation ? ($quotation->valid_until?->format('d/m/Y') ?? '') : '',
             'trang_thai' => $this->statusText($quotation->status),
         ];
     }
@@ -298,10 +413,12 @@ class QuotationDocxMergeService
     {
         if ($document instanceof Contract) {
             $document->loadMissing(['customer', 'owner', 'milestones', 'salesOrder.customer', 'salesOrder.items.sku', 'quotation.customer', 'quotation.items.sku']);
+
             return;
         }
         if ($document instanceof GoodsIssue) {
             $document->loadMissing(['salesOrder.customer', 'items.sku', 'warehouse']);
+
             return;
         }
 

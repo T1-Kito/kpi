@@ -1,10 +1,10 @@
 @php
     $modules = [
         ['key' => 'work', 'label' => 'Công việc', 'description' => 'Tổng quan và việc cần xử lý', 'href' => '/dashboard', 'icon' => 'work', 'permission' => ''],
-        ['key' => 'sales', 'label' => 'Kinh doanh', 'description' => 'Cơ hội, báo giá và đơn bán', 'href' => '/deals', 'icon' => 'sales', 'permission' => 'sales.deal.manage'],
+        ['key' => 'sales', 'label' => 'Kinh doanh', 'description' => 'Cơ hội, báo giá và đơn bán', 'href' => '/deals', 'icon' => 'sales', 'permission' => 'sales.deal.view'],
         ['key' => 'customer', 'label' => 'Khách hàng', 'description' => 'Hồ sơ khách hàng và người liên hệ', 'href' => '/customers', 'icon' => 'service', 'permission' => 'master.view'],
         ['key' => 'product', 'label' => 'Sản phẩm', 'description' => 'Sản phẩm và mã hàng', 'href' => '/skus', 'icon' => 'product', 'permission' => 'master.view'],
-        ['key' => 'procurement', 'label' => 'Mua hàng', 'description' => 'Yêu cầu mua và đơn mua', 'href' => '/purchase-requests', 'icon' => 'procurement', 'permission' => 'procurement.pr.approve'],
+        ['key' => 'procurement', 'label' => 'Mua hàng', 'description' => 'Yêu cầu mua và đơn mua', 'href' => '/purchase-requests', 'icon' => 'procurement', 'permission' => 'procurement.pr.view'],
         ['key' => 'inventory', 'label' => 'Kho vận', 'description' => 'Tồn kho, nhập xuất và kiểm kê', 'href' => '/inventory', 'icon' => 'inventory', 'permission' => 'master.view'],
         ['key' => 'finance', 'label' => 'Tài chính', 'description' => 'Hóa đơn, công nợ và thu tiền', 'href' => '/sales-invoices', 'icon' => 'finance', 'permission' => 'finance.invoice.view'],
         ['key' => 'service', 'label' => 'Dịch vụ khách hàng', 'description' => 'Ticket và bảo hành', 'href' => '/service-tickets', 'icon' => 'service', 'permission' => 'service.ticket.view'],
@@ -18,7 +18,7 @@
     <div class="app-switcher-panel" data-app-switcher-panel hidden>
         <div class="app-switcher-head">
             <div><strong>Phân hệ VKSoftware</strong><small>Chọn khu vực bạn muốn làm việc</small></div>
-            <button type="button" aria-label="Đóng" data-app-switcher-close>&times;</button>
+            <button class="ui-close-button" type="button" aria-label="Đóng danh sách phân hệ" title="Đóng" data-app-switcher-close><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         </div>
         <div class="app-switcher-search"><input type="search" placeholder="Tìm phân hệ" aria-label="Tìm phân hệ" data-app-switcher-search></div>
         <nav class="app-switcher-grid" aria-label="Danh sách phân hệ">

@@ -25,9 +25,11 @@ document.addEventListener('click', (event) => {
     const configure = event.target.closest('[data-configure-po-approval]');
     if (configure) { configurePurchaseApproval(configure.dataset.configurePoApproval); return; }
     if (event.target.matches('[data-create-purchase-order]')) openPurchaseOrderModal();
-    if (event.target.matches('[data-approve-purchase-order]')) {
+    const approve = event.target.closest('[data-approve-purchase-order]');
+    if (approve) {
         event.stopPropagation();
-        approvePurchaseOrder(event.target.dataset.approvePurchaseOrder);
+        approvePurchaseOrder(approve.dataset.approvePurchaseOrder, approve);
+        return;
     }
     if (event.target.closest('.row-action-menu') && !event.target.closest('[data-purchase-order-detail]')) return;
     const detail = event.target.closest('[data-purchase-order-detail], tr[data-row-detail]');
@@ -181,11 +183,20 @@ function toggleManualPurchaseFields(quoteId) {
     if (note) note.hidden = !quoteId;
 }
 
-async function approvePurchaseOrder(id) {
-    await VKApi.request(`/purchase-orders/${id}/approve`, { method: 'POST', body: JSON.stringify({ reason: 'Duyệt từ màn hình đơn mua' }) });
-    delete poState.detailCache[id];
-    VKModal.toast('Đã ghi nhận lượt duyệt của bạn.');
-    loadPurchaseOrders();
+async function approvePurchaseOrder(id, button) {
+    if (button?.disabled) return;
+    const originalText = button?.textContent;
+    if (button) { button.disabled = true; button.textContent = 'Đang duyệt…'; }
+    try {
+        await VKApi.request(`/purchase-orders/${id}/approve`, { method: 'POST', body: JSON.stringify({ reason: 'Duyệt từ màn hình đơn mua' }) });
+        delete poState.detailCache[id];
+        VKModal.toast('Đã ghi nhận lượt duyệt của bạn.');
+        await loadPurchaseOrders();
+    } catch (error) {
+        VKModal.toast(error.message || 'Không thể duyệt đơn mua. Vui lòng thử lại.', 'danger');
+    } finally {
+        if (button) { button.disabled = false; button.textContent = originalText; }
+    }
 }
 
 function openPurchaseOrderDetail(id) {

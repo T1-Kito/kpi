@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\ServiceTicket;
 use App\Models\WarrantyClaim;
+use App\Models\User;
 use App\Services\ServiceDesk\ServiceDeskService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,6 +21,15 @@ class ServiceDeskController extends Controller
         $query = ServiceTicket::where('tenant_id', $request->user()->tenant_id)->with(['customer:id,code,name', 'assignee:id,name,email'])->latest('id');
         if ($status = $request->query('status')) $query->where('status', $status);
         return $this->paginated($query, $request);
+    }
+    public function lookups(Request $request): JsonResponse
+    {
+        $tenantId = $request->user()->tenant_id;
+
+        return response()->json(['data' => [
+            'customers' => Customer::where('tenant_id', $tenantId)->orderBy('name')->get(['id', 'code', 'name']),
+            'users' => User::where('tenant_id', $tenantId)->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+        ]]);
     }
     public function showTicket(Request $request, ServiceTicket $ticket): JsonResponse
     {

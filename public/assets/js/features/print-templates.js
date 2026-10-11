@@ -1,5 +1,6 @@
 (function () {
-let templateState = { rows: [], q: '', status: '', fields: [], fieldSets: {}, modules: {} };
+let templateState = { rows: [], q: '', status: '', module: 'quotation', fields: [], fieldSets: {}, modules: {} };
+let templateLoadVersion = 0;
 
 document.addEventListener('vk:ready', () => loadPrintTemplates());
 document.addEventListener('input', (event) => {
@@ -18,6 +19,10 @@ document.addEventListener('change', (event) => {
 });
 document.addEventListener('click', (event) => {
     if (!document.getElementById('printTemplatesRoot')) return;
+    const tab = event.target.closest('[data-template-module]');
+    if (tab) { templateState.module = tab.dataset.templateModule; renderPrintTemplates(); }
+    const copy = event.target.closest('[data-copy-merge-field]');
+    if (copy) copyMergeField(copy.dataset.copyMergeField);
     if (event.target.matches('[data-create-print-template]')) openPrintTemplateModal();
     if (event.target.matches('[data-download-merge-template]')) downloadMergeTemplate(event.target.dataset.downloadMergeTemplate || 'quotation');
     if (event.target.matches('[data-edit-print-template]')) {
@@ -37,8 +42,14 @@ async function loadPrintTemplates(options = {}) {
         renderPrintTemplates();
     }
 
-    const response = await VKApi.request('/print-templates?page_size=100');
-    if (document.getElementById('printTemplatesRoot') !== root) return;
+    const version = ++templateLoadVersion;
+    let response;
+    try { response = await VKApi.request('/print-templates?page_size=100'); }
+    catch (error) {
+        if (version === templateLoadVersion && document.getElementById('printTemplatesRoot') === root) root.innerHTML = `<section class="module-panel"><p class="form-note">${VKTable.escapeHtml(error.message || 'Không tải được danh sách mẫu. Vui lòng tải lại trang.')}</p></section>`;
+        return;
+    }
+    if (version !== templateLoadVersion || document.getElementById('printTemplatesRoot') !== root) return;
     templateState.rows = response.data || [];
     templateState.fields = response.meta?.fields || defaultFields();
     templateState.fieldSets = response.meta?.field_sets || { quotation: templateState.fields };
@@ -51,9 +62,9 @@ function renderPrintTemplates(total = templateState.rows.length) {
     if (!root) return;
     const rows = filterRows();
 
-    root.innerHTML = VKTable.fullList({
-        title: 'Danh sách mẫu in',
-        subtitle: 'Thiết lập mẫu Word/PDF, mẫu gửi khách và trường trộn cho từng phân hệ.',
+    root.innerHTML = `<nav class="template-module-tabs" aria-label="Loại mẫu chứng từ">${moduleOptions().map(item => `<button type="button" data-template-module="${item.value}" aria-pressed="${templateState.module === item.value}" class="${templateState.module === item.value ? 'active' : ''}">${VKTable.escapeHtml(item.label)}</button>`).join('')}</nav>` + VKTable.fullList({
+        title: `Mẫu ${moduleLabel(templateState.module).toLowerCase()}`,
+        subtitle: 'Soạn một lần trong Word, tự lấy dữ liệu từ chứng từ khi xuất.',
         meta: `${VKTable.money(rows.length)} / ${VKTable.money(total)} mẫu in`,
         filters: VKTable.filterBar({
             searchPlaceholder: 'Tìm mã mẫu hoặc tên mẫu...',
@@ -71,15 +82,14 @@ function renderTemplateTable(rows) {
     return VKTable.renderTable([
         { label: 'Mẫu in', render: row => `
             <strong>${VKTable.escapeHtml(row.name)}</strong>
-            <span class="row-note mono">${VKTable.escapeHtml(row.code)}</span>
+            <span class="row-note mono" style="color:#ec008c">${VKTable.escapeHtml(row.code)}</span>
         ` },
-        { label: 'Phân hệ', render: row => moduleLabel(row.module) },
         { label: 'Mặc định', render: row => row.is_default ? '<span class="badge success">Mặc định</span>' : '<span class="text-muted">-</span>' },
         { label: 'File Word', render: row => VKTable.escapeHtml(row.file_name || 'Chưa tải file') },
         { label: 'Trạng thái', render: row => row.status === 'active' ? '<span class="badge success">Đang dùng</span>' : '<span class="badge muted">Tạm ngưng</span>' },
         { label: 'Cập nhật', render: row => formatDateTime(row.updated_at || row.created_at) },
         { label: '', render: row => VKTable.rowActions([
-            VKTable.smallButton('Sửa', `data-edit-print-template="${row.id}"`),
+            VKTable.smallButton('Xem / sửa mẫu', `data-edit-print-template="${row.id}"`),
             row.is_default ? '' : VKTable.smallButton('Đặt mặc định', `data-default-print-template="${row.id}"`),
         ]) },
     ], rows, 'Chưa có mẫu in', { rowAttr: row => `data-template-id="${row.id}"` });
@@ -88,7 +98,7 @@ function renderTemplateTable(rows) {
 function filterRows() {
     return templateState.rows.filter(row => {
         const haystack = `${row.code || ''} ${row.name || ''} ${moduleLabel(row.module)}`.toLowerCase();
-        return (!templateState.q || haystack.includes(templateState.q)) && (!templateState.status || row.status === templateState.status);
+        return row.module === templateState.module && (!templateState.q || haystack.includes(templateState.q)) && (!templateState.status || row.status === templateState.status);
     });
 }
 
@@ -102,30 +112,40 @@ function restoreFilters() {
 function openPrintTemplateModal(id = null) {
     const row = id ? templateState.rows.find(item => item.id === id) : {};
     VKModal.open(id ? 'Sửa mẫu in' : 'Tạo mẫu in', `
-        <div class="template-form">
+        <div class="template-workspace">
+            <section class="template-preview-panel">
+                <div class="template-preview-toolbar"><strong>Bản xem trước Word</strong><span class="badge muted" data-preview-caption>Mẫu gốc · chưa trộn dữ liệu</span></div>
+                ${id && row?.file_path ? `<div class="template-preview-toolbar"><select data-template-record aria-label="Chọn hồ sơ trộn thử"><option value="">Đang tải hồ sơ được phép xem…</option></select><button class="btn secondary" type="button" data-preview-merged>Trộn thử</button><button class="btn secondary" type="button" data-preview-original>Mẫu gốc</button></div><p class="form-note" data-template-merge-note>Trộn thử dùng mẫu đã lưu. Hồ sơ đã phát hành trả về bản lưu, không tạo lại.</p>` : '<p class="form-note">Lưu mẫu trước để chọn hồ sơ và trộn thử dữ liệu thật.</p>'}
+                <div class="template-word-preview" data-template-word-preview><div class="template-preview-empty"><strong>Giữ nguyên bố cục Word của bạn</strong><p>Chọn file .docx để xem trước ngay tại đây.</p><small>Chèn trường từ danh sách bên phải vào file Word, sau đó tải lên.</small></div></div>
+                <p class="form-note">Bản xem trước trên trình duyệt có thể khác cách ngắt trang trong Microsoft Word. Dữ liệu thật được trộn khi xuất từ hồ sơ.</p>
+            </section>
+        <aside class="template-form template-settings-panel">
             <div class="form-grid">
                 ${VKModal.field('name', 'Tên mẫu', 'text', row?.name || 'Mẫu chứng từ khách hàng')}
-                ${VKModal.select('module', 'Loại chứng từ', moduleOptions(), row?.module || 'quotation')}
+                ${VKModal.select('module', 'Loại chứng từ', moduleOptions(), row?.module || templateState.module)}
                 ${VKModal.select('status', 'Trạng thái', [
                     { value: 'active', label: 'Đang dùng' },
                     { value: 'inactive', label: 'Tạm ngưng' },
                 ], row?.status || 'active')}
+                <label><input type="checkbox" name="is_default" value="1" ${row?.is_default ? 'checked' : ''}> Dùng làm mẫu mặc định</label>
                 <div class="field full">
                     <label for="template_file">File Word gốc</label>
-                    <input id="template_file" name="template_file" type="file" accept=".doc,.docx">
+                    <input id="template_file" name="template_file" type="file" accept=".docx">
                     <small>${row?.file_name ? `Đang lưu: ${VKTable.escapeHtml(row.file_name)}` : 'Chọn file Word mẫu đã soạn sẵn.'}</small>
                 </div>
             </div>
             <div class="template-merge-guide">
                 <strong>Trường trộn mẫu Word</strong>
-                <ol><li>Chọn loại chứng từ, tải file mẫu tương ứng hoặc soạn file Word của bạn.</li><li>Chèn các trường bên dưới vào đúng vị trí trong Word.</li><li>Tải file Word lên và đặt làm mẫu mặc định cho loại chứng từ đó.</li></ol>
-                <div class="template-field-list" data-template-modal-fields>${renderFieldChips(null, row?.module || 'quotation')}</div>
+                <p class="form-note">Bấm trường để sao chép, rồi dán vào Word.</p>
+                <button class="btn secondary" type="button" data-download-current-guide>Tải hướng dẫn trường trộn</button>
+                <input type="search" data-merge-field-search placeholder="Tìm tên hoặc mã trường…" aria-label="Tìm trường trộn">
+                <div class="template-field-list" data-template-modal-fields>${renderFieldChips(null, row?.module || templateState.module)}</div>
                 <small>Đặt các trường dòng hàng trong cùng một hàng bảng Word để hệ thống tự tạo dòng theo chứng từ.</small>
             </div>
-        </div>
+        </aside></div>
     `, async (form) => {
         const data = new FormData(form);
-        data.set('is_default', row?.is_default || !id ? '1' : '0');
+        data.set('is_default', form.querySelector('[name="is_default"]').checked ? '1' : '0');
         data.set('content_html', row?.content_html || defaultTemplateContent(data.get('module')));
         await VKApi.request(id ? `/print-templates/${id}` : '/print-templates', {
             method: 'POST',
@@ -135,11 +155,110 @@ function openPrintTemplateModal(id = null) {
         VKModal.toast(id ? 'Đã cập nhật mẫu in.' : 'Đã tạo mẫu in.');
         VKModal.close();
         loadPrintTemplates();
-    }, { submitText: 'Lưu mẫu', className: 'modal-wide' });
+    }, { submitText: 'Lưu mẫu', className: 'modal-wide template-editor-modal' });
 
     document.querySelector('#modalBody [name="module"]')?.addEventListener('change', (event) => {
         const fieldRoot = document.querySelector('#modalBody [data-template-modal-fields]');
         if (fieldRoot) fieldRoot.innerHTML = renderFieldChips(null, event.target.value);
+        const search = document.querySelector('[data-merge-field-search]');
+        if (search) search.value = '';
+    });
+    const preview = document.querySelector('[data-template-word-preview]');
+    if (id && row?.file_path) {
+        const endpoint = {quotation:'quotations', sales_order:'sales-orders', goods_issue:'goods-issues', contract:'contracts'}[row.module];
+        const select = document.querySelector('[data-template-record]');
+        VKApi.request(`/${endpoint}?page_size=100`, {cache:false}).then(response => {
+            if (!select?.isConnected) return;
+            select.innerHTML = '<option value="">Chọn hồ sơ để trộn thử…</option>' + (response.data || []).map(record => `<option value="${Number(record.id)}">${VKTable.escapeHtml(record.code)} · ${VKTable.escapeHtml(record.customer?.name || record.name || record.status || '')}</option>`).join('');
+        }).catch(() => { if (select?.isConnected) select.innerHTML = '<option value="">Không tải được hồ sơ hoặc chưa có quyền xem</option>'; });
+        document.querySelector('[data-preview-merged]')?.addEventListener('click', async () => {
+            if (!select?.value) { VKModal.toast('Chọn hồ sơ để trộn thử.', 'warning'); return; }
+            if (document.querySelector('#modalBody [name="template_file"]')?.files?.length) { VKModal.toast('Lưu file Word mới trước khi trộn thử.', 'warning'); return; }
+            const version = String(Number(preview.dataset.previewVersion || 0) + 1);
+            preview.dataset.previewVersion = version;
+            preview.textContent = 'Đang trộn dữ liệu hồ sơ…';
+            try {
+                const response = await fetch(`/api/v1/${endpoint}/${encodeURIComponent(select.value)}/word?template_id=${encodeURIComponent(id)}`, {headers:{Accept:'application/json', Authorization:`Bearer ${VKApi.token()}`}});
+                if (!response.ok) {
+                    const body = await response.json();
+                    throw new Error(Object.values(body.fields || body.errors || {}).flat().join(' ') || body.message || 'Không trộn được chứng từ.');
+                }
+                const blob = await response.blob();
+                if (preview.isConnected && preview.dataset.previewVersion === version) previewWord(blob, preview, 'Dữ liệu hồ sơ · bản xuất Word');
+            } catch (error) { if (preview.isConnected && preview.dataset.previewVersion === version) preview.textContent = error.message; }
+        });
+        document.querySelector('[data-preview-original]')?.addEventListener('click', async () => {
+            const version = String(Number(preview.dataset.previewVersion || 0) + 1);
+            preview.dataset.previewVersion = version;
+            try {
+                const response = await fetch(`/api/v1/print-templates/${id}/original`, {headers:{Authorization:`Bearer ${VKApi.token()}`}});
+                if (!response.ok) throw new Error('Không tải được mẫu gốc.');
+                const blob = await response.blob();
+                if (preview.isConnected && preview.dataset.previewVersion === version) previewWord(blob, preview);
+            } catch (error) { if (preview.isConnected && preview.dataset.previewVersion === version) preview.textContent = error.message; }
+        });
+    }
+    document.querySelector('[data-download-current-guide]')?.addEventListener('click', () => downloadMergeTemplate(document.querySelector('#modalBody [name="module"]').value));
+    document.querySelector('#modalBody [name="template_file"]')?.addEventListener('change', event => {
+        const file = event.target.files?.[0];
+        if (file) previewWord(file, preview);
+    });
+    document.querySelector('[data-merge-field-search]')?.addEventListener('input', event => {
+        const q = event.target.value.toLocaleLowerCase('vi');
+        document.querySelectorAll('[data-merge-field-entry]').forEach(node => { node.hidden = !node.dataset.mergeFieldEntry.includes(q); });
+    });
+    if (row?.file_path) {
+        const path = String(row.file_path);
+        if (/^print-templates\/[0-9]+\/[a-zA-Z0-9._-]+$/.test(path)) {
+            fetch(`/api/v1/print-templates/${id}/original`, {headers:{Authorization:`Bearer ${VKApi.token()}`}}).then(response => { if (!response.ok) throw new Error('Không tải được file mẫu.'); return response.blob(); }).then(blob => {
+                if (preview?.isConnected && !preview.dataset.previewVersion) previewWord(blob, preview);
+            }).catch(() => { if (preview?.isConnected && !preview.dataset.previewVersion) preview.textContent = 'Không tải được mẫu gốc. Chọn file .docx để xem trước.'; });
+        }
+    }
+}
+
+async function copyMergeField(key) {
+    try { await navigator.clipboard.writeText(`{{${key}}}`); VKModal.toast('Đã sao chép trường trộn.'); }
+    catch { VKModal.toast('Không sao chép được. Bạn có thể chọn và sao chép mã trường bên dưới.', 'warning'); }
+}
+
+async function previewWord(file, root, caption = 'Mẫu gốc · chưa trộn dữ liệu') {
+    if (!root) return;
+    const token = String(Number(root.dataset.previewVersion || 0) + 1);
+    root.dataset.previewVersion = token;
+    root.textContent = 'Đang đọc bố cục Word…';
+    try {
+        if (file.name && !/\.docx$/i.test(file.name)) throw new Error('Vui lòng lưu mẫu thành .docx trong Word trước khi tải lên.');
+        if (file.size > 5 * 1024 * 1024) throw new Error('File mẫu tối đa 5MB.');
+        if (!window.JSZip) await loadPreviewScript('/assets/vendor/jszip.min.js', 'VKZipPreviewLoading');
+        if (!window.docx) {
+            await (window.VKDocxPreviewLoading ||= new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = '/assets/vendor/docx-preview.min.js';
+                script.onload = resolve;
+                script.onerror = () => { window.VKDocxPreviewLoading = null; reject(new Error('Không tải được công cụ xem Word.')); };
+                document.head.appendChild(script);
+            }));
+        }
+        const stage = document.createElement('div');
+        await window.docx.renderAsync(file, stage, null, {inWrapper:true, ignoreWidth:false, ignoreHeight:false, renderAltChunks:false});
+        if (root.isConnected && root.dataset.previewVersion === token) {
+            root.replaceChildren(stage);
+            const label = document.querySelector('[data-preview-caption]');
+            if (label) label.textContent = caption;
+        }
+    } catch (error) {
+        if (root.isConnected && root.dataset.previewVersion === token) root.textContent = error.message || 'Không đọc được file Word. Kiểm tra lại file .docx.';
+    }
+}
+
+function loadPreviewScript(src, key) {
+    return window[key] ||= new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = resolve;
+        script.onerror = () => { window[key] = null; reject(new Error('Không tải được công cụ xem Word.')); };
+        document.head.appendChild(script);
     });
 }
 
@@ -161,9 +280,14 @@ async function setDefaultTemplate(id) {
 
 function renderFieldChips(keys = null, module = 'quotation') {
     const fields = templateState.fieldSets[module] || templateState.fields || defaultFields();
-    return fields.filter(field => !keys || keys.includes(field.key)).map(field => (
-        `<button class="field-chip" type="button" onclick="navigator.clipboard?.writeText('{{${field.key}}}')">{{${field.key}}}</button>`
-    )).join('');
+    const groups = {};
+    fields.filter((field, index) => (!keys || keys.includes(field.key)) && fields.findIndex(item => item.key === field.key) === index).forEach(field => {
+        const group = ['stt','ma_hang','ten_hang','dvt','so_luong','don_gia','vat_percent','vat_dong','thanh_tien','bang_dong_hang'].includes(field.key) ? 'Dòng hàng'
+            : /tong|tam_tinh|chiet_khau|^vat$|gia_tri|thanh_toan/.test(field.key) ? 'Thanh toán'
+            : /khach_hang|lien_he|dien_thoai|email|cong_ty|ma_so_thue|dia_chi/.test(field.key) ? 'Khách hàng & hóa đơn' : 'Chứng từ';
+        (groups[group] ||= []).push(field);
+    });
+    return Object.entries(groups).map(([group, entries]) => `<section class="template-field-group"><h4>${group}</h4>${entries.map(field => `<button class="template-field-entry" type="button" data-merge-field-entry="${VKTable.escapeHtml(`${field.label} ${field.key}`.toLocaleLowerCase('vi'))}" data-copy-merge-field="${VKTable.escapeHtml(field.key)}"><span>${VKTable.escapeHtml(field.label || field.key)}</span><code>{{${VKTable.escapeHtml(field.key)}}}</code></button>`).join('')}</section>`).join('');
 }
 
 function downloadMergeTemplate(module = 'quotation') {

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\AlertController;
+use App\Http\Controllers\Api\V1\ApprovalCenterController;
 use App\Http\Controllers\Api\V1\AuditLogController;
 use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\CustomerDuplicateReviewController;
@@ -118,6 +119,7 @@ Route::prefix('v1')->group(function () {
         });
 
         Route::get('/notifications', [NotificationController::class, 'index']);
+        Route::get('/approval-center', ApprovalCenterController::class);
         Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
         Route::get('/print-templates/active', [PrintTemplateController::class, 'active']);
         Route::get('/print-templates/choices', [PrintTemplateController::class, 'choices']);
@@ -128,15 +130,36 @@ Route::prefix('v1')->group(function () {
         });
 
         Route::get('/kpi/overview', [KpiController::class, 'overview']);
+        Route::get('/kpi/mine', [\App\Http\Controllers\Api\V1\KpiAssignmentController::class, 'mine']);
+        Route::get('/kpi/period-closures/mine', [\App\Http\Controllers\Api\V1\KpiPeriodClosureController::class, 'mine']);
+        Route::post('/kpi/period-closures/{kpiPeriodClosure}/respond', [\App\Http\Controllers\Api\V1\KpiPeriodClosureController::class, 'respond']);
+        Route::get('/kpi/employee-report', [KpiController::class, 'employeeReport']);
+        Route::get('/kpi/employee-report/export', [KpiController::class, 'exportEmployeeReport']);
         Route::get('/kpi/snapshots', [KpiController::class, 'snapshots']);
-        Route::get('/kpi/definitions', [KpiController::class, 'definitions']);
-        Route::get('/kpi/targets', [KpiController::class, 'targets']);
         Route::get('/kpi/exceptions', [KpiController::class, 'exceptions']);
         Route::get('/kpi/adjustments', [KpiController::class, 'adjustments']);
         Route::get('/kpi/adjustments/summary', [KpiController::class, 'adjustmentSummary']);
         Route::post('/kpi/exceptions', [KpiController::class, 'storeException']);
 
         Route::middleware('permission:kpi.lock')->group(function () {
+            Route::get('/kpi/period-closures', [\App\Http\Controllers\Api\V1\KpiPeriodClosureController::class, 'index']);
+            Route::post('/kpi/period-closures/close', [\App\Http\Controllers\Api\V1\KpiPeriodClosureController::class, 'close']);
+            Route::post('/kpi/period-closures/{kpiPeriodClosure}/finalize', [\App\Http\Controllers\Api\V1\KpiPeriodClosureController::class, 'finalize']);
+            Route::post('/kpi/period-closures/{kpiPeriodClosure}/reopen', [\App\Http\Controllers\Api\V1\KpiPeriodClosureController::class, 'reopen']);
+            Route::post('/kpi/period-acknowledgements/{kpiPeriodAcknowledgement}/resolve', [\App\Http\Controllers\Api\V1\KpiPeriodClosureController::class, 'resolve']);
+            Route::get('/kpi/bundles', [\App\Http\Controllers\Api\V1\KpiBundleController::class, 'index']);
+            Route::post('/kpi/bundles', [\App\Http\Controllers\Api\V1\KpiBundleController::class, 'store']);
+            Route::put('/kpi/bundles/{kpiBundle}', [\App\Http\Controllers\Api\V1\KpiBundleController::class, 'update']);
+            Route::post('/kpi/bundles/{kpiBundle}/publish', [\App\Http\Controllers\Api\V1\KpiBundleController::class, 'publish']);
+            Route::post('/kpi/bundles/{kpiBundle}/duplicate', [\App\Http\Controllers\Api\V1\KpiBundleController::class, 'duplicate']);
+            Route::post('/kpi/bundles/{kpiBundle}/apply', [\App\Http\Controllers\Api\V1\KpiBundleController::class, 'apply']);
+            Route::get('/kpi/assignments', [\App\Http\Controllers\Api\V1\KpiAssignmentController::class, 'index']);
+            Route::post('/kpi/assignments/preview', [\App\Http\Controllers\Api\V1\KpiAssignmentController::class, 'preview']);
+            Route::post('/kpi/assignments', [\App\Http\Controllers\Api\V1\KpiAssignmentController::class, 'store']);
+            Route::put('/kpi/assignments/{kpiAssignment}', [\App\Http\Controllers\Api\V1\KpiAssignmentController::class, 'update']);
+            Route::post('/kpi/assignments/{kpiAssignment}/lock', [\App\Http\Controllers\Api\V1\KpiAssignmentController::class, 'lock']);
+            Route::get('/kpi/definitions', [KpiController::class, 'definitions']);
+            Route::get('/kpi/targets', [KpiController::class, 'targets']);
             Route::post('/kpi/snapshots/calculate', [KpiController::class, 'calculate']);
             Route::post('/kpi/definitions', [KpiController::class, 'storeDefinition']);
             Route::put('/kpi/definitions/{kpiDefinition}', [KpiController::class, 'updateDefinition']);
@@ -175,6 +198,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/positions', [PositionController::class, 'store']);
             Route::put('/positions/{position}', [PositionController::class, 'update']);
             Route::get('/print-templates', [PrintTemplateController::class, 'index']);
+            Route::get('/print-templates/{printTemplate}/original', [PrintTemplateController::class, 'original']);
             Route::post('/print-templates', [PrintTemplateController::class, 'store']);
             Route::post('/print-templates/{printTemplate}', [PrintTemplateController::class, 'update']);
             Route::put('/print-templates/{printTemplate}', [PrintTemplateController::class, 'update']);
@@ -187,9 +211,11 @@ Route::prefix('v1')->group(function () {
             Route::get('/permissions', [PermissionController::class, 'index']);
         });
 
-        Route::middleware('permission:sales.lead.manage')->group(function () {
+        Route::middleware('permission:sales.lead.view')->group(function () {
             Route::get('/leads', [LeadController::class, 'index']);
             Route::get('/leads/{lead}', [LeadController::class, 'show']);
+        });
+        Route::middleware('permission:sales.lead.manage')->group(function () {
             Route::post('/leads', [LeadController::class, 'store']);
             Route::post('/leads/{lead}/assign', [LeadController::class, 'assign']);
             Route::post('/leads/{lead}/follow-ups', [LeadController::class, 'createFollowUp']);
@@ -197,14 +223,16 @@ Route::prefix('v1')->group(function () {
             Route::post('/leads/{lead}/qualify', [LeadController::class, 'qualify']);
         });
 
-        Route::middleware('permission:sales.deal.manage')->group(function () {
+        Route::middleware('permission:sales.deal.view')->group(function () {
             Route::get('/deals', [DealController::class, 'index']);
+            Route::get('/deals/{deal}', [DealController::class, 'show']);
+        });
+        Route::middleware('permission:sales.deal.manage')->group(function () {
             Route::post('/deals', [DealController::class, 'store']);
-    Route::get('/deals/{deal}', [DealController::class, 'show']);
-    Route::post('/deals/{deal}/transition', [DealController::class, 'transition']);
-    Route::put('/deals/{deal}/items', [DealController::class, 'syncItems']);
-    Route::post('/deals/{deal}/activities', [DealController::class, 'addActivity']);
-    Route::post('/deals/{deal}/activities/{task}/complete', [DealController::class, 'completeActivity']);
+            Route::post('/deals/{deal}/transition', [DealController::class, 'transition']);
+            Route::put('/deals/{deal}/items', [DealController::class, 'syncItems']);
+            Route::post('/deals/{deal}/activities', [DealController::class, 'addActivity']);
+            Route::post('/deals/{deal}/activities/{task}/complete', [DealController::class, 'completeActivity']);
         });
 
         Route::middleware('permission:sales.contract.manage')->group(function () {
@@ -290,46 +318,73 @@ Route::prefix('v1')->group(function () {
             Route::post('/sales-invoices/{salesInvoice}/payments', [SalesFulfillmentController::class, 'recordPayment']);
         });
 
-        Route::middleware('permission:procurement.pr.approve')->group(function () {
+        Route::middleware('permission:procurement.pr.view')->group(function () {
             Route::get('/purchase-requests', [PurchaseRequestController::class, 'index']);
-            Route::post('/purchase-requests', [PurchaseRequestController::class, 'store']);
             Route::get('/purchase-requests/{purchaseRequest}', [PurchaseRequestController::class, 'show']);
+        });
+        Route::middleware('permission:procurement.pr.create')->group(function () {
+            Route::post('/purchase-requests', [PurchaseRequestController::class, 'store']);
+        });
+        Route::middleware('permission:procurement.pr.approve')->group(function () {
             Route::post('/purchase-requests/{purchaseRequest}/approve', [PurchaseRequestController::class, 'approve']);
             Route::post('/purchase-requests/{purchaseRequest}/reject', [PurchaseRequestController::class, 'reject']);
         });
 
-        Route::middleware('permission:procurement.po.approve')->group(function () {
+        Route::middleware('permission:procurement.sq.view')->group(function () {
+            Route::get('/supplier-quotations/bootstrap', [SupplierQuotationController::class, 'bootstrap']);
             Route::get('/supplier-quotations', [SupplierQuotationController::class, 'index']);
-            Route::post('/supplier-quotations', [SupplierQuotationController::class, 'store']);
             Route::get('/supplier-quotations/{supplierQuotation}', [SupplierQuotationController::class, 'show']);
-            Route::post('/supplier-quotations/{supplierQuotation}/document', [SupplierQuotationController::class, 'uploadDocument']);
             Route::get('/supplier-quotations/{supplierQuotation}/document', [SupplierQuotationController::class, 'document']);
+        });
+        Route::middleware('permission:procurement.sq.manage')->group(function () {
+            Route::post('/supplier-quotations', [SupplierQuotationController::class, 'store']);
+            Route::post('/supplier-quotations/{supplierQuotation}/document', [SupplierQuotationController::class, 'uploadDocument']);
+        });
+        Route::middleware('permission:procurement.po.create')->group(function () {
             Route::post('/supplier-quotations/{supplierQuotation}/select', [SupplierQuotationController::class, 'select']);
-            Route::post('/supplier-quotations/{supplierQuotation}/approval-flow', [SupplierQuotationController::class, 'configureApprovalFlow']);
-            Route::get('/purchase-orders', [PurchaseOrderController::class, 'index']);
             Route::post('/purchase-orders', [PurchaseOrderController::class, 'store']);
+        });
+        Route::middleware('permission:procurement.po.view')->group(function () {
+            Route::get('/purchase-orders', [PurchaseOrderController::class, 'index']);
             Route::get('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'show']);
+        });
+        Route::middleware('permission:procurement.po.approve')->group(function () {
+            Route::post('/supplier-quotations/{supplierQuotation}/approval-flow', [SupplierQuotationController::class, 'configureApprovalFlow']);
             Route::post('/purchase-orders/{purchaseOrder}/approval-flow', [PurchaseOrderController::class, 'configureApprovalFlow']);
             Route::post('/purchase-orders/{purchaseOrder}/approve', [PurchaseOrderController::class, 'approve']);
             Route::post('/purchase-orders/{purchaseOrder}/reject', [PurchaseOrderController::class, 'reject']);
         });
 
-        Route::middleware('permission:inventory.receipt.confirm')->group(function () {
+        Route::middleware('permission:inventory.receipt.view')->group(function () {
             Route::get('/goods-receipts', [GoodsReceiptController::class, 'index']);
-            Route::post('/goods-receipts', [GoodsReceiptController::class, 'store']);
             Route::get('/goods-receipts/{goodsReceipt}', [GoodsReceiptController::class, 'show']);
+        });
+        Route::middleware('permission:inventory.receipt.create')->group(function () {
+            Route::post('/goods-receipts', [GoodsReceiptController::class, 'store']);
+        });
+        Route::middleware('permission:inventory.receipt.confirm')->group(function () {
             Route::post('/goods-receipts/{goodsReceipt}/confirm', [GoodsReceiptController::class, 'confirm']);
         });
 
-        Route::middleware('permission:inventory.issue.confirm')->group(function () {
+        Route::middleware('permission:inventory.issue.view')->group(function () {
             Route::get('/goods-issues', [GoodsIssueController::class, 'index']);
-            Route::post('/goods-issues', [GoodsIssueController::class, 'store']);
             Route::get('/goods-issues/{goodsIssue}', [GoodsIssueController::class, 'show']);
             Route::get('/goods-issues/{goodsIssue}/word', [GoodsIssueController::class, 'exportWord']);
+        });
+        Route::middleware('permission:inventory.issue.create')->group(function () {
+            Route::post('/goods-issues', [GoodsIssueController::class, 'store']);
+        });
+        Route::middleware('permission:inventory.issue.confirm')->group(function () {
             Route::post('/goods-issues/{goodsIssue}/confirm', [GoodsIssueController::class, 'confirm']);
+        });
+        Route::middleware('permission:inventory.stocktake.view')->group(function () {
             Route::get('/stock-takes', [StockTakeController::class, 'index']);
-            Route::post('/stock-takes', [StockTakeController::class, 'store']);
             Route::get('/stock-takes/{stockTake}', [StockTakeController::class, 'show']);
+        });
+        Route::middleware('permission:inventory.stocktake.create')->group(function () {
+            Route::post('/stock-takes', [StockTakeController::class, 'store']);
+        });
+        Route::middleware('permission:inventory.stocktake.confirm')->group(function () {
             Route::post('/stock-takes/{stockTake}/confirm', [StockTakeController::class, 'confirm']);
         });
 
@@ -337,6 +392,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/service-tickets', [ServiceDeskController::class, 'tickets']);
             Route::get('/service-tickets/{ticket}', [ServiceDeskController::class, 'showTicket']);
             Route::get('/warranty-claims', [ServiceDeskController::class, 'warranties']);
+            Route::get('/service-desk/lookups', [ServiceDeskController::class, 'lookups']);
             Route::get('/warranty-customers/lookup/{taxCode}', [ServiceDeskController::class, 'lookupWarrantyCustomer']);
         });
 

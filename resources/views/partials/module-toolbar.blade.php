@@ -4,7 +4,7 @@
         [
             'match' => ['deals', 'quotations', 'sales-orders', 'contracts', 'deliveries'],
             'items' => [
-                ['label' => 'Cơ hội bán hàng', 'href' => '/deals', 'match' => 'deals', 'permission' => 'sales.deal.manage'],
+                ['label' => 'Cơ hội bán hàng', 'href' => '/deals', 'match' => 'deals', 'permission' => 'sales.deal.view'],
                 ['label' => 'Báo giá', 'href' => '/quotations', 'match' => 'quotations', 'permission' => 'sales.quotation.view'],
                 ['label' => 'Đơn hàng', 'href' => '/sales-orders', 'match' => 'sales-orders', 'permission' => 'sales.order.view'],
                 ['label' => 'Hợp đồng', 'href' => '/contracts', 'match' => 'contracts', 'permission' => 'sales.contract.manage'],
@@ -15,7 +15,7 @@
             'match' => ['customers', 'leads', 'customer-contacts'],
             'items' => [
                 ['label' => 'Khách hàng', 'href' => '/customers', 'match' => 'customers', 'permission' => 'master.view'],
-                ['label' => 'Khách hàng tiềm năng', 'href' => '/leads', 'match' => 'leads', 'permission' => 'sales.lead.manage'],
+                ['label' => 'Khách hàng tiềm năng', 'href' => '/leads', 'match' => 'leads', 'permission' => 'sales.lead.view'],
                 ['label' => 'Người liên hệ', 'href' => '/customer-contacts', 'match' => 'customer-contacts', 'permission' => 'master.view'],
             ],
         ],
@@ -25,17 +25,17 @@
                 ['label' => 'Tồn kho', 'href' => '/inventory', 'match' => 'inventory', 'permission' => 'master.view'],
                 ['label' => 'Giao dịch kho', 'href' => '/inventory-transactions', 'match' => 'inventory-transactions', 'permission' => 'master.view'],
                 ['label' => 'Kho', 'href' => '/warehouses', 'match' => 'warehouses', 'permission' => 'master.view'],
-                ['label' => 'Nhập kho', 'href' => '/goods-receipts', 'match' => 'goods-receipts', 'permission' => 'inventory.receipt.confirm'],
-                ['label' => 'Xuất kho', 'href' => '/goods-issues', 'match' => 'goods-issues', 'permission' => 'inventory.issue.confirm'],
-                ['label' => 'Kiểm kê', 'href' => '/stock-takes', 'match' => 'stock-takes', 'permission' => 'inventory.issue.confirm'],
+                ['label' => 'Nhập kho', 'href' => '/goods-receipts', 'match' => 'goods-receipts', 'permission' => 'inventory.receipt.view'],
+                ['label' => 'Xuất kho', 'href' => '/goods-issues', 'match' => 'goods-issues', 'permission' => 'inventory.issue.view'],
+                ['label' => 'Kiểm kê', 'href' => '/stock-takes', 'match' => 'stock-takes', 'permission' => 'inventory.stocktake.view'],
             ],
         ],
         [
             'match' => ['purchase-requests', 'supplier-quotations', 'purchase-orders', 'suppliers'],
             'items' => [
-                ['label' => 'Yêu cầu mua', 'href' => '/purchase-requests', 'match' => 'purchase-requests', 'permission' => 'procurement.pr.approve'],
-                ['label' => 'Báo giá NCC', 'href' => '/supplier-quotations', 'match' => 'supplier-quotations', 'permission' => 'procurement.po.approve'],
-                ['label' => 'Đơn mua', 'href' => '/purchase-orders', 'match' => 'purchase-orders', 'permission' => 'procurement.po.approve'],
+                ['label' => 'Yêu cầu mua', 'href' => '/purchase-requests', 'match' => 'purchase-requests', 'permission' => 'procurement.pr.view'],
+                ['label' => 'Báo giá NCC', 'href' => '/supplier-quotations', 'match' => 'supplier-quotations', 'permission' => 'procurement.sq.view'],
+                ['label' => 'Đơn mua', 'href' => '/purchase-orders', 'match' => 'purchase-orders', 'permission' => 'procurement.po.view'],
                 ['label' => 'Nhà cung cấp', 'href' => '/suppliers', 'match' => 'suppliers', 'permission' => 'master.view'],
             ],
         ],
@@ -63,9 +63,11 @@
             ],
         ],
         [
-            'match' => ['kpi', 'kpi-adjustments', 'kpi-settings'],
+            'match' => ['kpi', 'my-kpi', 'kpi-reports', 'kpi-adjustments', 'kpi-settings'],
             'items' => [
                 ['label' => 'Tổng quan KPI', 'href' => '/kpi', 'match' => 'kpi', 'permission' => ''],
+                ['label' => 'KPI của tôi', 'href' => '/my-kpi', 'match' => 'my-kpi', 'permission' => ''],
+                ['label' => 'Báo cáo theo kỳ', 'href' => '/kpi-reports', 'match' => 'kpi-reports', 'permission' => ''],
                 ['label' => 'Sổ điểm nhân viên', 'href' => '/kpi-adjustments', 'match' => 'kpi-adjustments', 'permission' => ''],
                 ['label' => 'Thiết lập KPI', 'href' => '/kpi-settings', 'match' => 'kpi-settings', 'permission' => 'kpi.lock'],
             ],

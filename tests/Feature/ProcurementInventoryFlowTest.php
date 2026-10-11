@@ -22,11 +22,30 @@ class ProcurementInventoryFlowTest extends TestCase
     use RefreshDatabase;
     use \Tests\Concerns\CompletesSalesQuotation;
 
+    public function test_seeded_demo_purchase_order_can_be_approved_and_creates_one_receipt(): void
+    {
+        $this->seed();
+        $token = $this->loginAs('admin@vk-kpi.local');
+        $order = PurchaseOrder::where('code', 'PO-DEMO-APPROVAL')->firstOrFail();
+        $this->assertNotNull($order->receiving_warehouse_id);
+        $this->withToken($token)->postJson("/api/v1/purchase-orders/{$order->id}/approve")
+            ->assertOk()->assertJsonPath('data.status', 'approved');
+        $this->assertDatabaseHas('goods_receipts', ['purchase_order_id' => $order->id, 'warehouse_id' => $order->receiving_warehouse_id]);
+        $this->withToken($token)->postJson("/api/v1/purchase-orders/{$order->id}/approve")->assertStatus(422);
+        $this->assertSame(1, \App\Models\GoodsReceipt::where('purchase_order_id', $order->id)->count());
+    }
+
     public function test_supplier_quotation_page_renders_approved_request_queue(): void
     {
         $this->seed();
         $this->get('/supplier-quotations')->assertOk()->assertSee('Yêu cầu chờ xử lý báo giá')->assertSee('supplierQuotationsRoot')
-            ->assertSee('data-sq-filter="request"', false)->assertSee('data-sq-filter="supplier"', false)->assertSee('data-sq-filter="status"', false);
+            ->assertSee('data-sq-filter="request"', false)->assertSee('data-sq-filter="supplier"', false)->assertSee('data-sq-filter="status"', false)
+            ->assertDontSee('PR-DEMO-SQ-APPROVED')->assertDontSee('supplierQuotationsData');
+
+        $token = $this->loginAs('admin@vk-kpi.local');
+        $this->withToken($token)->getJson('/api/v1/supplier-quotations/bootstrap')->assertOk()
+            ->assertJsonFragment(['code' => 'PR-DEMO-SQ-APPROVED'])
+            ->assertJsonStructure(['data' => ['supplierQuotations', 'purchaseRequests', 'suppliers', 'skus', 'warehouses']]);
     }
 
     public function test_quick_product_creation_checks_duplicate_and_permission(): void

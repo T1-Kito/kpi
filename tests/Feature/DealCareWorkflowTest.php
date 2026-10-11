@@ -68,6 +68,40 @@ class DealCareWorkflowTest extends TestCase
         $this->assertSame('new', $task->refresh()->status);
     }
 
+    public function test_generic_completion_is_repeat_safe_clears_reminders_and_syncs_next_activity(): void
+    {
+        [$actor, $token, $deal, $task] = $this->scenario();
+        $task->update(['due_at' => now()->subMinute()]);
+        $this->artisan('tasks:check-overdue')->assertExitCode(0);
+        $later = app(\App\Support\TaskService::class)->create($actor, [
+            'title' => 'Next care', 'module' => 'sales', 'task_type' => 'deal_follow_up',
+            'source_type' => 'Deal', 'source_id' => $deal->id, 'assignee_id' => $actor->id, 'due_at' => now()->addDay(),
+        ]);
+        app(\App\Support\TaskService::class)->changeStatus($task, $actor, 'completed', 'Done');
+        app(\App\Support\TaskService::class)->changeStatus($task, $actor, 'completed', 'Repeated');
+        $this->assertSame(1, $task->history()->where('to_status', 'completed')->count());
+        $this->assertEquals($later->due_at, $deal->fresh()->next_activity_at);
+        $this->assertDatabaseHas('alerts', ['source_type' => 'Task', 'source_id' => $task->id, 'status' => 'resolved']);
+    }
+
+    public function test_closing_opportunity_stops_only_its_pending_care_and_prevents_reopening(): void
+    {
+        [$actor, $token, $deal, $task] = $this->scenario();
+        $task->update(['due_at' => now()->subMinute()]);
+        $this->artisan('tasks:check-overdue')->assertExitCode(0);
+        $other = app(DealService::class)->create($actor, ['name' => 'Other opportunity']);
+        $unrelated = app(\App\Support\TaskService::class)->create($actor, [
+            'title' => 'Other care', 'task_type' => 'deal_follow_up', 'source_type' => 'Deal',
+            'source_id' => $other->id, 'assignee_id' => $actor->id,
+        ]);
+        app(DealService::class)->transition($deal, $actor, 'lost', 'No demand', $deal->version);
+        $this->assertSame('cancelled', $task->fresh()->status);
+        $this->assertNull($deal->fresh()->next_activity_at);
+        $this->assertSame('new', $unrelated->fresh()->status);
+        $this->assertDatabaseHas('alerts', ['source_type' => 'Task', 'source_id' => $task->id, 'status' => 'resolved']);
+        $this->withToken($token)->postJson("/api/v1/tasks/{$task->id}/status", ['status' => 'in_progress'])->assertStatus(422);
+    }
+
     public function test_reminders_are_repeat_safe_and_resolved_when_result_is_saved(): void
     {
         [$actor, $token, $deal, $task] = $this->scenario();

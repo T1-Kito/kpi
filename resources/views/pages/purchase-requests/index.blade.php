@@ -5,7 +5,7 @@
 @section('page_title', 'Yêu cầu mua')
 @section('page_subtitle', 'Theo dõi nhu cầu mua phát sinh từ đơn bán thiếu tồn.')
 @section('page_actions')
-<button class="btn primary" type="button" data-create-purchase-request>Tạo yêu cầu mua</button>
+<button class="btn primary" type="button" data-permission="procurement.pr.create" data-create-purchase-request>Tạo yêu cầu mua</button>
 @endsection
 
 @section('content')

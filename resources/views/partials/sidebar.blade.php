@@ -52,7 +52,7 @@
             <div class="nav-group" data-nav-group data-nav-key="dashboard-sales">
                 <button class="nav-group-toggle" type="button" data-nav-toggle><span class="nav-icon business" aria-hidden="true"></span><span>Kinh doanh</span><span class="nav-chevron" aria-hidden="true"></span></button>
                 <div class="nav-sub">
-                    <a data-permission="sales.deal.manage" href="/deals">Cơ hội bán hàng</a>
+                    <a data-permission="sales.deal.view" href="/deals">Cơ hội bán hàng</a>
                     <a data-permission="sales.quotation.view" href="/quotations">Báo giá</a>
                     <a data-permission="sales.order.view" href="/sales-orders">Đơn hàng</a>
                     <a data-permission="sales.contract.manage" href="/contracts">Hợp đồng</a>
@@ -63,7 +63,7 @@
                 <button class="nav-group-toggle" type="button" data-nav-toggle><span class="nav-icon profile" aria-hidden="true"></span><span>Khách hàng</span><span class="nav-chevron" aria-hidden="true"></span></button>
                 <div class="nav-sub">
                     <a data-permission="master.view" href="/customers">Danh sách khách hàng</a>
-                    <a data-permission="sales.lead.manage" href="/leads">Khách hàng tiềm năng</a>
+                    <a data-permission="sales.lead.view" href="/leads">Khách hàng tiềm năng</a>
                     <a data-permission="master.view" href="/customer-contacts">Người liên hệ</a>
                 </div>
             </div>
@@ -81,16 +81,16 @@
                     <a data-permission="master.view" href="/inventory">Tồn kho</a>
                     <a data-permission="master.view" href="/inventory-transactions">Giao dịch kho</a>
                     <a data-permission="master.view" href="/warehouses">Kho và vị trí</a>
-                    <a data-permission="inventory.receipt.confirm" href="/goods-receipts">Nhập kho</a>
-                    <a data-permission="inventory.issue.confirm" href="/goods-issues">Xuất kho</a>
+                    <a data-permission="inventory.receipt.view" href="/goods-receipts">Nhập kho</a>
+                    <a data-permission="inventory.issue.view" href="/goods-issues">Xuất kho</a>
                 </div>
             </div>
             <div class="nav-group" data-nav-group data-nav-key="dashboard-procurement">
                 <button class="nav-group-toggle" type="button" data-nav-toggle><span class="nav-icon purchase" aria-hidden="true"></span><span>Mua hàng</span><span class="nav-chevron" aria-hidden="true"></span></button>
                 <div class="nav-sub">
-                    <a data-permission="procurement.pr.approve" href="/purchase-requests">Yêu cầu mua</a>
-                    <a data-permission="procurement.po.approve" href="/supplier-quotations">Báo giá nhà cung cấp</a>
-                    <a data-permission="procurement.po.approve" href="/purchase-orders">Đơn mua</a>
+                    <a data-permission="procurement.pr.view" href="/purchase-requests">Yêu cầu mua</a>
+                    <a data-permission="procurement.sq.view" href="/supplier-quotations">Báo giá nhà cung cấp</a>
+                    <a data-permission="procurement.po.view" href="/purchase-orders">Đơn mua</a>
                     <a data-permission="master.view" href="/suppliers">Nhà cung cấp</a>
                 </div>
             </div>
@@ -113,6 +113,8 @@
                 <button class="nav-group-toggle" type="button" data-nav-toggle><span class="nav-icon kpi" aria-hidden="true"></span><span>KPI</span><span class="nav-chevron" aria-hidden="true"></span></button>
                 <div class="nav-sub">
                     <a href="/kpi">Tổng quan KPI</a>
+                    <a href="/my-kpi">KPI của tôi</a>
+                    <a href="/kpi-reports">Báo cáo theo kỳ</a>
                     <a href="/kpi-adjustments">Sổ điểm nhân viên</a>
                     <a data-permission="kpi.lock" href="/kpi-settings">Thiết lập KPI</a>
                 </div>
@@ -126,7 +128,7 @@
         </div>
 
         <div data-module-section="sales" hidden>
-            <a class="nav-link" data-permission="sales.deal.manage" href="/deals"><span class="nav-icon business" aria-hidden="true"></span><span>Cơ hội bán hàng</span></a>
+            <a class="nav-link" data-permission="sales.deal.view" href="/deals"><span class="nav-icon business" aria-hidden="true"></span><span>Cơ hội bán hàng</span></a>
             <a class="nav-link" data-permission="sales.quotation.view" href="/quotations"><span class="nav-icon print" aria-hidden="true"></span><span>Báo giá</span></a>
             <a class="nav-link" data-permission="sales.order.view" href="/sales-orders"><span class="nav-icon business" aria-hidden="true"></span><span>Đơn hàng</span></a>
             <a class="nav-link" data-permission="sales.contract.manage" href="/contracts"><span class="nav-icon print" aria-hidden="true"></span><span>Hợp đồng</span></a>
@@ -135,7 +137,7 @@
 
         <div data-module-section="customer" hidden>
             <a class="nav-link" data-permission="master.view" href="/customers"><span class="nav-icon profile" aria-hidden="true"></span><span>Danh sách khách hàng</span></a>
-            <a class="nav-link" data-permission="sales.lead.manage" href="/leads"><span class="nav-icon profile" aria-hidden="true"></span><span>Khách hàng tiềm năng</span></a>
+            <a class="nav-link" data-permission="sales.lead.view" href="/leads"><span class="nav-icon profile" aria-hidden="true"></span><span>Khách hàng tiềm năng</span></a>
             <a class="nav-link" data-permission="master.view" href="/customer-contacts"><span class="nav-icon profile" aria-hidden="true"></span><span>Người liên hệ</span></a>
         </div>
         <div data-module-section="product" hidden>
@@ -145,9 +147,9 @@
         </div>
 
         <div data-module-section="procurement" hidden>
-            <a class="nav-link" data-permission="procurement.pr.approve" href="/purchase-requests"><span class="nav-icon tasks" aria-hidden="true"></span><span>Yêu cầu mua</span></a>
-            <a class="nav-link" data-permission="procurement.po.approve" href="/supplier-quotations"><span class="nav-icon print" aria-hidden="true"></span><span>Báo giá nhà cung cấp</span></a>
-            <a class="nav-link" data-permission="procurement.po.approve" href="/purchase-orders"><span class="nav-icon purchase" aria-hidden="true"></span><span>Đơn mua</span></a>
+            <a class="nav-link" data-permission="procurement.pr.view" href="/purchase-requests"><span class="nav-icon tasks" aria-hidden="true"></span><span>Yêu cầu mua</span></a>
+            <a class="nav-link" data-permission="procurement.sq.view" href="/supplier-quotations"><span class="nav-icon print" aria-hidden="true"></span><span>Báo giá nhà cung cấp</span></a>
+            <a class="nav-link" data-permission="procurement.po.view" href="/purchase-orders"><span class="nav-icon purchase" aria-hidden="true"></span><span>Đơn mua</span></a>
             <a class="nav-link" data-permission="master.view" href="/suppliers"><span class="nav-icon profile" aria-hidden="true"></span><span>Nhà cung cấp</span></a>
         </div>
 
@@ -155,9 +157,9 @@
             <a class="nav-link" data-permission="master.view" href="/inventory"><span class="nav-icon inventory" aria-hidden="true"></span><span>Tồn kho</span></a>
             <a class="nav-link" data-permission="master.view" href="/inventory-transactions"><span class="nav-icon inventory" aria-hidden="true"></span><span>Giao dịch kho</span></a>
             <a class="nav-link" data-permission="master.view" href="/warehouses"><span class="nav-icon warehouse" aria-hidden="true"></span><span>Kho và vị trí</span></a>
-            <a class="nav-link" data-permission="inventory.receipt.confirm" href="/goods-receipts"><span class="nav-icon receipt" aria-hidden="true"></span><span>Nhập kho</span></a>
-            <a class="nav-link" data-permission="inventory.issue.confirm" href="/goods-issues"><span class="nav-icon issue" aria-hidden="true"></span><span>Xuất kho</span></a>
-            <a class="nav-link" data-permission="inventory.issue.confirm" href="/stock-takes"><span class="nav-icon stocktake" aria-hidden="true"></span><span>Kiểm kê</span></a>
+            <a class="nav-link" data-permission="inventory.receipt.view" href="/goods-receipts"><span class="nav-icon receipt" aria-hidden="true"></span><span>Nhập kho</span></a>
+            <a class="nav-link" data-permission="inventory.issue.view" href="/goods-issues"><span class="nav-icon issue" aria-hidden="true"></span><span>Xuất kho</span></a>
+            <a class="nav-link" data-permission="inventory.stocktake.view" href="/stock-takes"><span class="nav-icon stocktake" aria-hidden="true"></span><span>Kiểm kê</span></a>
         </div>
 
         <div data-module-section="finance" hidden>

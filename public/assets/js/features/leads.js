@@ -106,6 +106,7 @@ function leadMetric(label, value, note, tone) {
 }
 
 function renderLeadTable(rows) {
+    const canManage = window.VKLayout?.hasPermission('sales.lead.manage');
     return VKTable.renderTable([
         { label: 'Mã', render: row => `<span class="mono customer-code-accent">${VKTable.escapeHtml(row.code)}</span>` },
         { label: 'Khách hàng tiềm năng', render: row => renderLeadName(row) },
@@ -117,8 +118,8 @@ function renderLeadTable(rows) {
         { label: 'Việc tiếp theo', render: row => renderLeadNextTask(row) },
         { label: 'Trạng thái', render: row => VKTable.statusBadge(row.status) },
         { label: '', render: row => VKTable.rowActions([
-            row.status !== 'qualified' ? VKTable.smallButton(row.assigned_to ? 'Phân công lại' : 'Phân công', `data-assign-lead="${row.id}"`) : '',
-            row.status !== 'qualified' ? VKTable.smallButton('Chuyển cơ hội', `data-qualify-lead="${row.id}"`) : '',
+            canManage && row.status !== 'qualified' ? VKTable.smallButton(row.assigned_to ? 'Phân công lại' : 'Phân công', `data-assign-lead="${row.id}"`) : '',
+            canManage && row.status !== 'qualified' ? VKTable.smallButton('Chuyển cơ hội', `data-qualify-lead="${row.id}"`) : '',
             VKTable.smallButton('Mở', `data-lead-detail="${row.id}"`),
         ].filter(Boolean)) },
     ], rows, 'Chưa có khách hàng tiềm năng', { rowAttr: row => `data-row-detail="${row.id}"` });
@@ -234,10 +235,13 @@ function renderLeadDetail() {
         content = `<section class="customer360-metrics lead360-metrics"><article class="customer360-metric blue"><span>Trạng thái</span><strong>${e(VKTable.translateStatus(lead.status || 'new'))}</strong><small>Giai đoạn hiện tại</small></article><article class="customer360-metric green"><span>Người phụ trách</span><strong>${e(lead.assignee?.name || 'Chưa phân công')}</strong><small>Đầu mối chăm sóc</small></article><article class="customer360-metric orange"><span>Việc cần xử lý</span><strong>${openTasks.length}</strong><small>Công việc đang mở</small></article><article class="customer360-metric purple"><span>Chứng từ</span><strong>${docs.length}</strong><small>Chứng từ liên quan</small></article></section>${lead.converted_customer || lead.converted_deal ? `<div class="lead360-converted"><strong>Đã chuyển đổi</strong>${lead.converted_customer ? `<a href="/customers?open=${encodeURIComponent(lead.converted_customer.id)}">Khách hàng: ${e(lead.converted_customer.code)} · ${e(lead.converted_customer.name)} →</a>` : ''}${lead.converted_deal ? `<a href="/deals?open=${encodeURIComponent(lead.converted_deal.id)}">Cơ hội: ${e(lead.converted_deal.code)} · ${e(lead.converted_deal.name)} →</a>` : ''}</div>` : ''}<div class="customer360-grid lead360-grid"><article class="customer360-card"><div class="customer360-card-title"><span>◉</span><h2>Thông tin hồ sơ</h2><small>Dữ liệu lead</small></div>${lead360Info('Mã lead', lead.code)}${lead360Info('Số điện thoại', lead.phone)}${lead360Info('Email', lead.email)}${lead360Info('Nguồn', leadSourceLabel(lead.source))}${lead360Info('Chiến dịch', lead.campaign_code)}${lead360Info('Ngày tạo', lead360Date(lead.created_at))}</article><article class="customer360-card"><div class="customer360-card-title"><span>⌁</span><h2>Hoạt động gần đây</h2><small>${tasks.length + docs.length} mục</small>${lead.assigned_to && lead.status !== 'qualified' ? '<button type="button" data-lead-follow-up>+ Thêm việc</button>' : ''}</div>${tasks.slice(0, 3).map(task => lead360Item(task.title, `${VKTable.translateStatus(task.status)} · ${lead360Date(task.due_at)}`)).join('')}${docs.slice(0, 2).map(doc => lead360Item(`${doc.label || 'Chứng từ'} ${doc.code || ''}`, VKTable.translateStatus(doc.status), doc.path)).join('')}${!tasks.length && !docs.length ? lead360Empty('Chưa có hoạt động. Hãy phân công để bắt đầu chăm sóc.') : ''}</article></div>`;
     }
     document.getElementById('leadsRoot').innerHTML = `<section class="customer360-page lead360-page"><header class="customer360-hero"><div class="customer360-hero-top"><button class="customer360-back" type="button" data-lead-back>← Danh sách khách hàng tiềm năng</button><div class="customer360-hero-actions"><span class="customer360-id">${e(lead.code || 'LEAD')}</span>${lead.status !== 'qualified' ? `<button class="btn small" type="button" data-assign-lead="${lead.id}">Phân công</button><button class="btn small" type="button" data-qualify-lead="${lead.id}">Chuyển cơ hội</button>` : ''}</div></div><div class="customer360-identity"><div class="customer360-avatar">${e((lead.name || 'K').trim().slice(0, 1).toUpperCase())}</div><div><p>Hồ sơ khách hàng tiềm năng</p><h1>${e(lead.name || 'Khách hàng tiềm năng')}</h1><span>${e(lead.phone || 'Chưa có số điện thoại')} · ${e(lead.email || 'Chưa có email')} · ${e(leadSourceLabel(lead.source))}</span></div><div class="customer360-owner"><span>Người phụ trách</span><strong>${e(lead.assignee?.name || 'Chưa phân công')}</strong><em class="customer360-status active">${e(VKTable.translateStatus(lead.status || 'new'))}</em></div></div></header><nav class="customer360-tabs" aria-label="Hồ sơ khách hàng tiềm năng">${tabs.map(([key, label]) => `<button type="button" class="${leadState.detailTab === key ? 'active' : ''}" data-lead-tab="${key}">${label}</button>`).join('')}</nav><div class="customer360-body">${content}</div></section>`;
+    if (!window.VKLayout?.hasPermission('sales.lead.manage')) {
+        document.querySelectorAll('#leadsRoot [data-assign-lead], #leadsRoot [data-qualify-lead], #leadsRoot [data-lead-follow-up], #leadsRoot [data-lead-task-status]').forEach(node => node.remove());
+    }
 }
 
 function lead360Info(label, value) {
-    return `<div class="customer360-info"><span>${VKTable.escapeHtml(label)}</span><strong>${VKTable.escapeHtml(value || 'Chưa cập nhật')}</strong></div>`;
+    return `<div class="customer360-info"><span>${VKTable.escapeHtml(label)}</span><strong class="${/^Mã(?:\s|$)/i.test(label) ? 'record-code-text' : ''}">${VKTable.escapeHtml(value || 'Chưa cập nhật')}</strong></div>`;
 }
 
 function lead360Item(title, subtitle, path = '', task = null) {
@@ -313,7 +317,7 @@ async function openQualifyModal(id) {
         VKModal.toast('Đã liên kết khách hàng và tạo cơ hội bán hàng.');
         VKModal.close();
         if (openDeal && response.data?.deal?.id) {
-            window.location.href = `/deals?open=${encodeURIComponent(response.data.deal.id)}`;
+            await VKLayout.navigatePjax(`/deals?open=${encodeURIComponent(response.data.deal.id)}`);
             return;
         }
         await loadLeads();

@@ -14,5 +14,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/organization.js?v=20260921-1"></script>
+<script src="/assets/js/features/organization.js?v=20261011-master1"></script>
 @endpush

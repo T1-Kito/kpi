@@ -330,16 +330,16 @@
             ],
             salesOrder: [
                 row.status === 'draft' && can('sales.order.create') ? { action: 'confirm-sales-order', label: 'Xác nhận kiểm tồn', variant: 'primary' } : null,
-                row.stock_status === 'reserved' && row.status !== 'completed' && can('inventory.issue.confirm') ? { action: 'create-goods-issue', label: 'Tạo phiếu xuất', variant: 'primary' } : null,
-                row.stock_status === 'shortage' && can('procurement.pr.approve') ? { action: 'open-purchase-requests', label: 'Mở yêu cầu mua' } : null,
+                row.stock_status === 'reserved' && row.status !== 'completed' && can('inventory.issue.create') ? { action: 'create-goods-issue', label: 'Tạo phiếu xuất', variant: 'primary' } : null,
+                row.stock_status === 'shortage' && can('procurement.pr.view') ? { action: 'open-purchase-requests', label: 'Mở yêu cầu mua' } : null,
             ],
             purchaseRequest: [
                 row.status === 'draft' && can('procurement.pr.approve') ? { action: 'approve-purchase-request', label: 'Duyệt yêu cầu mua', variant: 'primary' } : null,
-                row.status === 'approved' && can('procurement.po.approve') ? { action: 'create-purchase-order', label: 'Tạo đơn mua', variant: 'primary' } : null,
+                row.status === 'approved' && can('procurement.po.create') ? { action: 'create-purchase-order', label: 'Tạo đơn mua', variant: 'primary' } : null,
             ],
             purchaseOrder: [
                 row.status === 'draft' && can('procurement.po.approve') ? { action: 'approve-purchase-order', label: 'Duyệt đơn mua', variant: 'primary' } : null,
-                row.status === 'approved' && can('inventory.receipt.confirm') ? { action: 'create-goods-receipt', label: 'Tạo phiếu nhập', variant: 'primary' } : null,
+                row.status === 'approved' && can('inventory.receipt.create') ? { action: 'create-goods-receipt', label: 'Tạo phiếu nhập', variant: 'primary' } : null,
             ],
             goodsReceipt: [
                 row.status === 'draft' && can('inventory.receipt.confirm') ? { action: 'confirm-goods-receipt', label: 'Xác nhận nhập kho', variant: 'primary' } : null,
@@ -835,7 +835,7 @@
     }
 
     document.addEventListener('click', (event) => {
-        if (event.target.matches('[data-detail-close]') || event.target.matches('[data-detail-drawer-backdrop]')) close();
+        if (event.target.closest('[data-detail-close]') || event.target.matches('[data-detail-drawer-backdrop]')) close();
         if (event.target.matches('[data-detail-tab]')) {
             state.tab = event.target.dataset.detailTab;
             render();

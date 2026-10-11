@@ -50,6 +50,8 @@ class SkuController extends Controller
     {
         $tenantId = $request->user()->tenant_id;
         $data = $request->validate([
+            'product_code' => ['nullable', 'string', 'max:100', Rule::unique('products', 'code')->where('tenant_id', $tenantId)],
+            'sku_code' => ['nullable', 'string', 'max:100', Rule::unique('skus', 'sku_code')->where('tenant_id', $tenantId)],
             'product_name' => ['nullable', 'string', 'max:255'], 'category_id' => ['nullable', Rule::exists('product_categories', 'id')->where('tenant_id', $tenantId)], 'brand_id' => ['nullable', Rule::exists('product_brands', 'id')->where('tenant_id', $tenantId)],
             'product_image' => ['nullable', 'image', 'max:4096'], 'description' => ['nullable', 'string', 'max:5000'], 'technical_specs' => ['nullable', 'string', 'max:5000'],
             'name' => ['required', 'string', 'max:255'], 'serial_number' => ['nullable', 'string', 'max:120'],
@@ -73,7 +75,7 @@ class SkuController extends Controller
 
         $product = Product::create([
             'tenant_id' => $tenantId,
-            'code' => $this->codes->next('products', 'code', 'PROD-', fn ($query) => $query->where('tenant_id', $tenantId)),
+            'code' => $data['product_code'] ?? $this->codes->next('products', 'code', 'PROD-', fn ($query) => $query->where('tenant_id', $tenantId)),
             'name' => $data['product_name'] ?? $data['name'],
             ...$this->productDetails($request, $data, $tenantId),
             'status' => 'active',
@@ -82,7 +84,7 @@ class SkuController extends Controller
         $sku = Sku::create([
             'tenant_id' => $tenantId,
             'product_id' => $product?->id,
-            'sku_code' => $this->codes->next('skus', 'sku_code', 'SKU-', fn ($query) => $query->where('tenant_id', $tenantId)),
+            'sku_code' => $data['sku_code'] ?? $this->codes->next('skus', 'sku_code', 'SKU-', fn ($query) => $query->where('tenant_id', $tenantId)),
             'name' => $data['name'],
             'serial_number' => $data['serial_number'] ?? null,
             'barcode' => $data['barcode'] ?? null,
@@ -112,6 +114,8 @@ class SkuController extends Controller
         abort_if($sku->tenant_id !== $request->user()->tenant_id, 404);
         $tenantId = $request->user()->tenant_id;
         $data = $request->validate([
+            'product_code' => ['nullable', 'string', 'max:100', Rule::unique('products', 'code')->where('tenant_id', $tenantId)->ignore($sku->product_id)],
+            'sku_code' => ['nullable', 'string', 'max:100', Rule::unique('skus', 'sku_code')->where('tenant_id', $tenantId)->ignore($sku->id)],
             'product_name' => ['nullable', 'string', 'max:255'], 'category_id' => ['nullable', Rule::exists('product_categories', 'id')->where('tenant_id', $tenantId)], 'brand_id' => ['nullable', Rule::exists('product_brands', 'id')->where('tenant_id', $tenantId)],
             'product_image' => ['nullable', 'image', 'max:4096'], 'description' => ['nullable', 'string', 'max:5000'], 'technical_specs' => ['nullable', 'string', 'max:5000'],
             'name' => ['required', 'string', 'max:255'], 'serial_number' => ['nullable', 'string', 'max:120'],
@@ -127,6 +131,7 @@ class SkuController extends Controller
         $product = $sku->product;
         if ($product) {
             $product->update([
+                'code' => $data['product_code'] ?? $product->code,
                 'name' => $data['product_name'] ?? $product->name,
                 ...$this->productDetails($request, $data, $tenantId, $product),
                 'status' => 'active',
@@ -134,7 +139,7 @@ class SkuController extends Controller
         } else {
             $product = Product::create([
                 'tenant_id' => $tenantId,
-                'code' => $this->codes->next('products', 'code', 'PROD-', fn ($query) => $query->where('tenant_id', $tenantId)),
+                'code' => $data['product_code'] ?? $this->codes->next('products', 'code', 'PROD-', fn ($query) => $query->where('tenant_id', $tenantId)),
                 'name' => $data['product_name'] ?? $data['name'],
                 ...$this->productDetails($request, $data, $tenantId),
                 'status' => 'active',
@@ -143,6 +148,7 @@ class SkuController extends Controller
 
         $old = $sku->toArray();
         $sku->update([
+            'sku_code' => $data['sku_code'] ?? $sku->sku_code,
             'product_id' => $product?->id,
             'name' => $data['name'],
             'serial_number' => $data['serial_number'] ?? null,

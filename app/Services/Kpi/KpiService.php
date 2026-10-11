@@ -23,37 +23,42 @@ class KpiService
     /** @return array<string, mixed> */
     public function buildMetrics(int $tenantId): array
     {
-        $leads = Lead::where('tenant_id', $tenantId)->get();
-        $quotations = Quotation::where('tenant_id', $tenantId)->with('items')->get();
-        $salesOrders = SalesOrder::where('tenant_id', $tenantId)->with('items')->get();
-        $purchaseRequests = DB::table('purchase_requests')->where('tenant_id', $tenantId)->get();
-        $purchaseOrders = DB::table('purchase_orders')->where('tenant_id', $tenantId)->get();
-        $balances = InventoryBalance::where('tenant_id', $tenantId)->with('sku')->get();
-        $receipts = GoodsReceipt::where('tenant_id', $tenantId)->get();
-        $issues = GoodsIssue::where('tenant_id', $tenantId)->get();
-        $tasks = Task::where('tenant_id', $tenantId)->get();
-        $alerts = Alert::where('tenant_id', $tenantId)->get();
+        // Aggregate in the database: memory and response size do not grow with the document lists.
+        $leadTotal = Lead::where('tenant_id', $tenantId)->count();
+        $quotations = Quotation::where('tenant_id', $tenantId)->selectRaw("COUNT(*) as total, COALESCE(SUM(total_amount),0) as amount, SUM(CASE WHEN status = 'pending_approval' THEN 1 ELSE 0 END) as pending")->first();
+        $salesOrders = SalesOrder::where('tenant_id', $tenantId)->selectRaw("COUNT(*) as total, COALESCE(SUM(total_amount),0) as amount, SUM(CASE WHEN stock_status = 'shortage' THEN 1 ELSE 0 END) as shortages")->first();
+        $purchaseRequests = DB::table('purchase_requests')->where('tenant_id', $tenantId)->selectRaw("COUNT(*) as total, SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved")->first();
+        $purchaseOrders = DB::table('purchase_orders')->where('tenant_id', $tenantId)->selectRaw("COUNT(*) as total, COALESCE(SUM(total_amount),0) as amount, SUM(CASE WHEN status IN ('approved','received','partially_received') THEN 1 ELSE 0 END) as approved, SUM(CASE WHEN status IN ('received','partially_received') THEN 1 ELSE 0 END) as received")->first();
+        $balances = DB::table('inventory_balances as balances')->where('balances.tenant_id', $tenantId)
+            ->leftJoin('skus', function ($join) {
+                $join->on('skus.id', '=', 'balances.sku_id')->on('skus.tenant_id', '=', 'balances.tenant_id');
+            })->selectRaw('COUNT(*) as total, COALESCE(SUM(available),0) as available, COALESCE(SUM(reserved),0) as reserved, SUM(CASE WHEN available <= COALESCE(skus.min_stock,0) THEN 1 ELSE 0 END) as low_stock')->first();
+        $receiptTotal = GoodsReceipt::where('tenant_id', $tenantId)->count();
+        $issueTotal = GoodsIssue::where('tenant_id', $tenantId)->count();
+        $tasks = Task::where('tenant_id', $tenantId)->selectRaw("COUNT(*) as total, SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed, SUM(CASE WHEN status = 'overdue' THEN 1 ELSE 0 END) as overdue")->first();
+        $alerts = Alert::where('tenant_id', $tenantId)->selectRaw("COUNT(*) as total, SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) as resolved, SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) as open_count")->first();
 
-        $revenue = $salesOrders->sum('total_amount');
-        $quotationValue = $quotations->sum('total_amount');
-        $purchaseValue = $purchaseOrders->sum('total_amount');
-        $available = $balances->sum('available');
-        $reserved = $balances->sum('reserved');
-        $orderTotal = $salesOrders->count();
-        $quotationTotal = $quotations->count();
-        $leadTotal = $leads->count();
-        $poTotal = $purchaseOrders->count();
-        $taskTotal = $tasks->count();
-        $completedTasks = $tasks->where('status', 'completed')->count();
-        $overdueTasks = $tasks->where('status', 'overdue')->count();
-        $resolvedAlerts = $alerts->where('status', 'resolved')->count();
-        $openAlerts = $alerts->where('status', 'open')->count();
-        $approvedPrs = $purchaseRequests->where('status', 'approved')->count();
-        $approvedPos = $purchaseOrders->whereIn('status', ['approved', 'received', 'partially_received'])->count();
-        $receivedPos = $purchaseOrders->whereIn('status', ['received', 'partially_received'])->count();
-        $pendingQuotes = $quotations->where('status', 'pending_approval')->count();
-        $lowStockRows = $balances->filter(fn ($row) => (float) $row->available <= (float) ($row->sku->min_stock ?? 0))->count();
-        $shortageOrders = $salesOrders->where('stock_status', 'shortage')->count();
+        $revenue = (float) $salesOrders->amount;
+        $quotationValue = (float) $quotations->amount;
+        $purchaseValue = (float) $purchaseOrders->amount;
+        $available = (float) $balances->available;
+        $reserved = (float) $balances->reserved;
+        $orderTotal = (int) $salesOrders->total;
+        $quotationTotal = (int) $quotations->total;
+        $poTotal = (int) $purchaseOrders->total;
+        $prTotal = (int) $purchaseRequests->total;
+        $taskTotal = (int) $tasks->total;
+        $alertTotal = (int) $alerts->total;
+        $completedTasks = (int) $tasks->completed;
+        $overdueTasks = (int) $tasks->overdue;
+        $resolvedAlerts = (int) $alerts->resolved;
+        $openAlerts = (int) $alerts->open_count;
+        $approvedPrs = (int) $purchaseRequests->approved;
+        $approvedPos = (int) $purchaseOrders->approved;
+        $receivedPos = (int) $purchaseOrders->received;
+        $pendingQuotes = (int) $quotations->pending;
+        $lowStockRows = (int) $balances->low_stock;
+        $shortageOrders = (int) $salesOrders->shortages;
 
         $salesScore = $this->score([
             $this->ratio($orderTotal, max($quotationTotal, 1)) * 45,
@@ -65,11 +70,11 @@ class KpiService
         $inventoryScore = $this->score([
             $this->ratio($available, max($available + $reserved, 1)) * 45,
             $lowStockRows === 0 ? 30 : max(0, 30 - $lowStockRows * 8),
-            $this->ratio($receipts->count() + $issues->count(), max($poTotal + $orderTotal, 1)) * 25,
+            $this->ratio($receiptTotal + $issueTotal, max($poTotal + $orderTotal, 1)) * 25,
         ]);
 
         $procurementScore = $this->score([
-            $this->ratio($approvedPrs, max($purchaseRequests->count(), 1)) * 35,
+            $this->ratio($approvedPrs, max($prTotal, 1)) * 35,
             $this->ratio($approvedPos, max($poTotal, 1)) * 35,
             $this->ratio($receivedPos, max($poTotal, 1)) * 20,
             $purchaseValue > 0 ? 10 : 0,
@@ -79,7 +84,7 @@ class KpiService
         $workflowScore = $this->score([
             $this->ratio($completedTasks, max($taskTotal, 1)) * 45,
             $overdueTasks === 0 ? 25 : max(0, 25 - $overdueTasks * 6),
-            $this->ratio($resolvedAlerts, max($alerts->count(), 1)) * 20,
+            $this->ratio($resolvedAlerts, max($alertTotal, 1)) * 20,
             $openAlerts === 0 ? 10 : max(0, 10 - $openAlerts * 3),
         ]);
 
@@ -102,17 +107,19 @@ class KpiService
             'lowStockRows' => $lowStockRows,
             'approvedPos' => $approvedPos,
             'slaRate' => $slaRate,
+            'completionRate' => $slaRate,
             'poApprovalRate' => $poApprovalRate,
             'counts' => [
                 'leads' => $leadTotal,
                 'quotations' => $quotationTotal,
                 'salesOrders' => $orderTotal,
-                'purchaseRequests' => $purchaseRequests->count(),
+                'purchaseRequests' => $prTotal,
                 'purchaseOrders' => $poTotal,
-                'receipts' => $receipts->count(),
-                'issues' => $issues->count(),
+                'balances' => (int) $balances->total,
+                'receipts' => $receiptTotal,
+                'issues' => $issueTotal,
                 'tasks' => $taskTotal,
-                'alerts' => $alerts->count(),
+                'alerts' => $alertTotal,
             ],
         ];
     }

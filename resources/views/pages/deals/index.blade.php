@@ -5,7 +5,7 @@
 @section('page_title', 'Cơ hội bán hàng')
 @section('page_subtitle', 'Theo dõi cơ hội từ tiếp nhận nhu cầu đến chốt báo giá.')
 @section('page_actions')
-    <button class="btn primary" type="button" data-create-deal>Tạo cơ hội</button>
+    <button class="btn primary" type="button" data-permission="sales.deal.manage" data-create-deal>Tạo cơ hội</button>
 @endsection
 
 @section('content')
@@ -13,5 +13,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/deals.js?v=20261009-care1"></script>
+<script src="/assets/js/features/deals.js?v=20261011-permissions1"></script>
 @endpush

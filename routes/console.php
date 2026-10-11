@@ -7,6 +7,9 @@ use App\Models\Task;
 use App\Models\Tenant;
 use App\Models\VkNotification;
 use App\Services\Kpi\KpiService;
+use App\Services\Kpi\KpiBundleRolloutService;
+use App\Models\KpiBundlePlan;
+use Carbon\CarbonImmutable;
 use App\Support\BusinessEventPublisher;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -165,3 +168,17 @@ Schedule::command('tasks:check-overdue')->everyFiveMinutes();
 Schedule::command('procurement:check-late-po')->hourly();
 // Enable event retry only after a real, idempotent dispatcher is implemented.
 Schedule::command('kpi:calculate-snapshots')->dailyAt('23:55');
+
+Artisan::command('kpi:rollout-bundles', function (KpiBundleRolloutService $rollout) {
+    $created = 0; $failed = 0;
+    KpiBundlePlan::where('status', 'active')->with('bundle')->chunkById(100, function ($plans) use ($rollout, &$created, &$failed) {
+        foreach ($plans as $plan) {
+            try { $created += $rollout->ensure($plan, CarbonImmutable::today()); }
+            catch (\Throwable $error) { report($error); $failed++; }
+        }
+    });
+    $this->info("Created {$created} KPI assignment(s); {$failed} plan(s) need review.");
+    return $failed ? 1 : 0;
+})->purpose('Create KPI assignments for active recurring bundle plans');
+
+Schedule::command('kpi:rollout-bundles')->dailyAt('00:10')->withoutOverlapping();

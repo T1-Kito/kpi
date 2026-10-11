@@ -4,17 +4,17 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\PrintTemplate;
+use App\Services\Print\QuotationDocxMergeService;
 use App\Support\CodeGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 class PrintTemplateController extends Controller
 {
-    public function __construct(private readonly CodeGenerator $codes)
-    {
-    }
+    public function __construct(private readonly CodeGenerator $codes) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -119,7 +119,7 @@ class PrintTemplateController extends Controller
                 ...$file,
                 'tenant_id' => $tenantId,
                 'code' => $this->codes->next('print_templates', 'code', 'TPL-', fn ($query) => $query->where('tenant_id', $tenantId)),
-                'content_html' => $data['content_html'] ?: self::defaultTemplate($data['module']),
+                'content_html' => ($data['content_html'] ?? '') ?: self::defaultTemplate($data['module']),
                 'merge_fields' => self::fields($data['module']),
                 'is_default' => (bool) ($data['is_default'] ?? false),
                 'status' => $data['status'] ?? 'active',
@@ -147,13 +147,24 @@ class PrintTemplateController extends Controller
             $printTemplate->update([
                 ...$data,
                 ...$file,
-                'content_html' => $data['content_html'] ?: self::defaultTemplate($data['module']),
+                'content_html' => ($data['content_html'] ?? '') ?: self::defaultTemplate($data['module']),
                 'merge_fields' => self::fields($data['module']),
                 'is_default' => (bool) ($data['is_default'] ?? false),
             ]);
         });
 
         return response()->json(['data' => $printTemplate->refresh()]);
+    }
+
+    public function original(Request $request, PrintTemplate $printTemplate)
+    {
+        abort_if($printTemplate->tenant_id !== $request->user()->tenant_id, 404);
+        $path = $printTemplate->file_path;
+        abort_unless($path, 404, 'Mẫu chưa có file Word.');
+        $disk = Storage::disk('local')->exists($path) ? 'local' : 'public';
+        abort_unless(Storage::disk($disk)->exists($path), 404, 'Không tìm thấy file mẫu.');
+
+        return Storage::disk($disk)->download($path, basename($printTemplate->file_name ?: 'mau-word.docx'));
     }
 
     private function validated(Request $request): array
@@ -164,7 +175,7 @@ class PrintTemplateController extends Controller
             'content_html' => ['nullable', 'string'],
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
             'is_default' => ['nullable', 'boolean'],
-            'template_file' => ['nullable', 'file', 'mimes:doc,docx,html,txt', 'max:5120'],
+            'template_file' => ['nullable', 'file', 'mimes:docx,zip', 'extensions:docx', 'max:5120'],
         ]);
     }
 
@@ -175,9 +186,13 @@ class PrintTemplateController extends Controller
         }
 
         $file = $request->file('template_file');
+        app(QuotationDocxMergeService::class)->validateTemplateFile(
+            $file->getRealPath(),
+            array_column(self::fields($request->input('module')), 'key'),
+        );
 
         return [
-            'file_path' => $file->store("print-templates/{$tenantId}", 'public'),
+            'file_path' => $file->store("print-templates/{$tenantId}", 'local'),
             'file_name' => $file->getClientOriginalName(),
         ];
     }
@@ -209,6 +224,7 @@ class PrintTemplateController extends Controller
             ['key' => 'so_luong', 'label' => 'Số lượng'],
             ['key' => 'bang_dong_hang', 'label' => 'Bảng dòng hàng dạng text'],
             ['key' => 'nguoi_lap', 'label' => 'Người lập'],
+            ['key' => 'trang_thai', 'label' => 'Trạng thái chứng từ'],
         ];
         if ($module === 'goods_issue') {
             return [...$common, ['key' => 'ma_don_ban', 'label' => 'Mã đơn bán'], ['key' => 'kho_xuat', 'label' => 'Kho xuất'], ['key' => 'ly_do_xuat', 'label' => 'Lý do xuất'], ['key' => 'dia_diem_giao_hang', 'label' => 'Địa điểm giao'], ['key' => 'chung_tu_goc', 'label' => 'Chứng từ gốc'], ['key' => 'co_tru_ton', 'label' => 'Có trừ tồn kho']];
@@ -229,8 +245,17 @@ class PrintTemplateController extends Controller
                 ['key' => 'ma_don_hang', 'label' => 'Đơn hàng tham chiếu'],
                 ['key' => 'dieu_khoan', 'label' => 'Ghi chú / điều khoản'],
                 ['key' => 'moc_thanh_toan', 'label' => 'Các mốc thanh toán'],
+                ['key' => 'email', 'label' => 'Email khách hàng'],
+                ['key' => 'ten_cong_ty', 'label' => 'Tên công ty khách hàng'],
+                ['key' => 'ma_so_thue', 'label' => 'Mã số thuế khách hàng'],
+                ['key' => 'dia_chi_cong_ty', 'label' => 'Địa chỉ hóa đơn khách hàng'],
+                ['key' => 'tong_cong', 'label' => 'Tổng cộng'],
+                ['key' => 'tong_tien_bang_chu', 'label' => 'Tổng tiền bằng chữ'],
+                ['key' => 'nguoi_dai_dien_phap_luat', 'label' => 'Người đại diện pháp luật khách hàng'],
+                ['key' => 'chuc_vu_dai_dien', 'label' => 'Chức vụ đại diện khách hàng'],
             ];
         }
+
         return [
             ...$common,
             ['key' => 'ma_bao_gia', 'label' => 'Mã báo giá'],
@@ -258,6 +283,11 @@ class PrintTemplateController extends Controller
             ['key' => 'vat', 'label' => 'VAT'],
             ['key' => 'tong_cong', 'label' => 'Tổng cộng'],
             ['key' => 'tong_tien_bang_chu', 'label' => 'Tổng tiền bằng chữ'],
+            ['key' => 'nguoi_dai_dien_phap_luat', 'label' => 'Người đại diện pháp luật khách hàng'],
+            ['key' => 'chuc_vu_dai_dien', 'label' => 'Chức vụ đại diện khách hàng'],
+            ['key' => 'dieu_khoan_thanh_toan', 'label' => 'Điều khoản thanh toán'],
+            ['key' => 'dieu_khoan_giao_hang', 'label' => 'Điều khoản giao hàng'],
+            ['key' => 'ngay_het_hieu_luc', 'label' => 'Ngày hết hiệu lực báo giá'],
         ];
     }
 
@@ -267,6 +297,7 @@ class PrintTemplateController extends Controller
             return '<section class="doc-header"><div><p class="muted">HỢP ĐỒNG</p><h1>{{ma_hop_dong}}</h1><p><strong>{{ten_hop_dong}}</strong></p></div><div class="doc-meta"><span>Ngày lập</span><strong>{{ngay_hop_dong}}</strong></div></section><section class="doc-grid"><div class="doc-card"><h2>Bên A</h2><p><strong>{{ten_cong_ty}}</strong></p><p>Mã số thuế: {{ma_so_thue}}</p><p>Địa chỉ: {{dia_chi_cong_ty}}</p></div><div class="doc-card"><h2>Bên B</h2><p><strong>{{ten_khach_hang}}</strong></p><p>Người liên hệ: {{nguoi_lien_he}}</p><p>Địa chỉ: {{dia_chi_giao_hang}}</p></div></section><section class="doc-card"><h2>Giá trị và thời hạn</h2><p>Giá trị hợp đồng: <strong>{{gia_tri_hop_dong}}</strong></p><p>Bằng chữ: {{gia_tri_bang_chu}}</p><p>Hiệu lực: {{ngay_hieu_luc}} đến {{ngay_het_han}}</p></section><section class="doc-card"><h2>Mốc thanh toán</h2><p>{{moc_thanh_toan}}</p></section><section class="doc-card"><h2>Điều khoản khác</h2><p>{{dieu_khoan}}</p></section>';
         }
         $title = self::modules()[$module] ?? 'Chứng từ';
+
         return '<section class="doc-header"><div><p class="muted">'.$title.'</p><h1>{{ma_chung_tu}}</h1><p><strong>{{ten_khach_hang}}</strong> · {{nguoi_lien_he}} · {{so_dien_thoai}}</p></div><div class="doc-meta"><span>Ngày lập</span><strong>{{ngay_chung_tu}}</strong></div></section><section class="doc-card"><h2>Thông tin giao nhận</h2><p>Địa chỉ: <strong>{{dia_chi_giao_hang}}</strong></p></section>{{bang_dong_hang}}';
     }
 

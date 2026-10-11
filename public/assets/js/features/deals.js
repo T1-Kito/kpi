@@ -26,7 +26,7 @@ document.addEventListener('click', event => {
     if (transition) openTransitionModal(transition.dataset.transitionDeal, transition._dealRow);
     if (detail) openDealDetail(detail.dataset.dealDetail);
     if (quotation) {
-        window.location.href = `/quotations?deal_id=${encodeURIComponent(quotation.dataset.dealCreateQuotation)}`;
+        VKLayout.navigatePjax(`/quotations?deal_id=${encodeURIComponent(quotation.dataset.dealCreateQuotation)}`);
     }
     if (editItems) openDealItemsModal(editItems.dataset.dealEditItems);
     if (addActivity) openDealActivityModal(addActivity.dataset.dealAddActivity);
@@ -47,6 +47,7 @@ async function loadDeals() {
 }
 
 function renderDeals(total = dealState.rows.length) {
+    const canManage = window.VKLayout?.hasPermission('sales.deal.manage');
     const rows = dealState.rows.filter(row => {
         const text = `${row.code || ''} ${row.name || ''} ${row.customer?.name || ''} ${row.lead?.name || ''} ${row.owner?.name || ''}`.toLowerCase();
         return (!dealState.q || text.includes(dealState.q)) && (!dealState.stage || row.stage === dealState.stage);
@@ -69,8 +70,8 @@ function renderDeals(total = dealState.rows.length) {
             { label: 'Phụ trách', render: row => VKTable.escapeHtml(row.owner?.name || '-') },
             { label: '', render: row => row.status === 'open' ? VKTable.rowActions([
                 VKTable.smallButton('Mở', `data-deal-detail="${row.id}"`),
-                ['qualified', 'proposal', 'negotiation'].includes(row.stage) ? VKTable.smallButton('Tạo báo giá', `data-deal-create-quotation="${row.id}"`) : '',
-                VKTable.smallButton('Chuyển giai đoạn', `data-transition-deal="${row.id}"`, 'primary'),
+                canManage && ['qualified', 'proposal', 'negotiation'].includes(row.stage) ? VKTable.smallButton('Tạo báo giá', `data-deal-create-quotation="${row.id}"`) : '',
+                canManage ? VKTable.smallButton('Chuyển giai đoạn', `data-transition-deal="${row.id}"`, 'primary') : '',
             ].filter(Boolean)) : VKTable.statusBadge(row.status) },
         ], rows, 'Chưa có cơ hội bán hàng'),
     }));
@@ -121,15 +122,16 @@ function openTransitionModal(id, sourceRow = null) {
 
 function openDealDetail(id) {
     const preview = dealState.rows.find(row => String(row.id) === String(id)) || {};
+    const canManage = window.VKLayout?.hasPermission('sales.deal.manage');
     VKRecordPage.open({
         root: '#dealsRoot', type: 'deal', id, path: `/deals/${id}`, preview,
         onBack: () => renderDeals(),
-        actions: row => row.status === 'open' ? `
+        actions: row => canManage && row.status === 'open' ? `
             <button class="btn secondary" type="button" data-deal-add-activity="${row.id}">+ Chăm sóc</button>
             <button class="btn secondary" type="button" data-deal-edit-items="${row.id}">Hàng hóa</button>
             <button class="btn secondary" type="button" data-deal-create-quotation="${row.id}">Tạo báo giá</button>
             <button class="btn primary" type="button" data-transition-deal="${row.id}">Chuyển giai đoạn</button>
-        ` : '<span class="badge muted">Cơ hội đã kết thúc</span>',
+        ` : (row.status === 'open' ? '' : '<span class="badge muted">Cơ hội đã kết thúc</span>'),
     });
 }
 

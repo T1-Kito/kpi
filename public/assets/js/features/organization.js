@@ -9,22 +9,38 @@ document.addEventListener('click', (event) => {
 });
 
 let organizationState = { departments: [], positions: [], users: [] };
+let organizationLoadVersion = 0;
+
+async function loadAllOrganizationRows(endpoint) {
+    const rows = [];
+    for (let page = 1; ; page++) {
+        const result = await VKApi.request(`${endpoint}?page_size=100&page=${page}`, {cache:false});
+        rows.push(...(result.data || []));
+        if (rows.length >= (result.meta?.total ?? rows.length)) return rows;
+        if (!result.data?.length) throw new Error('Không thể tải đầy đủ dữ liệu tổ chức.');
+    }
+}
 
 async function loadOrganization() {
-    if (!document.getElementById('organizationRoot')) return;
+    const root = document.getElementById('organizationRoot');
+    if (!root) return;
+    const version = ++organizationLoadVersion;
+    root.textContent = 'Đang tải cơ cấu tổ chức…';
+    try {
     const [departments, positions, users] = await Promise.all([
-        VKApi.request('/departments'),
-        VKApi.request('/positions'),
-        VKApi.request('/users?page_size=100'),
+        loadAllOrganizationRows('/departments'),
+        loadAllOrganizationRows('/positions'),
+        loadAllOrganizationRows('/users'),
     ]);
+    if (version !== organizationLoadVersion || document.getElementById('organizationRoot') !== root) return;
 
     organizationState = {
-        departments: departments.data || [],
-        positions: positions.data || [],
-        users: users.data || [],
+        departments,
+        positions,
+        users,
     };
 
-    document.getElementById('organizationRoot').innerHTML = `
+    root.innerHTML = `
         <div class="organization-help"><strong>Thiết lập cơ cấu trước, gán nhân viên sau.</strong><span>Bước 1: tạo phòng ban/chức vụ. Bước 2: vào Người dùng để gán từng nhân viên vào phòng ban và chức vụ phù hợp.</span></div>
         <div class="layout-2">
             <section class="module-panel">
@@ -47,6 +63,9 @@ async function loadOrganization() {
             </section>
         </div>
     `;
+    } catch(error) {
+        if (version === organizationLoadVersion && document.getElementById('organizationRoot') === root) root.textContent = error.message || 'Không thể tải cơ cấu tổ chức.';
+    }
 }
 
 function renderDepartmentTable(rows) {

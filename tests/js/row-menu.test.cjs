@@ -53,6 +53,7 @@ for (const [file, [entity, opener]] of Object.entries(modules)) {
                 dataset: isOpen ? explicit.dataset : { [actions[file][0].replace(/-([a-z])/g, (_, c) => c.toUpperCase())]: '17', status: 'done' },
                 matches: selector => (mode === 'open' && selector === `[data-${entity}-detail]`) || (mode === 'real-action' && selector === `[data-${actions[file][0]}]`),
                 closest(selector) {
+                    if (selector === `[data-${actions[file][0]}]`) return mode === 'real-action' ? target : null;
                     if (selector === '.row-action-menu') return mode === 'row' ? null : {};
                     if (selector === 'button') return mode === 'summary' || mode === 'row' ? null : {};
                     if (selector === `[data-${entity}-detail]`) return isOpen ? explicit : null;

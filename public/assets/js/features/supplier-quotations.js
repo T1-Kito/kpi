@@ -4,9 +4,11 @@
     let documentSequence = 0;
 
     window.loadSupplierQuotations = loadSupplierQuotations;
+    document.addEventListener('vk:ready', () => loadSupplierQuotations());
 
     document.addEventListener('click', (event) => {
         if (!document.getElementById('supplierQuotationsRoot')) return;
+        if (event.target.closest('[data-retry-sq]')) { loadSupplierQuotations(); return; }
         const uploadDocument = event.target.closest('[data-sq-upload-document]');
         if (uploadDocument) { uploadOriginalDocument(uploadDocument.dataset.sqUploadDocument); return; }
         const filterRequest = event.target.closest('[data-filter-sq-request]');
@@ -81,13 +83,25 @@
         }
     });
 
-    function loadSupplierQuotations() {
-        readData();
-        filterQuotations();
-        const queueToggle = document.querySelector('[data-toggle-sq-queue]');
-        if (queueToggle) queueToggle.hidden = new Set(Array.from(document.querySelectorAll('[data-sq-queue-row]'), row => row.dataset.sqQueueRow)).size <= 5;
-        const requestId = new URLSearchParams(window.location.search).get('request');
-        if (requestId) { openCreateModal(requestId); window.history.replaceState({}, '', window.location.pathname); }
+    async function loadSupplierQuotations(options = {}) {
+        const root = document.getElementById('supplierQuotationsRoot');
+        if (!root) return;
+        root.setAttribute('aria-busy', 'true');
+        try {
+            const response = await VKApi.request('/supplier-quotations/bootstrap');
+            data = response.data || response;
+            renderPage();
+            filterQuotations();
+            const queueToggle = document.querySelector('[data-toggle-sq-queue]');
+            if (queueToggle) queueToggle.hidden = data.purchaseRequests.length <= 5;
+            const requestId = new URLSearchParams(window.location.search).get('request');
+            if (requestId && !options.keepView) { openCreateModal(requestId); window.history.replaceState({}, '', window.location.pathname); }
+        } catch (error) {
+            document.querySelector('[data-sq-queue-body]').innerHTML = `<tr><td colspan="9"><div class="empty-state"><strong>Không tải được yêu cầu mua</strong><span>${escape(error.message || 'Vui lòng thử lại.')}</span><button class="btn small" type="button" data-retry-sq>Thử lại</button></div></td></tr>`;
+            document.querySelector('[data-sq-table-body]').innerHTML = `<tr><td colspan="11"><div class="empty-state"><strong>Không tải được báo giá nhà cung cấp</strong></div></td></tr>`;
+        } finally {
+            root.setAttribute('aria-busy', 'false');
+        }
     }
 
     document.addEventListener('change', event => {
@@ -110,6 +124,54 @@
         if (box && request) box.innerHTML = request.items.map((item, index) => lineTemplate(index, item)).join('');
     });
 
+    function renderPage() {
+        const quotesByRequest = new Map();
+        data.supplierQuotations.forEach(quote => {
+            const key = String(quote.purchase_request_id || '');
+            if (!quotesByRequest.has(key)) quotesByRequest.set(key, []);
+            quotesByRequest.get(key).push(quote);
+        });
+        const queueRows = [];
+        data.purchaseRequests.forEach((request, requestIndex) => {
+            const quotes = quotesByRequest.get(String(request.id)) || [];
+            const selected = quotes.some(quote => quote.status === 'selected');
+            (request.items?.length ? request.items : [null]).forEach(item => queueRows.push(`<tr data-sq-queue-row="${request.id}" data-sq-queue-index="${requestIndex}" ${requestIndex >= 5 ? 'hidden' : ''}>
+                <td><button type="button" class="sq-request-link mono" data-filter-sq-request="${request.id}">${escape(request.code)}</button></td><td>${escape(request.reason || '—')}</td>
+                <td class="mono">${escape(item?.sku?.sku_code || '—')}</td><td>${escape(item?.sku?.name || '—')}</td><td>${item ? formatNumber(item.quantity) : '—'}</td><td>${escape(item?.sku?.unit || '—')}</td><td>${escape(request.requester?.name || '—')}</td>
+                <td><span class="badge ${selected ? 'success' : 'info'}">${selected ? 'Đã chọn NCC' : quotes.length ? `${quotes.length} báo giá đang so sánh` : 'Chờ lấy báo giá'}</span></td>
+                <td><button class="btn small" type="button" data-permission="procurement.sq.manage" data-quote-purchase-request="${request.id}">+ Lấy báo giá</button></td></tr>`));
+        });
+        document.querySelector('[data-sq-queue-body]').innerHTML = queueRows.join('') || '<tr><td colspan="9"><div class="empty-state">Chưa có yêu cầu mua đã duyệt. Duyệt yêu cầu mua để bắt đầu lấy báo giá.</div></td></tr>';
+
+        const requestOptions = new Map();
+        data.purchaseRequests.forEach(row => requestOptions.set(String(row.id), row.code));
+        data.supplierQuotations.forEach(row => { const request = row.purchase_request || row.purchaseRequest; if (request) requestOptions.set(String(request.id), request.code); });
+        const supplierOptions = new Map();
+        data.suppliers.forEach(row => supplierOptions.set(String(row.id), row.name));
+        data.supplierQuotations.forEach(row => { if (row.supplier) supplierOptions.set(String(row.supplier.id), row.supplier.name); });
+        document.querySelector('[data-sq-filter="request"]').innerHTML = '<option value="">Tất cả yêu cầu</option>' + Array.from(requestOptions, ([id, name]) => `<option value="${id}">${escape(name)}</option>`).join('');
+        document.querySelector('[data-sq-filter="supplier"]').innerHTML = '<option value="">Tất cả nhà cung cấp</option>' + Array.from(supplierOptions, ([id, name]) => `<option value="${id}">${escape(name)}</option>`).join('');
+
+        const rows = data.supplierQuotations.map(quote => {
+            const request = quote.purchase_request || quote.purchaseRequest;
+            const orders = quote.purchase_orders || quote.purchaseOrders || [];
+            const order = orders[0];
+            const status = order ? 'ordered' : quote.status;
+            const label = order ? 'Đã tạo đơn mua' : statusLabel(quote.status);
+            const tone = quote.status === 'selected' ? 'success' : quote.status === 'rejected' ? 'inactive' : 'info';
+            const flow = quote.approval_flow || [];
+            const ticks = flow.length ? flow.map(step => { const approved = Boolean(step.decided_at); const title = `${step.name || 'Người duyệt'}${step.final ? ' · Duyệt cuối' : ''} · ${approved ? 'Đã duyệt' : 'Chờ duyệt'}`; return `<span class="sq-approval-tick ${approved ? 'is-approved' : 'is-pending'} ${step.final ? 'is-final' : ''}" title="${escape(title)}">${approved ? '✓' : '○'}</span>`; }).join('') : `<span class="sq-approval-tick ${quote.selected_at ? 'is-approved' : 'is-pending'}">${quote.selected_at ? '✓' : '○'}</span>`;
+            return `<tr data-supplier-quotation-row="${quote.id}" data-sq-request="${quote.purchase_request_id || ''}" data-sq-supplier="${quote.supplier_id}" data-sq-status="${status}" style="cursor:pointer">
+                <td><span class="sq-request-link mono">${escape(request?.code || '—')}</span></td><td><button class="btn small" type="button" data-open-supplier-quotation="${quote.id}">${escape(quote.code)}</button></td><td>${escape(request?.reason || '—')}</td>
+                <td>${(quote.lines || []).map(line => `<div>${escape(line.sku?.name || 'Chưa có tên sản phẩm')}</div>`).join('') || '—'}</td><td><strong>${escape(quote.supplier?.name || '—')}</strong></td><td>${formatDate(quote.quoted_at)}</td><td>${formatDate(quote.valid_until)}</td><td><strong>${formatMoney(quote.total_amount)}</strong></td>
+                <td><span class="badge ${tone}">${escape(label)}</span>${order ? `<span class="row-note">${escape(order.code)}</span>` : ''}</td><td><div class="sq-approval-ticks">${ticks}</div></td>
+                <td class="actions-cell"><details class="row-action-menu"><summary aria-label="Mở thao tác">⋮</summary><div class="row-action-menu-list"><button class="btn" type="button" data-open-supplier-quotation="${quote.id}">Mở</button>${quote.status === 'draft' ? `<button class="btn primary" type="button" data-select-supplier-quotation="${quote.id}">Duyệt báo giá</button>` : ''}${quote.status === 'selected' && !order ? `<button class="btn primary" type="button" data-create-po-from-supplier-quotation="${quote.id}">Tạo đơn mua</button>` : ''}</div></details></td></tr>`;
+        });
+        document.querySelector('[data-sq-table-body]').innerHTML = rows.join('') || '<tr><td colspan="11"><div class="empty-state"><strong>Chưa có báo giá NCC</strong><span>Tạo báo giá để so sánh giá mua trước khi lên đơn mua.</span></div></td></tr>';
+        const toggle = document.querySelector('[data-toggle-sq-queue]');
+        if (toggle) toggle.textContent = `Xem tất cả (${data.purchaseRequests.length})`;
+    }
+
     function filterQuotations() {
         const root = document.getElementById('supplierQuotationsRoot');
         if (!root) return;
@@ -131,8 +193,6 @@
         if (!row) return;
         const index = data.supplierQuotations.findIndex(item => String(item.id) === String(row.id));
         if (index >= 0) data.supplierQuotations[index] = {...data.supplierQuotations[index], ...row};
-        const source = document.getElementById('supplierQuotationsData');
-        if (source) source.textContent = JSON.stringify(data);
         const ticks = document.querySelector(`[data-supplier-quotation-row="${row.id}"] .sq-approval-ticks`);
         if (!ticks) return;
         const flow = row.approval_flow || [];
@@ -143,15 +203,7 @@
         }).join('');
     }
 
-    function readData() {
-        const node = document.getElementById('supplierQuotationsData');
-        if (!node) return;
-        try {
-            data = JSON.parse(node.textContent || '{}');
-        } catch (error) {
-            data = { supplierQuotations: [], purchaseRequests: [], suppliers: [], skus: [] };
-        }
-    }
+    function readData() {}
 
     function openCreateModal(requestId = '') {
         readData();
@@ -199,8 +251,13 @@
                 body: payload,
             });
             VKModal.toast('Đã tạo báo giá nhà cung cấp.');
-            window.setTimeout(() => window.location.reload(), 450);
+            VKModal.close();
+            await refreshSupplierQuotationPage();
         }, { className: 'modal-wide supplier-quotation-modal', submitText: 'Lưu báo giá' });
+    }
+
+    async function refreshSupplierQuotationPage() {
+        await loadSupplierQuotations({ keepView: true });
     }
 
     function lineTemplate(index, item = {}) {

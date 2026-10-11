@@ -4,7 +4,11 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\PurchaseRequest;
+use App\Models\PurchaseOrder;
+use App\Models\Sku;
+use App\Models\Supplier;
 use App\Models\SupplierQuotation;
+use App\Models\Warehouse;
 use App\Support\AuditLogger;
 use App\Support\CodeGenerator;
 use Illuminate\Http\JsonResponse;
@@ -44,6 +48,25 @@ class SupplierQuotationController extends Controller
                 'total' => $quotations->total(),
             ],
         ]);
+    }
+
+    public function bootstrap(Request $request): JsonResponse
+    {
+        $tenantId = $request->user()->tenant_id;
+        $supplierQuotations = SupplierQuotation::query()->where('tenant_id', $tenantId)
+            ->with(['supplier:id,code,name,phone,email', 'purchaseRequest:id,code,status,reason', 'creator:id,name,email', 'selector:id,name,email', 'lines.sku:id,sku_code,name,unit'])
+            ->withCount('lines')->with('purchaseOrders:id,supplier_quotation_id,code,status,created_at')->latest('id')->get();
+        $purchaseRequests = PurchaseRequest::query()->where('tenant_id', $tenantId)->where('status', 'approved')
+            ->whereNotIn('id', PurchaseOrder::where('tenant_id', $tenantId)->whereNotIn('status', ['cancelled', 'rejected'])->whereNotNull('purchase_request_id')->select('purchase_request_id'))
+            ->with(['items.sku:id,sku_code,name,unit', 'requester:id,name'])->withCount('items')->latest('id')->get();
+
+        return response()->json(['data' => [
+            'supplierQuotations' => $supplierQuotations,
+            'purchaseRequests' => $purchaseRequests,
+            'suppliers' => Supplier::where('tenant_id', $tenantId)->where('status', 'active')->orderBy('name')->get(['id', 'code', 'name']),
+            'skus' => Sku::where('tenant_id', $tenantId)->where('status', 'active')->orderBy('sku_code')->get(['id', 'sku_code', 'name', 'unit']),
+            'warehouses' => Warehouse::where('tenant_id', $tenantId)->where('status', 'active')->orderBy('name')->get(['id', 'code', 'name']),
+        ]]);
     }
 
     public function show(Request $request, SupplierQuotation $supplierQuotation): JsonResponse

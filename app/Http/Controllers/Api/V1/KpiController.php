@@ -27,11 +27,39 @@ class KpiController extends Controller
 
     public function overview(Request $request): JsonResponse
     {
+        abort_unless($request->user()->dataScope() === 'company', 403, 'Tổng quan toàn công ty cần quyền phạm vi toàn công ty.');
         return response()->json(['data' => $this->kpis->overview($request->user()->tenant_id)]);
+    }
+
+    public function employeeReport(Request $request, \App\Services\Kpi\EmployeeKpiReport $reports): JsonResponse
+    {
+        $report = $reports->build($request->user(), $this->reportFilters($request));
+        return response()->json(['data' => $report['rows'], 'meta' => $report['meta'], 'employees' => $report['employees']]);
+    }
+
+    public function exportEmployeeReport(Request $request, \App\Services\Kpi\EmployeeKpiReport $reports, \App\Services\Kpi\KpiReportWorkbook $workbooks)
+    {
+        $report = $reports->build($request->user(), $this->reportFilters($request));
+        $path = $workbooks->write($report);
+        return response()->download($path, 'KPI-nhan-vien-'.$report['meta']['period_start'].'.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Cache-Control' => 'private, no-store',
+        ])->deleteFileAfterSend(true);
+    }
+
+    private function reportFilters(Request $request): array
+    {
+        return $request->validate([
+            'period_type' => ['nullable', Rule::in(['month', 'quarter', 'year'])],
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'user_id' => ['nullable', 'integer', 'min:1'],
+            'department_id' => ['nullable', 'integer', 'min:1'],
+        ]);
     }
 
     public function snapshots(Request $request): JsonResponse
     {
+        abort_unless($request->user()->dataScope() === 'company', 403, 'Lịch sử KPI công ty cần quyền phạm vi toàn công ty.');
         $pageSize = min((int) $request->query('page_size', 20), 100);
         $query = KpiScoreSnapshot::where('tenant_id', $request->user()->tenant_id)
             ->latest('snapshot_date')
@@ -208,6 +236,7 @@ class KpiController extends Controller
         $pageSize = min((int) $request->query('page_size', 20), 100);
         $query = KpiException::where('tenant_id', $request->user()->tenant_id)
             ->with(['definition:id,code,name', 'user:id,name,email']);
+        $this->scopeEmployeePoints($query, $request->user());
 
         if ($status = $request->query('status')) {
             $query->where('status', $status);
@@ -252,6 +281,7 @@ class KpiController extends Controller
             $query->where('period_type', $periodType);
         }
 
+        $this->scopeEmployeePoints($query, $request->user());
         $adjustments = $query->paginate($pageSize);
 
         return response()->json([
@@ -279,6 +309,7 @@ class KpiController extends Controller
             $query->whereDate('period_start', $periodStart);
         }
 
+        $this->scopeEmployeePoints($query, $request->user());
         $rows = $query
             ->select('user_id')
             ->selectRaw("SUM(CASE WHEN adjustment_type = 'bonus' THEN points ELSE -points END) as net_points")
@@ -304,6 +335,17 @@ class KpiController extends Controller
                 'adjustment_count' => (int) $row->adjustment_count,
             ])->values(),
         ]);
+    }
+
+    private function scopeEmployeePoints(\Illuminate\Database\Eloquent\Builder $query, User $actor): void
+    {
+        if ($actor->dataScope() === 'company') return;
+        $query->where(function ($scope) use ($actor) {
+            $scope->where('user_id', $actor->id);
+            if ($actor->dataScope() === 'department' && $actor->department_id) {
+                $scope->orWhereHas('user', fn ($user) => $user->where('tenant_id', $actor->tenant_id)->where('department_id', $actor->department_id));
+            }
+        });
     }
 
     public function storeAdjustment(Request $request): JsonResponse

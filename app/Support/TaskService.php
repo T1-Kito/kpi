@@ -90,6 +90,14 @@ class TaskService
     public function changeStatus(Task $task, User $actor, string $status, ?string $reason = null): Task
     {
         return DB::transaction(function () use ($task, $actor, $status, $reason) {
+            abort_if($task->tenant_id !== $actor->tenant_id, 404);
+            // Keep the same lock order as opportunity care and closure.
+            $deal = $task->source_type === 'Deal' && $task->task_type === 'deal_follow_up'
+                ? \App\Models\Deal::where('tenant_id', $actor->tenant_id)->whereKey($task->source_id)->lockForUpdate()->first()
+                : null;
+            $task = Task::where('tenant_id', $actor->tenant_id)->whereKey($task->id)->lockForUpdate()->firstOrFail();
+            abort_if($deal && $deal->status !== 'open' && in_array($status, ['new', 'in_progress', 'overdue'], true), 422, 'Cơ hội đã kết thúc, không thể mở lại công việc chăm sóc.');
+            if ($task->status === $status) return $task;
             $old = $task->status;
             $task->update(['status' => $status]);
 
@@ -102,6 +110,18 @@ class TaskService
 
             $this->audit->record('task', $task->id, 'change_task_status', $actor, ['status' => $old], ['status' => $status], null, $reason);
             $this->events->publish($actor->tenant_id, 'TaskStatusChanged', 'Task', $task->id, ['from' => $old, 'to' => $status]);
+
+            if (in_array($status, ['completed', 'cancelled'], true)) {
+                \App\Models\Alert::where('tenant_id', $actor->tenant_id)->where('source_type', 'Task')->where('source_id', $task->id)
+                    ->where('alert_type', 'task_overdue')->where('status', 'open')->update(['status' => 'resolved']);
+                VkNotification::where('tenant_id', $actor->tenant_id)->where('source_type', 'Task')->where('source_id', $task->id)
+                    ->where('title', 'Task quá hạn')->where('status', 'unread')->update(['status' => 'read']);
+            }
+            if ($deal) {
+                $due = Task::where('tenant_id', $actor->tenant_id)->where('source_type', 'Deal')->where('source_id', $deal->id)
+                    ->where('task_type', 'deal_follow_up')->whereIn('status', ['new', 'in_progress', 'overdue'])->whereNotNull('due_at')->min('due_at');
+                $deal->update(['next_activity_at' => $deal->status === 'open' ? $due : null]);
+            }
 
             return $task->refresh();
         });

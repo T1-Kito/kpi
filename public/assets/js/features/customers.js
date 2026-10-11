@@ -209,7 +209,6 @@ async function openCustomerModal(id = null, readOnly = false, asPage = false) {
             <section class="quick-customer-section">
                 <h4><span aria-hidden="true">${customerFormIcon('user')}</span>Thông tin khách hàng</h4>
                 <div class="quick-customer-grid">
-                    <div data-customer-business-field>${customerField('legal_representative', 'Người đại diện pháp luật', 'text', row?.legal_representative || '', 'ĐD')}</div>
                     ${customerField('name', 'Tên khách hàng / tổ chức', 'text', row?.name || '', 'CT')}
                     ${customerSelect('customer_type', 'Loại khách hàng', [
                         { value: 'organization', label: 'Tổ chức / doanh nghiệp' },
@@ -234,6 +233,7 @@ async function openCustomerModal(id = null, readOnly = false, asPage = false) {
             <section class="quick-customer-section">
                 <h4><span aria-hidden="true">${customerFormIcon('document')}</span>Thông tin xuất hóa đơn</h4>
                 <div class="quick-customer-grid">
+                    <div data-customer-business-field>${customerField('legal_representative', 'Người đại diện pháp luật', 'text', row?.legal_representative || '', 'ĐD')}</div>
                     <div data-customer-tax-field>${customerField('tax_code', 'Mã số thuế', 'text', row?.tax_code || '', 'MST')}</div>
                     <div data-customer-identity-field>${customerField('identity_number', 'Số CCCD', 'text', row?.identity_number || '', 'CCCD')}</div>
                     ${customerField('billing_address', 'Địa chỉ xuất hóa đơn', 'text', row?.billing_address || '', 'DC', true)}
@@ -618,7 +618,7 @@ function customer360Metric(label, value, note, tone = '') {
 }
 
 function customer360Info(label, value) {
-    return `<div class="customer360-info"><span>${VKTable.escapeHtml(label)}</span><strong>${VKTable.escapeHtml(String(value ?? '-'))}</strong></div>`;
+    return `<div class="customer360-info"><span>${VKTable.escapeHtml(label)}</span><strong class="${/^Mã(?:\s|$)/i.test(label) ? 'record-code-text' : ''}">${VKTable.escapeHtml(String(value ?? '-'))}</strong></div>`;
 }
 
 function customer360ListCard(title, icon, rows = [], renderRow, route) {
