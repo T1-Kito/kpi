@@ -39,3 +39,19 @@ test('template editor does not crowd the upload form with the merge field catalo
   assert.doesNotMatch(modalSource,/Trường trộn mẫu Word|data-template-modal-fields|data-merge-field-search|data-download-current-guide/);
   assert.match(modalSource,/Hệ thống giữ bố cục gốc và trộn dữ liệu khi xuất chứng từ/);
 });
+
+test('template rows expose a destructive delete action with confirmation',()=>{
+  assert.match(source,/VKTable\.smallButton\('Xóa mẫu',[\s\S]*?'danger'\)/);
+  assert.match(source,/window\.confirm\(`Xóa mẫu/);
+  assert.match(source,/method: 'DELETE'/);
+});
+
+test('each document tab exposes a ready Word reference template',()=>{
+  assert.match(source,/template-example-download/);
+  assert.match(source,/data-download-merge-template="\$\{templateState\.module\}"/);
+  assert.match(source,/Tải mẫu \$\{VKTable\.escapeHtml\(moduleLabel\(templateState\.module\)\)\} tham khảo/);
+  assert.match(source,/Save As thành \.docx/);
+  assert.match(source,/ĐƠN BÁN HÀNG/);
+  assert.match(source,/PHIẾU XUẤT KHO/);
+  assert.match(source,/HỢP ĐỒNG/);
+});

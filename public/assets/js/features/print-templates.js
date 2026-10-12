@@ -33,6 +33,10 @@ document.addEventListener('click', (event) => {
         event.stopPropagation();
         setDefaultTemplate(Number(event.target.dataset.defaultPrintTemplate));
     }
+    if (event.target.matches('[data-delete-print-template]')) {
+        event.stopPropagation();
+        deletePrintTemplate(Number(event.target.dataset.deletePrintTemplate));
+    }
 });
 
 async function loadPrintTemplates(options = {}) {
@@ -62,7 +66,7 @@ function renderPrintTemplates(total = templateState.rows.length) {
     if (!root) return;
     const rows = filterRows();
 
-    root.innerHTML = `<nav class="template-module-tabs" aria-label="Loại mẫu chứng từ">${moduleOptions().map(item => `<button type="button" data-template-module="${item.value}" aria-pressed="${templateState.module === item.value}" class="${templateState.module === item.value ? 'active' : ''}">${VKTable.escapeHtml(item.label)}</button>`).join('')}</nav>` + VKTable.fullList({
+    root.innerHTML = `<div class="template-module-bar"><nav class="template-module-tabs" aria-label="Loại mẫu chứng từ">${moduleOptions().map(item => `<button type="button" data-template-module="${item.value}" aria-pressed="${templateState.module === item.value}" class="${templateState.module === item.value ? 'active' : ''}">${VKTable.escapeHtml(item.label)}</button>`).join('')}</nav><button class="btn secondary template-example-download" type="button" data-download-merge-template="${templateState.module}">Tải mẫu ${VKTable.escapeHtml(moduleLabel(templateState.module))} tham khảo</button></div>` + VKTable.fullList({
         title: `Mẫu ${moduleLabel(templateState.module).toLowerCase()}`,
         subtitle: 'Soạn một lần trong Word, tự lấy dữ liệu từ chứng từ khi xuất.',
         meta: `${VKTable.money(rows.length)} / ${VKTable.money(total)} mẫu in`,
@@ -91,6 +95,7 @@ function renderTemplateTable(rows) {
         { label: '', render: row => VKTable.rowActions([
             VKTable.smallButton('Xem / sửa mẫu', `data-edit-print-template="${row.id}"`),
             row.is_default ? '' : VKTable.smallButton('Đặt mặc định', `data-default-print-template="${row.id}"`),
+            VKTable.smallButton('Xóa mẫu', `data-delete-print-template="${row.id}"`, 'danger'),
         ]) },
     ], rows, 'Chưa có mẫu in', { rowAttr: row => `data-template-id="${row.id}"` });
 }
@@ -259,6 +264,16 @@ async function setDefaultTemplate(id) {
     loadPrintTemplates();
 }
 
+async function deletePrintTemplate(id) {
+    const row = templateState.rows.find(item => item.id === id);
+    if (!row || !window.confirm(`Xóa mẫu “${row.name}”? File Word của mẫu cũng sẽ bị xóa và thao tác này không thể hoàn tác.`)) return;
+
+    await VKApi.request(`/print-templates/${id}`, { method: 'DELETE' });
+    VKApi.clearCache();
+    VKModal.toast('Đã xóa mẫu in.');
+    loadPrintTemplates();
+}
+
 function renderFieldChips(keys = null, module = 'quotation') {
     const fields = templateState.fieldSets[module] || templateState.fields || defaultFields();
     const groups = {};
@@ -312,7 +327,7 @@ function downloadMergeTemplate(module = 'quotation') {
 <body>
     <div class="Section1">
         <h1>Mẫu trường trộn ${VKTable.escapeHtml(label)}</h1>
-        <p class="muted">Dùng file này để soạn mẫu Word ${VKTable.escapeHtml(label)}, sau đó upload lại ở màn Tạo mẫu in.</p>
+        <p class="muted">Dùng file này để soạn mẫu Word ${VKTable.escapeHtml(label)}. Sau khi chỉnh sửa, chọn Save As thành .docx rồi tải lên màn Mẫu in.</p>
         <div class="note">
             <strong>Cách dùng:</strong> copy trường ở cột "Trường trộn" và đặt vào vị trí cần hiển thị dữ liệu trong mẫu Word.
             Giữ nguyên hai dấu ngoặc nhọn, ví dụ {{ma_bao_gia}}.
@@ -408,6 +423,17 @@ function wordTemplateContent(module = 'quotation') {
 </table>
 <table><tr><th>Bên A</th><th>Bên B</th></tr><tr><td><strong>{{ten_cong_ty}}</strong><br>MST: {{ma_so_thue}}<br>Địa chỉ: {{dia_chi_cong_ty}}</td><td><strong>{{ten_khach_hang}}</strong><br>Liên hệ: {{nguoi_lien_he}}<br>Địa chỉ: {{dia_chi_giao_hang}}</td></tr></table>
 <table><tr><td>Giá trị hợp đồng</td><td>{{gia_tri_hop_dong}}</td></tr><tr><td>Bằng chữ</td><td>{{gia_tri_bang_chu}}</td></tr><tr><td>Hiệu lực</td><td>{{ngay_hieu_luc}} đến {{ngay_het_han}}</td></tr><tr><td>Mốc thanh toán</td><td>{{moc_thanh_toan}}</td></tr><tr><td>Điều khoản khác</td><td>{{dieu_khoan}}</td></tr></table>`;
+    }
+    if (module === 'sales_order') {
+        return `<table class="sample-header"><tr><td><div class="sample-title">ĐƠN BÁN HÀNG</div><p><strong>Mã đơn:</strong> {{ma_don_ban}}</p><p><strong>Báo giá nguồn:</strong> {{ma_bao_gia}}</p></td><td class="sample-meta"><p><strong>Ngày lập</strong></p><p>{{ngay_chung_tu}}</p></td></tr></table>
+<table><tr><th>Khách hàng</th><th>Giao nhận</th></tr><tr><td><strong>{{ten_khach_hang}}</strong><br>Liên hệ: {{nguoi_lien_he}}<br>Điện thoại: {{so_dien_thoai}}</td><td>{{dia_chi_giao_hang}}<br>Hình thức: {{hinh_thuc_giao_hang}}<br>Ghi chú: {{ghi_chu_giao_hang}}</td></tr></table>
+<table><thead><tr><th>STT</th><th>Mã hàng</th><th>Tên hàng</th><th>ĐVT</th><th>SL</th></tr></thead><tbody><tr><td>{{stt}}</td><td>{{ma_hang}}</td><td>{{ten_hang}}</td><td>{{dvt}}</td><td>{{so_luong}}</td></tr></tbody></table>
+<table><tr class="total"><td>Tổng cộng</td><td>{{tong_cong}}</td></tr><tr><td>Bằng chữ</td><td>{{tong_tien_bang_chu}}</td></tr></table>`;
+    }
+    if (module === 'goods_issue') {
+        return `<table class="sample-header"><tr><td><div class="sample-title">PHIẾU XUẤT KHO</div><p><strong>Mã phiếu:</strong> {{ma_chung_tu}}</p><p><strong>Đơn bán:</strong> {{ma_don_ban}}</p></td><td class="sample-meta"><p><strong>Ngày xuất</strong></p><p>{{ngay_chung_tu}}</p></td></tr></table>
+<table><tr><th>Kho xuất</th><th>Thông tin giao hàng</th></tr><tr><td>{{kho_xuat}}<br>Lý do: {{ly_do_xuat}}<br>Chứng từ gốc: {{chung_tu_goc}}</td><td><strong>{{ten_khach_hang}}</strong><br>{{nguoi_lien_he}} · {{so_dien_thoai}}<br>{{dia_diem_giao_hang}}</td></tr></table>
+<table><thead><tr><th>STT</th><th>Mã hàng</th><th>Tên hàng</th><th>ĐVT</th><th>SL</th></tr></thead><tbody><tr><td>{{stt}}</td><td>{{ma_hang}}</td><td>{{ten_hang}}</td><td>{{dvt}}</td><td>{{so_luong}}</td></tr></tbody></table>`;
     }
     return `<table class="sample-header">
     <tr>

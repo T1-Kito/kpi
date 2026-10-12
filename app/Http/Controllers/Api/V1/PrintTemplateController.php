@@ -167,6 +167,52 @@ class PrintTemplateController extends Controller
         return Storage::disk($disk)->download($path, basename($printTemplate->file_name ?: 'mau-word.docx'));
     }
 
+    public function destroy(Request $request, PrintTemplate $printTemplate): JsonResponse
+    {
+        abort_if($printTemplate->tenant_id !== $request->user()->tenant_id, 404);
+
+        $path = $printTemplate->file_path;
+        $tenantId = $printTemplate->tenant_id;
+        $module = $printTemplate->module;
+        $wasDefault = $printTemplate->is_default;
+
+        $promoted = DB::transaction(function () use ($printTemplate, $tenantId, $module, $wasDefault) {
+            $template = PrintTemplate::query()
+                ->where('tenant_id', $tenantId)
+                ->whereKey($printTemplate->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $template->delete();
+
+            if (! $wasDefault) {
+                return null;
+            }
+
+            $replacement = PrintTemplate::query()
+                ->where('tenant_id', $tenantId)
+                ->where('module', $module)
+                ->where('status', 'active')
+                ->latest('id')
+                ->lockForUpdate()
+                ->first();
+            $replacement?->update(['is_default' => true]);
+
+            return $replacement?->id;
+        });
+
+        if ($path && str_starts_with($path, "print-templates/{$tenantId}/")) {
+            Storage::disk('local')->delete($path);
+            Storage::disk('public')->delete($path);
+        }
+
+        return response()->json([
+            'data' => [
+                'deleted_id' => $printTemplate->id,
+                'promoted_default_id' => $promoted,
+            ],
+        ]);
+    }
+
     private function validated(Request $request): array
     {
         return $request->validate([

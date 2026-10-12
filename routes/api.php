@@ -1,38 +1,41 @@
 <?php
 
-use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\AlertController;
 use App\Http\Controllers\Api\V1\ApprovalCenterController;
 use App\Http\Controllers\Api\V1\AuditLogController;
+use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\ContractController;
 use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\CustomerDuplicateReviewController;
-use App\Http\Controllers\Api\V1\ContractController;
 use App\Http\Controllers\Api\V1\DashboardSummaryController;
-use App\Http\Controllers\Api\V1\DepartmentController;
 use App\Http\Controllers\Api\V1\DealController;
-use App\Http\Controllers\Api\V1\InventoryBalanceController;
-use App\Http\Controllers\Api\V1\InventoryTransactionController;
+use App\Http\Controllers\Api\V1\DepartmentController;
 use App\Http\Controllers\Api\V1\GoodsIssueController;
 use App\Http\Controllers\Api\V1\GoodsReceiptController;
+use App\Http\Controllers\Api\V1\InventoryBalanceController;
+use App\Http\Controllers\Api\V1\InventoryTransactionController;
+use App\Http\Controllers\Api\V1\KpiAssignmentController;
+use App\Http\Controllers\Api\V1\KpiBundleController;
 use App\Http\Controllers\Api\V1\KpiController;
+use App\Http\Controllers\Api\V1\KpiPeriodClosureController;
 use App\Http\Controllers\Api\V1\LeadController;
 use App\Http\Controllers\Api\V1\LookupController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\PermissionController;
 use App\Http\Controllers\Api\V1\PositionController;
-use App\Http\Controllers\Api\V1\ProductCatalogController;
 use App\Http\Controllers\Api\V1\PrintTemplateController;
+use App\Http\Controllers\Api\V1\ProductCatalogController;
 use App\Http\Controllers\Api\V1\PurchaseOrderController;
 use App\Http\Controllers\Api\V1\PurchaseRequestController;
 use App\Http\Controllers\Api\V1\QuotationController;
 use App\Http\Controllers\Api\V1\RoleAdminController;
-use App\Http\Controllers\Api\V1\SalesOrderController;
 use App\Http\Controllers\Api\V1\SalesFulfillmentController;
 use App\Http\Controllers\Api\V1\SalesMasterDataController;
+use App\Http\Controllers\Api\V1\SalesOrderController;
+use App\Http\Controllers\Api\V1\ServiceDeskController;
 use App\Http\Controllers\Api\V1\SkuController;
 use App\Http\Controllers\Api\V1\SlaPolicyController;
-use App\Http\Controllers\Api\V1\ServiceDeskController;
 use App\Http\Controllers\Api\V1\StockTakeController;
 use App\Http\Controllers\Api\V1\SupplierController;
 use App\Http\Controllers\Api\V1\SupplierQuotationController;
@@ -130,9 +133,9 @@ Route::prefix('v1')->group(function () {
         });
 
         Route::get('/kpi/overview', [KpiController::class, 'overview']);
-        Route::get('/kpi/mine', [\App\Http\Controllers\Api\V1\KpiAssignmentController::class, 'mine']);
-        Route::get('/kpi/period-closures/mine', [\App\Http\Controllers\Api\V1\KpiPeriodClosureController::class, 'mine']);
-        Route::post('/kpi/period-closures/{kpiPeriodClosure}/respond', [\App\Http\Controllers\Api\V1\KpiPeriodClosureController::class, 'respond']);
+        Route::get('/kpi/mine', [KpiAssignmentController::class, 'mine']);
+        Route::get('/kpi/period-closures/mine', [KpiPeriodClosureController::class, 'mine']);
+        Route::post('/kpi/period-closures/{kpiPeriodClosure}/respond', [KpiPeriodClosureController::class, 'respond']);
         Route::get('/kpi/employee-report', [KpiController::class, 'employeeReport']);
         Route::get('/kpi/employee-report/export', [KpiController::class, 'exportEmployeeReport']);
         Route::get('/kpi/snapshots', [KpiController::class, 'snapshots']);
@@ -142,22 +145,22 @@ Route::prefix('v1')->group(function () {
         Route::post('/kpi/exceptions', [KpiController::class, 'storeException']);
 
         Route::middleware('permission:kpi.lock')->group(function () {
-            Route::get('/kpi/period-closures', [\App\Http\Controllers\Api\V1\KpiPeriodClosureController::class, 'index']);
-            Route::post('/kpi/period-closures/close', [\App\Http\Controllers\Api\V1\KpiPeriodClosureController::class, 'close']);
-            Route::post('/kpi/period-closures/{kpiPeriodClosure}/finalize', [\App\Http\Controllers\Api\V1\KpiPeriodClosureController::class, 'finalize']);
-            Route::post('/kpi/period-closures/{kpiPeriodClosure}/reopen', [\App\Http\Controllers\Api\V1\KpiPeriodClosureController::class, 'reopen']);
-            Route::post('/kpi/period-acknowledgements/{kpiPeriodAcknowledgement}/resolve', [\App\Http\Controllers\Api\V1\KpiPeriodClosureController::class, 'resolve']);
-            Route::get('/kpi/bundles', [\App\Http\Controllers\Api\V1\KpiBundleController::class, 'index']);
-            Route::post('/kpi/bundles', [\App\Http\Controllers\Api\V1\KpiBundleController::class, 'store']);
-            Route::put('/kpi/bundles/{kpiBundle}', [\App\Http\Controllers\Api\V1\KpiBundleController::class, 'update']);
-            Route::post('/kpi/bundles/{kpiBundle}/publish', [\App\Http\Controllers\Api\V1\KpiBundleController::class, 'publish']);
-            Route::post('/kpi/bundles/{kpiBundle}/duplicate', [\App\Http\Controllers\Api\V1\KpiBundleController::class, 'duplicate']);
-            Route::post('/kpi/bundles/{kpiBundle}/apply', [\App\Http\Controllers\Api\V1\KpiBundleController::class, 'apply']);
-            Route::get('/kpi/assignments', [\App\Http\Controllers\Api\V1\KpiAssignmentController::class, 'index']);
-            Route::post('/kpi/assignments/preview', [\App\Http\Controllers\Api\V1\KpiAssignmentController::class, 'preview']);
-            Route::post('/kpi/assignments', [\App\Http\Controllers\Api\V1\KpiAssignmentController::class, 'store']);
-            Route::put('/kpi/assignments/{kpiAssignment}', [\App\Http\Controllers\Api\V1\KpiAssignmentController::class, 'update']);
-            Route::post('/kpi/assignments/{kpiAssignment}/lock', [\App\Http\Controllers\Api\V1\KpiAssignmentController::class, 'lock']);
+            Route::get('/kpi/period-closures', [KpiPeriodClosureController::class, 'index']);
+            Route::post('/kpi/period-closures/close', [KpiPeriodClosureController::class, 'close']);
+            Route::post('/kpi/period-closures/{kpiPeriodClosure}/finalize', [KpiPeriodClosureController::class, 'finalize']);
+            Route::post('/kpi/period-closures/{kpiPeriodClosure}/reopen', [KpiPeriodClosureController::class, 'reopen']);
+            Route::post('/kpi/period-acknowledgements/{kpiPeriodAcknowledgement}/resolve', [KpiPeriodClosureController::class, 'resolve']);
+            Route::get('/kpi/bundles', [KpiBundleController::class, 'index']);
+            Route::post('/kpi/bundles', [KpiBundleController::class, 'store']);
+            Route::put('/kpi/bundles/{kpiBundle}', [KpiBundleController::class, 'update']);
+            Route::post('/kpi/bundles/{kpiBundle}/publish', [KpiBundleController::class, 'publish']);
+            Route::post('/kpi/bundles/{kpiBundle}/duplicate', [KpiBundleController::class, 'duplicate']);
+            Route::post('/kpi/bundles/{kpiBundle}/apply', [KpiBundleController::class, 'apply']);
+            Route::get('/kpi/assignments', [KpiAssignmentController::class, 'index']);
+            Route::post('/kpi/assignments/preview', [KpiAssignmentController::class, 'preview']);
+            Route::post('/kpi/assignments', [KpiAssignmentController::class, 'store']);
+            Route::put('/kpi/assignments/{kpiAssignment}', [KpiAssignmentController::class, 'update']);
+            Route::post('/kpi/assignments/{kpiAssignment}/lock', [KpiAssignmentController::class, 'lock']);
             Route::get('/kpi/definitions', [KpiController::class, 'definitions']);
             Route::get('/kpi/targets', [KpiController::class, 'targets']);
             Route::post('/kpi/snapshots/calculate', [KpiController::class, 'calculate']);
@@ -202,6 +205,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/print-templates', [PrintTemplateController::class, 'store']);
             Route::post('/print-templates/{printTemplate}', [PrintTemplateController::class, 'update']);
             Route::put('/print-templates/{printTemplate}', [PrintTemplateController::class, 'update']);
+            Route::delete('/print-templates/{printTemplate}', [PrintTemplateController::class, 'destroy']);
         });
 
         Route::middleware('permission:role.manage')->group(function () {

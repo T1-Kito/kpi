@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\PrintTemplate;
+use App\Models\Tenant;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -59,5 +61,69 @@ class PrintTemplateBoundaryTest extends TestCase
         $this->assertSame($before, PrintTemplate::count());
         $this->assertSame($defaults, PrintTemplate::where('is_default', true)->pluck('id')->all());
         $this->assertEmpty(Storage::disk('local')->allFiles());
+    }
+
+    public function test_admin_can_delete_template_file_and_default_is_promoted_safely(): void
+    {
+        $this->seed();
+        Storage::fake('local');
+        Storage::fake('public');
+        $token = $this->token('admin@vk-kpi.local');
+        $tenantId = User::where('email', 'admin@vk-kpi.local')->firstOrFail()->tenant_id;
+        $replacement = PrintTemplate::create([
+            'tenant_id' => $tenantId,
+            'code' => 'TPL-REPLACEMENT',
+            'name' => 'Replacement',
+            'module' => 'quotation',
+            'status' => 'active',
+            'is_default' => false,
+        ]);
+        $created = $this->withToken($token)->post('/api/v1/print-templates', [
+            'name' => 'Temporary default',
+            'module' => 'quotation',
+            'content_html' => '',
+            'template_file' => $this->file('ma_bao_gia'),
+            'is_default' => true,
+        ], ['Accept' => 'application/json'])->assertCreated();
+        $id = $created->json('data.id');
+        $path = $created->json('data.file_path');
+
+        $this->withToken($token)->deleteJson('/api/v1/print-templates/'.$id)->assertOk()
+            ->assertJsonPath('data.deleted_id', $id)
+            ->assertJsonPath('data.promoted_default_id', $replacement->id);
+
+        $this->assertDatabaseMissing('print_templates', ['id' => $id]);
+        $this->assertDatabaseHas('print_templates', ['id' => $replacement->id, 'is_default' => true]);
+        Storage::disk('local')->assertMissing($path);
+    }
+
+    public function test_template_delete_is_permission_and_tenant_scoped(): void
+    {
+        $this->seed();
+        $tenantId = User::where('email', 'admin@vk-kpi.local')->firstOrFail()->tenant_id;
+        $template = PrintTemplate::create([
+            'tenant_id' => $tenantId,
+            'code' => 'TPL-LOCAL',
+            'name' => 'Local template',
+            'module' => 'quotation',
+            'status' => 'active',
+        ]);
+
+        $this->withToken($this->token('sales@vk-kpi.local'))
+            ->deleteJson('/api/v1/print-templates/'.$template->id)
+            ->assertForbidden();
+
+        $otherTenant = Tenant::create(['code' => 'PRINT-OTHER', 'name' => 'Other company', 'status' => 'active']);
+        $other = PrintTemplate::create([
+            'tenant_id' => $otherTenant->id,
+            'code' => 'TPL-OTHER',
+            'name' => 'Other tenant',
+            'module' => 'quotation',
+            'status' => 'active',
+        ]);
+        $this->withToken($this->token('admin@vk-kpi.local'))
+            ->deleteJson('/api/v1/print-templates/'.$other->id)
+            ->assertNotFound();
+        $this->assertDatabaseHas('print_templates', ['id' => $other->id]);
     }
 }
