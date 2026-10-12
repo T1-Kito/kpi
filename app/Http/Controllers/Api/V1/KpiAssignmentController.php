@@ -9,6 +9,7 @@ use App\Models\Position;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Kpi\AssignedKpiService;
+use App\Services\Kpi\KpiBundleRolloutService;
 use App\Support\AuditLogger;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -18,12 +19,14 @@ use Illuminate\Validation\ValidationException;
 
 class KpiAssignmentController extends Controller
 {
-    public function __construct(private AssignedKpiService $service, private AuditLogger $audit) {}
+    public function __construct(private AssignedKpiService $service, private AuditLogger $audit, private KpiBundleRolloutService $rollout) {}
 
     public function mine(Request $request)
     {
         $input = $request->validate(['date' => ['nullable', 'date_format:Y-m-d']]);
-        $rows = $this->service->personal($request->user(), $input['date'] ?? now()->toDateString());
+        $date = CarbonImmutable::parse($input['date'] ?? now()->toDateString());
+        $this->rollout->ensureTenant((int) $request->user()->tenant_id, $date);
+        $rows = $this->service->personal($request->user(), $date->toDateString());
         $summaries = collect($rows)->groupBy(fn ($row) => $row['period_type'].'-'.$row['period_start'])->map(function ($group) {
             $weight = $group->sum('weight');
 
@@ -39,6 +42,7 @@ class KpiAssignmentController extends Controller
     public function index(Request $request)
     {
         $tenant = $request->user()->tenant_id;
+        $this->rollout->ensureTenant((int) $tenant, CarbonImmutable::today());
 
         return response()->json(['data' => KpiAssignment::where('tenant_id', $tenant)->with('definition:id,name,code')->latest('period_start')->latest('id')->get(),
             'meta' => ['metrics' => AssignedKpiService::METRICS,

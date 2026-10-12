@@ -9,6 +9,12 @@
         if (!document.getElementById('kpiSettingsRoot')) return;
         if (!canConfigure()) return;
 
+        const standardSetup = event.target.closest('[data-kpi-standard-setup]');
+        if (standardSetup) {
+            setupStandardKpi();
+            return;
+        }
+
         const assignmentButton = event.target.closest('[data-kpi-assignment-create], [data-kpi-assignment-edit], [data-kpi-assignment-lock], [data-kpi-period-close], [data-kpi-period-reopen], [data-kpi-period-finalize], [data-kpi-ack-resolve]');
         if (assignmentButton) {
             if (assignmentButton.hasAttribute('data-kpi-period-close')) closePeriod(assignmentButton.dataset.kpiPeriodClose);
@@ -131,7 +137,18 @@
             {label:'Trạng thái',render:row=>`${esc(({draft:'Bản nháp',active:'Đang áp dụng',inactive:'Phiên bản cũ'})[row.status] || row.status || '—')}<br><small>${(row.plans || []).filter(plan=>plan.status==='active').length} kế hoạch tự động</small>`},
             {label:'Thao tác',render:row=>row.status === 'draft' ? `<button class="btn secondary small" data-kpi-bundle-edit="${row.id}">Sửa</button> <button class="btn primary small" data-kpi-bundle-publish="${row.id}">Phát hành</button>` : `<button class="btn primary small" data-kpi-bundle-apply="${row.id}">Giao theo bộ</button> <button class="btn secondary small" data-kpi-bundle-duplicate="${row.id}">Tạo phiên bản mới</button>`},
         ], (data.bundles || []).filter(row=>row?.code), 'Chưa có bộ KPI mẫu.');
-        return `<section class="module-panel" style="margin-bottom:20px"><div class="panel-head"><div><h2>Bộ KPI theo vị trí / phòng ban</h2><span>Tạo một lần, phát hành phiên bản rồi giao đồng thời nhiều chỉ tiêu.</span></div><button class="btn primary small" data-kpi-bundle-create>Tạo bộ KPI</button></div>${rows}<p class="form-note">Bản đã phát hành được giữ nguyên để đối chiếu. Muốn thay đổi phải tạo phiên bản mới; tổng trọng số bắt buộc đúng 100%.</p></section>`;
+        return `<section class="module-panel" style="margin-bottom:20px"><div class="panel-head"><div><h2>Bộ KPI theo vị trí / phòng ban</h2><span>Tạo một lần, phát hành phiên bản rồi giao đồng thời nhiều chỉ tiêu.</span></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn secondary small" data-kpi-standard-setup>Thiết lập nhanh KPI chuẩn</button><button class="btn primary small" data-kpi-bundle-create>Tạo bộ KPI</button></div></div>${rows}<p class="form-note">“Thiết lập nhanh” tự nhận diện phòng ban, tạo bộ KPI tháng và kế hoạch cho các kỳ sau. Có thể tạo phiên bản riêng khi doanh nghiệp cần thay đổi mục tiêu.</p></section>`;
+    }
+
+    async function setupStandardKpi() {
+        if (!confirm('Thiết lập và giao bộ KPI chuẩn cho các phòng ban đang có? Hệ thống không tạo trùng cấu hình đã tồn tại.')) return;
+        try {
+            const response = await VKApi.request('/kpi/standard-setup', {method:'POST'});
+            const result = response.data || {}, configured = result.configured || [], skipped = result.skipped || [];
+            VKModal.notice({type:'success', title:'Đã thiết lập KPI chuẩn', message:`${configured.length} nhóm được cấu hình · ${result.created_assignments || 0} chỉ tiêu mới.`, details:[...configured.map(row=>`${row.name}: ${row.employees} nhân viên · ${row.indicators} chỉ tiêu`), ...skipped]});
+            document.dispatchEvent(new CustomEvent('vk:kpi:changed'));
+            await loadKpiSettings();
+        } catch (error) { VKModal.toast(error.message || 'Không thể thiết lập KPI chuẩn.', 'danger'); }
     }
 
     function bundleItemRow(item = {}, index = 0) {

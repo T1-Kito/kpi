@@ -151,6 +151,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/kpi/period-closures/{kpiPeriodClosure}/reopen', [KpiPeriodClosureController::class, 'reopen']);
             Route::post('/kpi/period-acknowledgements/{kpiPeriodAcknowledgement}/resolve', [KpiPeriodClosureController::class, 'resolve']);
             Route::get('/kpi/bundles', [KpiBundleController::class, 'index']);
+            Route::post('/kpi/standard-setup', [KpiBundleController::class, 'standardSetup']);
             Route::post('/kpi/bundles', [KpiBundleController::class, 'store']);
             Route::put('/kpi/bundles/{kpiBundle}', [KpiBundleController::class, 'update']);
             Route::post('/kpi/bundles/{kpiBundle}/publish', [KpiBundleController::class, 'publish']);

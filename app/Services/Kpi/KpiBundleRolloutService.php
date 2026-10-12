@@ -11,6 +11,17 @@ use RuntimeException;
 
 class KpiBundleRolloutService
 {
+    public function ensureTenant(int $tenantId, CarbonImmutable $date): int
+    {
+        $created = 0;
+        KpiBundlePlan::where('tenant_id', $tenantId)->where('status', 'active')->with('bundle')
+            ->get()->each(function (KpiBundlePlan $plan) use ($date, &$created) {
+                $created += $this->ensure($plan, $date);
+            });
+
+        return $created;
+    }
+
     public function ensure(KpiBundlePlan $plan, CarbonImmutable $date): int
     {
         return DB::transaction(function () use ($plan, $date) {

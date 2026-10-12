@@ -6,7 +6,10 @@ use App\Models\GoodsIssue;
 use App\Models\GoodsReceipt;
 use App\Models\KpiAssignment;
 use App\Models\Lead;
+use App\Models\CustomerPayment;
+use App\Models\PurchaseOrder;
 use App\Models\SalesOrder;
+use App\Models\ServiceTicket;
 use App\Models\Task;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -20,6 +23,9 @@ class AssignedKpiService
         'orders_completed_amount' => ['label' => 'Giá trị đơn bán hoàn tất trong kỳ', 'unit' => 'VND', 'description' => 'Đơn đã hoàn tất theo completed_at, tính cho sales_owner_id. Không phải tiền thực thu hay doanh thu hóa đơn.'],
         'receipts_confirmed' => ['label' => 'Phiếu nhập kho xác nhận trong kỳ', 'unit' => 'phiếu', 'description' => 'Theo confirmed_at và confirmed_by; chỉ phiếu đã xác nhận.'],
         'issues_confirmed' => ['label' => 'Phiếu xuất kho xác nhận trong kỳ', 'unit' => 'phiếu', 'description' => 'Theo confirmed_at và confirmed_by; chỉ phiếu đã xác nhận.'],
+        'purchase_orders_created' => ['label' => 'Đơn mua đã lập trong kỳ', 'unit' => 'đơn', 'description' => 'Đơn mua tạo trong kỳ, tính cho người lập chứng từ.'],
+        'payments_received_amount' => ['label' => 'Giá trị thu tiền trong kỳ', 'unit' => 'VND', 'description' => 'Tổng tiền thực thu theo ngày thu và người ghi nhận.'],
+        'tickets_resolved' => ['label' => 'Ticket đã xử lý trong kỳ', 'unit' => 'ticket', 'description' => 'Ticket hoàn tất theo thời điểm xử lý và nhân viên phụ trách.'],
     ];
 
     public function audience(KpiAssignment $assignment)
@@ -50,6 +56,9 @@ class AssignedKpiService
             'orders_completed_amount' => (float) SalesOrder::where('tenant_id', $tenant)->where('sales_owner_id', $user->id)->where('status', 'completed')->where('completed_at', '>=', $start)->where('completed_at', '<', $until)->sum('total_amount'),
             'receipts_confirmed' => GoodsReceipt::where('tenant_id', $tenant)->where('confirmed_by', $user->id)->where('status', 'confirmed')->where('confirmed_at', '>=', $start)->where('confirmed_at', '<', $until)->count(),
             'issues_confirmed' => GoodsIssue::where('tenant_id', $tenant)->where('confirmed_by', $user->id)->where('status', 'confirmed')->where('confirmed_at', '>=', $start)->where('confirmed_at', '<', $until)->count(),
+            'purchase_orders_created' => PurchaseOrder::where('tenant_id', $tenant)->where('created_by', $user->id)->where('created_at', '>=', $start)->where('created_at', '<', $until)->count(),
+            'payments_received_amount' => (float) CustomerPayment::where('tenant_id', $tenant)->where('received_by', $user->id)->where('paid_at', '>=', $start)->where('paid_at', '<', $until)->sum('amount'),
+            'tickets_resolved' => ServiceTicket::where('tenant_id', $tenant)->where('assignee_id', $user->id)->whereNotNull('resolved_at')->where('resolved_at', '>=', $start)->where('resolved_at', '<', $until)->count(),
         };
         $target = (float) $assignment->target_value;
         $score = $assignment->direction === 'increase' ? min(100, $actual / $target * 100) : ($actual <= $target ? 100 : $target / $actual * 100);

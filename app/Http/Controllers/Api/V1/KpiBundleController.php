@@ -12,6 +12,7 @@ use App\Models\Position;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Kpi\AssignedKpiService;
+use App\Services\Kpi\StandardKpiSetupService;
 use App\Support\AuditLogger;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -21,7 +22,15 @@ use Illuminate\Validation\ValidationException;
 
 class KpiBundleController extends Controller
 {
-    public function __construct(private AssignedKpiService $assigned, private AuditLogger $audit) {}
+    public function __construct(private AssignedKpiService $assigned, private AuditLogger $audit, private StandardKpiSetupService $standardSetup) {}
+
+    public function standardSetup(Request $request)
+    {
+        $result = $this->standardSetup->setup($request->user(), CarbonImmutable::today());
+        $this->audit->record('kpi_configuration', $request->user()->tenant_id, 'standard_kpi_setup', $request->user(), null, $result, $request);
+
+        return response()->json(['data' => $result]);
+    }
 
     public function index(Request $request)
     {

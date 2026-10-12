@@ -33,4 +33,20 @@ class KpiBundleRolloutTest extends TestCase
         $this->artisan('kpi:rollout-bundles')->assertSuccessful()->expectsOutput('Created 0 KPI assignment(s); 0 plan(s) need review.');
         $this->assertSame(1, KpiAssignment::count());
     }
+
+    public function test_employee_kpi_request_rolls_recurring_plan_into_requested_period(): void
+    {
+        $this->seed();
+        $admin = User::where('email', 'admin@vk-kpi.local')->firstOrFail();
+        $sales = User::where('email', 'sales@vk-kpi.local')->firstOrFail();
+        $definition = KpiDefinition::where('tenant_id', $admin->tenant_id)->where('status', 'active')->firstOrFail();
+        $bundle = KpiBundle::create(['tenant_id' => $admin->tenant_id, 'code' => 'LOGIN-ROLL', 'name' => 'Login rollout', 'version' => 1, 'status' => 'active', 'published_at' => now(), 'created_by' => $admin->id]);
+        $bundle->items()->create(['kpi_definition_id' => $definition->id, 'metric' => 'tasks_completed', 'target_value' => 10, 'weight' => 100, 'direction' => 'increase', 'sort_order' => 1]);
+        KpiBundlePlan::create(['tenant_id' => $admin->tenant_id, 'kpi_bundle_id' => $bundle->id, 'audience_type' => 'department', 'audience_id' => $sales->department_id,
+            'period_type' => 'month', 'assignment_status' => 'active', 'starts_on' => '2026-10-01', 'status' => 'active', 'created_by' => $admin->id]);
+
+        $token = $this->postJson('/api/v1/auth/login', ['email' => $sales->email, 'password' => 'Admin@123'])->json('data.access_token');
+        $this->withToken($token)->getJson('/api/v1/kpi/mine?date=2026-11-10')->assertOk()->assertJsonCount(1, 'data');
+        $this->assertDatabaseHas('kpi_assignments', ['kpi_bundle_id' => $bundle->id, 'period_start' => '2026-11-01 00:00:00']);
+    }
 }
