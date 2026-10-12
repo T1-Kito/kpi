@@ -1,16 +1,16 @@
 <?php
 
 use App\Models\Alert;
-use App\Models\BusinessEvent;
+use App\Models\KpiBundlePlan;
 use App\Models\PurchaseOrder;
 use App\Models\Task;
 use App\Models\Tenant;
 use App\Models\VkNotification;
-use App\Services\Kpi\KpiService;
+use App\Services\Automation\BusinessEventDispatcher;
 use App\Services\Kpi\KpiBundleRolloutService;
-use App\Models\KpiBundlePlan;
-use Carbon\CarbonImmutable;
+use App\Services\Kpi\KpiService;
 use App\Support\BusinessEventPublisher;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -144,12 +144,12 @@ Artisan::command('procurement:check-late-po', function (BusinessEventPublisher $
     $this->info("Created or verified {$count} late PO alert(s).");
 })->purpose('Create alerts for late purchase orders');
 
-Artisan::command('events:retry-failed', function () {
-    $count = BusinessEvent::whereIn('status', ['pending', 'failed'])->count();
-    $this->error("Retry dispatcher is not configured. Preserved {$count} pending/failed event(s); no business action was replayed.");
+Artisan::command('events:retry-failed {--limit=100} {--max-attempts=5}', function (BusinessEventDispatcher $dispatcher) {
+    $result = $dispatcher->process((int) $this->option('limit'), (int) $this->option('max-attempts'));
+    $this->info("Processed {$result['processed']} event(s); {$result['failed']} failed; {$result['unsupported']} unsupported; {$result['exhausted']} exhausted.");
 
-    return 1;
-})->purpose('Report unavailable event retry without falsely marking events processed');
+    return ($result['failed'] + $result['unsupported'] + $result['exhausted']) > 0 ? 1 : 0;
+})->purpose('Reliably dispatch pending business events and retry transient failures');
 
 Artisan::command('kpi:calculate-snapshots', function (KpiService $kpis) {
     $count = 0;
@@ -166,18 +166,24 @@ Artisan::command('kpi:calculate-snapshots', function (KpiService $kpis) {
 
 Schedule::command('tasks:check-overdue')->everyFiveMinutes();
 Schedule::command('procurement:check-late-po')->hourly();
-// Enable event retry only after a real, idempotent dispatcher is implemented.
+Schedule::command('events:retry-failed --limit=200 --max-attempts=5')->everyMinute()->withoutOverlapping();
 Schedule::command('kpi:calculate-snapshots')->dailyAt('23:55');
 
 Artisan::command('kpi:rollout-bundles', function (KpiBundleRolloutService $rollout) {
-    $created = 0; $failed = 0;
+    $created = 0;
+    $failed = 0;
     KpiBundlePlan::where('status', 'active')->with('bundle')->chunkById(100, function ($plans) use ($rollout, &$created, &$failed) {
         foreach ($plans as $plan) {
-            try { $created += $rollout->ensure($plan, CarbonImmutable::today()); }
-            catch (\Throwable $error) { report($error); $failed++; }
+            try {
+                $created += $rollout->ensure($plan, CarbonImmutable::today());
+            } catch (Throwable $error) {
+                report($error);
+                $failed++;
+            }
         }
     });
     $this->info("Created {$created} KPI assignment(s); {$failed} plan(s) need review.");
+
     return $failed ? 1 : 0;
 })->purpose('Create KPI assignments for active recurring bundle plans');
 

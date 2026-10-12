@@ -14,6 +14,8 @@ class BusinessEvent extends Model
         'payload',
         'status',
         'retry_count',
+        'last_attempted_at',
+        'next_attempt_at',
         'error_message',
         'processed_at',
     ];
@@ -22,6 +24,8 @@ class BusinessEvent extends Model
     {
         return [
             'payload' => 'array',
+            'last_attempted_at' => 'datetime',
+            'next_attempt_at' => 'datetime',
             'processed_at' => 'datetime',
         ];
     }

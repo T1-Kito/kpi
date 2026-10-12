@@ -14,10 +14,12 @@ if [ -f artisan ]; then
 fi
 
 reminder_pid=""
+scheduler_pid=""
 server_pid=""
 cleanup() {
     trap - EXIT TERM INT
     if [ -n "$reminder_pid" ]; then kill "$reminder_pid" 2>/dev/null || true; fi
+    if [ -n "$scheduler_pid" ]; then kill "$scheduler_pid" 2>/dev/null || true; fi
     if [ -n "$server_pid" ]; then kill "$server_pid" 2>/dev/null || true; fi
     wait 2>/dev/null || true
 }
@@ -25,12 +27,16 @@ trap cleanup EXIT
 trap 'exit 143' TERM
 trap 'exit 130' INT
 
-if [ "${CRM_REMINDERS_ENABLED:-false}" = "true" ]; then
+if [ "${AUTOMATION_SCHEDULER_ENABLED:-true}" = "true" ]; then
+    echo "Business automation scheduler enabled."
+    php artisan schedule:work --no-interaction &
+    scheduler_pid=$!
+elif [ "${CRM_REMINDERS_ENABLED:-false}" = "true" ]; then
     echo "CRM overdue reminders enabled: checking every five minutes."
     bash scripts/crm-reminders.sh &
     reminder_pid=$!
 else
-    echo "CRM reminders disabled. Set CRM_REMINDERS_ENABLED=true to enable."
+    echo "Business automation scheduler disabled. Set AUTOMATION_SCHEDULER_ENABLED=true to enable."
 fi
 
 docker-php-entrypoint --config /Caddyfile --adapter caddyfile &

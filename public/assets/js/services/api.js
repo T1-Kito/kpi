@@ -76,6 +76,12 @@
             throw new Error([body.message, fields].filter(Boolean).join(' ') || 'Có lỗi xảy ra.');
         }
 
+        if (String(options.method || 'GET').toUpperCase() !== 'GET') {
+            window.dispatchEvent(new CustomEvent('vk:data-mutated', {
+                detail: { path, method: String(options.method || 'GET').toUpperCase() },
+            }));
+        }
+
         return body;
     }
 

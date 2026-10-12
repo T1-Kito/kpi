@@ -5,6 +5,7 @@
         loading: false,
         booted: false,
         poller: null,
+        refreshTimer: null,
     };
 
     function qs(selector) {
@@ -35,7 +36,7 @@
         state.booted = true;
         bindEvents();
         await loadNotifications();
-        state.poller = window.setInterval(loadNotifications, 45000);
+        state.poller = window.setInterval(loadNotifications, 15000);
     }
 
     function bindEvents() {
@@ -77,6 +78,18 @@
                 closePopover();
             }
         });
+
+        window.addEventListener('vk:data-mutated', queueRefresh);
+        window.addEventListener('online', queueRefresh);
+        window.addEventListener('focus', queueRefresh);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) queueRefresh();
+        });
+    }
+
+    function queueRefresh() {
+        window.clearTimeout(state.refreshTimer);
+        state.refreshTimer = window.setTimeout(loadNotifications, 250);
     }
 
     async function loadNotifications() {

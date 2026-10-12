@@ -40,13 +40,13 @@
     @include('components.detail-drawer')
     <div id="toast" class="toast" role="status"></div>
 
-    <script src="/assets/js/services/api.js?v=20261007-2"></script>
+    <script src="/assets/js/services/api.js?v=20261012-events1"></script>
     <script src="/assets/js/table.js?v=20261009-codes1"></script>
     <script src="/assets/js/modal.js?v=20261011-close1"></script>
     <script src="/assets/js/record-page.js?v=20261009-codes1"></script>
     <script src="/assets/js/detail-drawer.js?v=20261011-close1"></script>
     <script src="/assets/js/layout.js?v=20261011-bundle2"></script>
-    <script src="/assets/js/notifications.js"></script>
+    <script src="/assets/js/notifications.js?v=20261012-events1"></script>
     <script src="/assets/js/app.js"></script>
     @stack('scripts')
 </body>
