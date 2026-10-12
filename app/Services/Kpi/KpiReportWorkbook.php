@@ -3,7 +3,6 @@
 namespace App\Services\Kpi;
 
 use RuntimeException;
-use ZipArchive;
 
 /** Runtime XLSX export. Text cells are inline strings, never executable formulas. */
 class KpiReportWorkbook
@@ -34,29 +33,24 @@ class KpiReportWorkbook
         }
         $sheets = [['Tổng hợp', $summary, 6], ['KPI được phân', $kpis, 4], ['Phiếu điểm', $ledger, 4], ['Công việc', $tasks, 4]];
         $path = tempnam(sys_get_temp_dir(), 'kpi-xlsx-');
-        $zip = new ZipArchive;
         try {
-            // tempnam creates an empty file. Linux ZipArchive needs CREATE in
-            // addition to OVERWRITE, while Windows accepted OVERWRITE alone.
-            if ($zip->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-                throw new RuntimeException('Không thể tạo Excel.');
-            }
             $types = '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>';
             $book = '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>';
             $rels = '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">';
+            $files = [];
             foreach ($sheets as $index => [$name, $rows, $header]) {
                 $id = $index + 1;
                 $types .= '<Override PartName="/xl/worksheets/sheet'.$id.'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>';
                 $book .= '<sheet name="'.$name.'" sheetId="'.$id.'" r:id="rId'.$id.'"/>';
                 $rels .= '<Relationship Id="rId'.$id.'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'.$id.'.xml"/>';
-                $zip->addFromString('xl/worksheets/sheet'.$id.'.xml', $this->sheet($rows, $header));
+                $files['xl/worksheets/sheet'.$id.'.xml'] = $this->sheet($rows, $header);
             }
-            $zip->addFromString('[Content_Types].xml', $types.'</Types>');
-            $zip->addFromString('_rels/.rels', '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
-            $zip->addFromString('xl/workbook.xml', $book.'</sheets></workbook>');
-            $zip->addFromString('xl/_rels/workbook.xml.rels', $rels.'<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>');
-            $zip->addFromString('xl/styles.xml', '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF2563EB"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="3"><xf fontId="0" fillId="0" borderId="0" xfId="0"><alignment vertical="top" wrapText="1"/></xf><xf fontId="1" fillId="2" borderId="0" xfId="0" applyFill="1" applyFont="1"><alignment wrapText="1"/></xf><xf fontId="0" fillId="0" borderId="0" xfId="0" numFmtId="4" applyNumberFormat="1"/></cellXfs></styleSheet>');
-            if (! $zip->close()) {
+            $files['[Content_Types].xml'] = $types.'</Types>';
+            $files['_rels/.rels'] = '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';
+            $files['xl/workbook.xml'] = $book.'</sheets></workbook>';
+            $files['xl/_rels/workbook.xml.rels'] = $rels.'<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
+            $files['xl/styles.xml'] = '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF2563EB"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="3"><xf fontId="0" fillId="0" borderId="0" xfId="0"><alignment vertical="top" wrapText="1"/></xf><xf fontId="1" fillId="2" borderId="0" xfId="0" applyFill="1" applyFont="1"><alignment wrapText="1"/></xf><xf fontId="0" fillId="0" borderId="0" xfId="0" numFmtId="4" applyNumberFormat="1"/></cellXfs></styleSheet>';
+            if (file_put_contents($path, $this->zip($files)) === false) {
                 throw new RuntimeException('Không thể hoàn tất Excel.');
             }
 
@@ -67,6 +61,26 @@ class KpiReportWorkbook
             }
             throw $e;
         }
+    }
+
+    /** @param array<string, string> $files */
+    private function zip(array $files): string
+    {
+        $body = '';
+        $central = '';
+        $offset = 0;
+        foreach ($files as $name => $content) {
+            $crc = hexdec(hash('crc32b', $content));
+            $size = strlen($content);
+            $nameLength = strlen($name);
+            $local = pack('VvvvvvVVVvv', 0x04034b50, 20, 0, 0, 0, 0, $crc, $size, $size, $nameLength, 0).$name.$content;
+            $central .= pack('VvvvvvvVVVvvvvvVV', 0x02014b50, 20, 20, 0, 0, 0, 0, $crc, $size, $size, $nameLength, 0, 0, 0, 0, 0, $offset).$name;
+            $body .= $local;
+            $offset += strlen($local);
+        }
+
+        $count = count($files);
+        return $body.$central.pack('VvvvvVVv', 0x06054b50, 0, 0, $count, $count, strlen($central), strlen($body), 0);
     }
 
     private function sheet(array $rows, int $header): string
