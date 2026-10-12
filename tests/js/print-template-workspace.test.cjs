@@ -50,7 +50,10 @@ test('each document tab exposes a ready Word reference template',()=>{
   assert.match(source,/template-example-download/);
   assert.match(source,/data-download-merge-template="\$\{templateState\.module\}"/);
   assert.match(source,/Tải mẫu \$\{VKTable\.escapeHtml\(moduleLabel\(templateState\.module\)\)\} tham khảo/);
-  assert.match(source,/Save As thành \.docx/);
+  const downloadSource=source.slice(source.indexOf('function downloadMergeTemplate'),source.indexOf('function downloadTextFile'));
+  assert.match(downloadSource,/Save As thành \.docx/);
+  assert.doesNotMatch(downloadSource,/Danh sách trường trộn|fieldRows|Mẫu trường trộn/);
+  assert.match(downloadSource,/wordTemplateContent\(module\)/);
   assert.match(source,/ĐƠN BÁN HÀNG/);
   assert.match(source,/PHIẾU XUẤT KHO/);
   assert.match(source,/HỢP ĐỒNG/);

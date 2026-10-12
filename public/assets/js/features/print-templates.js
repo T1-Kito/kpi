@@ -287,16 +287,7 @@ function renderFieldChips(keys = null, module = 'quotation') {
 }
 
 function downloadMergeTemplate(module = 'quotation') {
-    const fields = templateState.fieldSets[module] || templateState.fields || defaultFields();
     const label = templateState.modules[module] || moduleLabel(module);
-    const fieldRows = fields.map((field, index) => `
-        <tr>
-            <td>${index + 1}</td>
-            <td>{{${VKTable.escapeHtml(field.key)}}}</td>
-            <td>${VKTable.escapeHtml(field.label || field.key)}</td>
-            <td>Chèn đúng cú pháp vào vị trí cần trộn dữ liệu.</td>
-        </tr>
-    `).join('');
     const html = `<!DOCTYPE html>
 <html xmlns:o="urn:schemas-microsoft-com:office:office"
       xmlns:w="urn:schemas-microsoft-com:office:word"
@@ -305,16 +296,13 @@ function downloadMergeTemplate(module = 'quotation') {
     <meta charset="utf-8">
     <meta name="ProgId" content="Word.Document">
     <meta name="Generator" content="VK-KPI">
-    <title>Mẫu trường trộn báo giá</title>
+    <title>Mẫu ${VKTable.escapeHtml(label)} tham khảo</title>
     <style>
         @page Section1 { size: 21cm 29.7cm; margin: 1.8cm 1.6cm 1.8cm 1.6cm; }
         div.Section1 { page: Section1; }
         body { font-family: Arial, sans-serif; color: #111827; font-size: 11pt; line-height: 1.45; }
-        h1 { font-size: 22pt; margin: 0 0 4pt; color: #0F172A; }
-        h2 { font-size: 15pt; margin: 18pt 0 8pt; color: #0F172A; }
         p { margin: 4pt 0; }
         .muted { color: #64748B; }
-        .note { background: #EFF6FF; border: 1px solid #BFDBFE; padding: 10pt; margin: 12pt 0; }
         table { width: 100%; border-collapse: collapse; margin-top: 10pt; }
         th, td { border: 1px solid #CBD5E1; padding: 7pt; text-align: left; vertical-align: top; }
         th { background: #EAF2FF; color: #0F172A; font-weight: 700; }
@@ -326,32 +314,12 @@ function downloadMergeTemplate(module = 'quotation') {
 </head>
 <body>
     <div class="Section1">
-        <h1>Mẫu trường trộn ${VKTable.escapeHtml(label)}</h1>
-        <p class="muted">Dùng file này để soạn mẫu Word ${VKTable.escapeHtml(label)}. Sau khi chỉnh sửa, chọn Save As thành .docx rồi tải lên màn Mẫu in.</p>
-        <div class="note">
-            <strong>Cách dùng:</strong> copy trường ở cột "Trường trộn" và đặt vào vị trí cần hiển thị dữ liệu trong mẫu Word.
-            Giữ nguyên hai dấu ngoặc nhọn, ví dụ {{ma_bao_gia}}.
-        </div>
-
-        <h2>Danh sách trường trộn</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th style="width: 42px;">#</th>
-                    <th style="width: 190px;">Trường trộn</th>
-                    <th style="width: 190px;">Ý nghĩa</th>
-                    <th>Ghi chú</th>
-                </tr>
-            </thead>
-            <tbody>${fieldRows}</tbody>
-        </table>
-
-        <h2>Mẫu ${VKTable.escapeHtml(label)} tham khảo</h2>
         ${wordTemplateContent(module)}
+        <p class="muted" style="margin-top:18pt;font-size:9pt">Mẫu tham khảo: chỉnh bố cục theo nhận diện doanh nghiệp, giữ nguyên các mã trong dấu ngoặc nhọn. Sau đó chọn Save As thành .docx và tải lên hệ thống.</p>
     </div>
 </body>
 </html>`;
-    downloadTextFile(`mau-${module.replace('_', '-')}.doc`, `\ufeff${html}`, 'application/msword;charset=utf-8');
+    downloadTextFile(`mau-${module.replace('_', '-')}-tham-khao.doc`, `\ufeff${html}`, 'application/msword;charset=utf-8');
 }
 
 function downloadTextFile(fileName, content, type) {
@@ -364,11 +332,6 @@ function downloadTextFile(fileName, content, type) {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-}
-
-function downloadQuotationExample() {
-    const html = `<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>Mẫu báo giá ví dụ</title><style>@page Section1 { size:21cm 29.7cm; margin:1.8cm 1.6cm; } div.Section1 { page:Section1; } body{font-family:Arial,sans-serif;color:#1f2937;font-size:11pt;line-height:1.45} table{width:100%;border-collapse:collapse;margin:12pt 0} th,td{border:1px solid #b8c4d5;padding:7pt;text-align:left;vertical-align:top} th{background:#eaf2ff;color:#153d79}.head td{border:0;padding:0 0 12pt}.title{font-size:23pt;font-weight:700;color:#124ca0}.right{text-align:right}.total td{font-weight:700;background:#f2f7ff}.note{margin-top:14pt;padding:8pt;background:#fff7e6;border:1px solid #f0c36c;font-size:9.5pt}</style></head><body><div class="Section1">${wordTemplateContent()}<div class="note"><strong>Lưu ý:</strong> Đây là file ví dụ có sẵn trường trộn. Giữ nguyên cú pháp {{ten_khach_hang}}. Với bảng hàng, để các trường {{stt}}, {{ma_hang}}, {{ten_hang}}... trên cùng một hàng bảng để hệ thống tự tạo dòng theo báo giá.</div></div></body></html>`;
-    downloadTextFile('mau-bao-gia-vi-du.doc', `\ufeff${html}`, 'application/msword;charset=utf-8');
 }
 
 function moduleLabel(module) {
