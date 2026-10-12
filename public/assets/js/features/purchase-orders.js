@@ -16,15 +16,11 @@ document.addEventListener('change', (event) => {
         poState.status = event.target.value;
         renderPurchaseOrders();
     }
-    if (event.target.matches('[name="supplier_quotation_id"]')) {
-        toggleManualPurchaseFields(event.target.value);
-    }
 });
 document.addEventListener('click', (event) => {
     if (!document.getElementById('purchaseOrdersRoot')) return;
     const configure = event.target.closest('[data-configure-po-approval]');
     if (configure) { configurePurchaseApproval(configure.dataset.configurePoApproval); return; }
-    if (event.target.matches('[data-create-purchase-order]')) openPurchaseOrderModal();
     const approve = event.target.closest('[data-approve-purchase-order]');
     if (approve) {
         event.stopPropagation();
@@ -63,7 +59,7 @@ function renderPurchaseOrders(total = poState.rows.length) {
     const rows = filterRows();
     document.getElementById('purchaseOrdersRoot').innerHTML = VKTable.fullList({
         title: 'Danh sách đơn mua',
-        subtitle: 'Theo dõi nhà cung cấp, báo giá nguồn, ngày dự kiến nhận và trạng thái nhập kho.',
+        subtitle: 'Đơn tự sinh từ báo giá NCC đã chọn. Duyệt đủ cấp sẽ tự tạo phiếu nhập chờ kho xác nhận.',
         meta: `${VKTable.money(rows.length)} / ${VKTable.money(total)} đơn`,
         filters: VKTable.filterBar({
             searchPlaceholder: 'Tìm mã đơn, báo giá NCC, yêu cầu mua hoặc nhà cung cấp...',
@@ -110,77 +106,6 @@ function restoreFilters() {
 
 function renderSupplier(row) {
     return `${VKTable.escapeHtml(row.supplier?.name || '-')}<span class="row-note">${row.expected_delivery_date ? `Dự kiến: ${formatDate(row.expected_delivery_date)}` : 'Chưa có ngày dự kiến'}</span>`;
-}
-
-async function openPurchaseOrderModal() {
-    const [quotes, requests, suppliers, warehouses] = await Promise.all([
-        VKApi.request('/supplier-quotations?status=selected&page_size=100'),
-        VKApi.request('/purchase-requests?status=approved&page_size=100'),
-        VKApi.request('/suppliers?page_size=100'),
-        VKApi.request('/warehouses?page_size=100'),
-    ]);
-
-    const quoteOptions = [{ value: '', label: 'Không dùng báo giá NCC - tạo thủ công' }].concat((quotes.data || []).map(row => ({
-        value: row.id,
-        label: `${row.code} - ${row.supplier?.name || '-'} - ${VKTable.money(row.total_amount)} đ`,
-    })));
-
-    if (!quoteOptions.length && (!requests.data?.length || !suppliers.data?.length)) {
-        return VKModal.toast('Chưa có báo giá NCC đã chọn hoặc yêu cầu mua đã duyệt để tạo đơn mua.', 'warning');
-    }
-
-    VKModal.open('Tạo đơn mua', `
-        <div class="form-grid">
-            ${VKModal.select('supplier_quotation_id', 'Báo giá NCC đã chọn', quoteOptions, quoteOptions[1]?.value || '')}
-            ${VKModal.field('expected_delivery_date', 'Ngày dự kiến nhận', 'date')}
-            ${VKModal.field('payment_terms', 'Điều khoản thanh toán', 'text')}
-            ${VKModal.field('delivery_terms', 'Điều kiện giao hàng', 'text')}
-            ${VKModal.field('warranty_terms', 'Bảo hành', 'text')}
-            ${VKModal.field('shipping_fee', 'Phí vận chuyển', 'number', '0')}
-            ${VKModal.select('receiving_warehouse_id', 'Kho nhận hàng *', (warehouses.data || []).filter(row => row.status === 'active').map(row => ({value:row.id,label:`${row.code} - ${row.name}`})))}
-        </div>
-        <p class="form-note" data-quote-note>Hệ thống sẽ lấy nhà cung cấp, dòng hàng và đơn giá từ báo giá NCC đã chọn.</p>
-        <div data-manual-purchase-fields>
-            <div class="form-grid two">
-                ${VKModal.select('purchase_request_id', 'Yêu cầu mua', (requests.data || []).map(row => ({ value: row.id, label: `${row.code} - ${VKTable.translateStatus(row.status)}` })))}
-                ${VKModal.select('supplier_id', 'Nhà cung cấp', (suppliers.data || []).map(row => ({ value: row.id, label: `${row.code} - ${row.name}` })))}
-            </div>
-            <p class="form-note">Chỉ dùng phần này khi chưa có báo giá NCC đã chọn.</p>
-        </div>
-    `, async (form) => {
-        const data = Object.fromEntries(new FormData(form));
-        const payload = {
-            expected_delivery_date: data.expected_delivery_date || null,
-            payment_terms: data.payment_terms || null,
-            delivery_terms: data.delivery_terms || null,
-            warranty_terms: data.warranty_terms || null,
-            shipping_fee: Number(data.shipping_fee || 0),
-            receiving_warehouse_id: Number(data.receiving_warehouse_id),
-        };
-        if (data.supplier_quotation_id) {
-            payload.supplier_quotation_id = Number(data.supplier_quotation_id);
-        } else {
-            payload.purchase_request_id = Number(data.purchase_request_id);
-            payload.supplier_id = Number(data.supplier_id);
-        }
-        await VKApi.request('/purchase-orders', {
-            method: 'POST',
-            body: JSON.stringify(payload),
-        });
-        VKModal.toast('Đã tạo đơn mua.');
-        VKModal.close();
-        loadPurchaseOrders();
-    }, { className: 'modal-wide', submitText: 'Tạo đơn mua' });
-
-    toggleManualPurchaseFields(document.querySelector('[name="supplier_quotation_id"]')?.value || '');
-}
-
-function toggleManualPurchaseFields(quoteId) {
-    const fields = document.querySelector('[data-manual-purchase-fields]');
-    const note = document.querySelector('[data-quote-note]');
-    if (!fields) return;
-    fields.hidden = Boolean(quoteId);
-    if (note) note.hidden = !quoteId;
 }
 
 async function approvePurchaseOrder(id, button) {

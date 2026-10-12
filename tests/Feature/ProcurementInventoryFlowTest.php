@@ -48,6 +48,19 @@ class ProcurementInventoryFlowTest extends TestCase
             ->assertJsonStructure(['data' => ['supplierQuotations', 'purchaseRequests', 'suppliers', 'skus', 'warehouses']]);
     }
 
+    public function test_purchase_and_receipt_pages_expose_only_required_workflow_actions(): void
+    {
+        $this->get('/purchase-orders')
+            ->assertOk()
+            ->assertSee('Đơn mua được tự tạo từ báo giá nhà cung cấp đã chọn')
+            ->assertDontSee('data-create-purchase-order', false);
+
+        $this->get('/goods-receipts')
+            ->assertOk()
+            ->assertSee('Phiếu nhập được tự tạo sau khi đơn mua duyệt đủ')
+            ->assertDontSee('data-create-goods-receipt', false);
+    }
+
     public function test_quick_product_creation_checks_duplicate_and_permission(): void
     {
         $this->seed();

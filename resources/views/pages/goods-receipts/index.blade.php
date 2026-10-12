@@ -3,15 +3,12 @@
 @section('title', 'Nhập kho')
 @section('page', 'goods-receipts')
 @section('page_title', 'Nhập kho')
-@section('page_subtitle', 'Tạo phiếu nhập từ đơn mua đã duyệt và cập nhật tồn kho.')
-@section('page_actions')
-    <button class="btn primary" type="button" data-permission="inventory.receipt.create" data-create-goods-receipt>Tạo phiếu nhập</button>
-@endsection
+@section('page_subtitle', 'Phiếu nhập được tự tạo sau khi đơn mua duyệt đủ; kho chỉ cần kiểm tra và xác nhận nhận hàng.')
 
 @section('content')
 <div id="goodsReceiptsRoot"></div>
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/goods-receipts.js?v=20261008-menu1"></script>
+<script src="/assets/js/features/goods-receipts.js?v=20261012-auto-flow1"></script>
 @endpush
