@@ -26,6 +26,8 @@ class StandardKpiSetupTest extends TestCase
         $this->assertDatabaseHas('kpi_definitions', ['code' => 'STD-PAYMENTS', 'formula' => 'payments_received_amount', 'status' => 'active']);
         $this->assertDatabaseHas('kpi_bundles', ['code' => 'STD-SALES', 'status' => 'active']);
         $this->assertDatabaseHas('kpi_bundle_plans', ['period_type' => 'month', 'status' => 'active']);
+        $this->assertDatabaseHas('departments', ['name' => 'Chăm sóc khách hàng']);
+        $this->assertDatabaseHas('kpi_bundles', ['code' => 'STD-SERVICE', 'status' => 'active']);
 
         $counts = [KpiDefinition::count(), KpiBundle::count(), KpiBundlePlan::count(), KpiAssignment::count()];
         $this->withToken($token)->postJson('/api/v1/kpi/standard-setup')->assertOk()

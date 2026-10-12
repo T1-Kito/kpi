@@ -27,11 +27,7 @@ class StandardKpiSetupService
             $skipped = [];
 
             foreach ($this->blueprints() as $blueprint) {
-                $audience = $this->findAudience($tenantId, $blueprint['audience'], $blueprint['matches']);
-                if (! $audience) {
-                    $skipped[] = $blueprint['name'].' (chưa có dữ liệu tổ chức phù hợp)';
-                    continue;
-                }
+                $audience = $this->findOrCreateAudience($tenantId, $blueprint['audience'], $blueprint['matches'], $blueprint['code']);
                 $bundle = KpiBundle::firstOrCreate(
                     ['tenant_id' => $tenantId, 'code' => $blueprint['code'], 'version' => 1],
                     ['name' => $blueprint['name'], 'description' => $blueprint['description'], 'status' => 'active', 'created_by' => $actor->id, 'published_at' => now()],
@@ -111,13 +107,23 @@ class StandardKpiSetupService
         ];
     }
 
-    private function findAudience(int $tenantId, string $type, array $matches)
+    private function findOrCreateAudience(int $tenantId, string $type, array $matches, string $bundleCode)
     {
         $class = $type === 'position' ? Position::class : Department::class;
-        return $class::where('tenant_id', $tenantId)->get()->first(function ($row) use ($matches) {
+        $found = $class::where('tenant_id', $tenantId)->get()->first(function ($row) use ($matches) {
             $name = Str::lower(Str::ascii($row->name));
             return collect($matches)->contains(fn ($match) => str_contains($name, $match));
         });
+        if ($found) return $found;
+
+        $names = [
+            'STD-SALES' => 'Kinh doanh', 'STD-WAREHOUSE' => 'Kho', 'STD-PROCUREMENT' => 'Mua hàng',
+            'STD-FINANCE' => 'Tài chính', 'STD-MARKETING' => 'Marketing', 'STD-SERVICE' => 'Chăm sóc khách hàng',
+            'STD-MANAGER' => 'Trưởng phòng', 'STD-DIRECTOR' => 'Giám đốc',
+        ];
+        $prefix = $type === 'position' ? 'POS-' : 'DEP-';
+
+        return $class::create(['tenant_id' => $tenantId, 'code' => $prefix.str_replace('STD-', '', $bundleCode), 'name' => $names[$bundleCode]]);
     }
 
     private function employeeCount(int $tenantId, string $type, int $id): int
