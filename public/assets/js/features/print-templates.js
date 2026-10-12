@@ -57,7 +57,7 @@ async function loadPrintTemplates(options = {}) {
     templateState.rows = response.data || [];
     templateState.fields = response.meta?.fields || defaultFields();
     templateState.fieldSets = response.meta?.field_sets || { quotation: templateState.fields };
-    templateState.modules = response.meta?.modules || { quotation: 'Báo giá', sales_order: 'Đơn bán hàng', goods_issue: 'Phiếu xuất kho', contract: 'Hợp đồng' };
+    templateState.modules = response.meta?.modules || { quotation: 'Báo giá', sales_order: 'Đơn bán hàng', goods_issue: 'Phiếu xuất kho', contract: 'Hợp đồng', delivery_acceptance: 'Biên bản nghiệm thu' };
     renderPrintTemplates(response.meta?.total ?? templateState.rows.length);
 }
 
@@ -156,7 +156,7 @@ function openPrintTemplateModal(id = null) {
 
     const preview = document.querySelector('[data-template-word-preview]');
     if (id && row?.file_path) {
-        const endpoint = {quotation:'quotations', sales_order:'sales-orders', goods_issue:'goods-issues', contract:'contracts'}[row.module];
+        const endpoint = {quotation:'quotations', sales_order:'sales-orders', goods_issue:'goods-issues', contract:'contracts', delivery_acceptance:'delivery-records'}[row.module];
         const select = document.querySelector('[data-template-record]');
         VKApi.request(`/${endpoint}?page_size=100`, {cache:false}).then(response => {
             if (!select?.isConnected) return;
@@ -292,6 +292,7 @@ async function downloadMergeTemplate(module = 'quotation') {
         sales_order: 'mau-don-ban-hang-tham-khao.docx',
         goods_issue: 'mau-phieu-xuat-kho-tham-khao.docx',
         contract: 'mau-hop-dong-tham-khao.docx',
+        delivery_acceptance: 'mau-bien-ban-nghiem-thu-tham-khao.docx',
     };
     if (!names[module]) return;
     try {

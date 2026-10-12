@@ -50,6 +50,10 @@
         if (accept) openAcceptanceConfirmation(accept.dataset.worklistConfirmAcceptance);
         const invoiceFromDelivery = event.target.closest('[data-delivery-issue-invoice]');
         if (invoiceFromDelivery) openInvoiceFromDeliveryModal(invoiceFromDelivery.dataset.deliveryIssueInvoice);
+        const exportAcceptance = event.target.closest('[data-delivery-export-acceptance]');
+        if (exportAcceptance) exportAcceptanceWord(exportAcceptance.dataset.deliveryExportAcceptance);
+        const acceptanceFile = event.target.closest('[data-delivery-acceptance-file]');
+        if (acceptanceFile) downloadAcceptanceFile(acceptanceFile.dataset.deliveryAcceptanceFile);
         const receive = event.target.closest('[data-worklist-record-payment]');
         if (receive) openPaymentModal(receive.dataset.worklistRecordPayment);
     });
@@ -253,7 +257,7 @@
                 ]) : ''}
                 ${(row.invoices || []).length ? relatedInvoices(row.invoices) : ''}
                 ${itemsTable(row.items || [])}
-            `, deliveryActions(row, hasInvoice));
+            `, `${deliveryActions(row, hasInvoice)}${delivery?.acceptance_file_path ? `<button class="btn small" type="button" data-delivery-acceptance-file="${delivery.id}">Tải biên bản đã ký</button>` : ''}`);
         } catch (error) {
             showError(root, 'Không tải được chi tiết giao hàng', error);
         }
@@ -370,19 +374,21 @@
                 </div>
                 <div class="field full"><label for="acceptance_note">Nội dung nghiệm thu / bàn giao</label><textarea id="acceptance_note" name="acceptance_note" rows="3" placeholder="Hàng hóa, số lượng, tình trạng, tài liệu đi kèm..."></textarea></div>
                 <div class="field full"><label for="discrepancy_note">Sai lệch hoặc yêu cầu xử lý</label><textarea id="discrepancy_note" name="discrepancy_note" rows="3" placeholder="Bắt buộc khi nghiệm thu không đạt"></textarea></div>
+                <div class="field full"><label for="acceptance_file">Biên bản ký hoặc minh chứng</label><input id="acceptance_file" name="acceptance_file" type="file" accept=".pdf,.docx,.jpg,.jpeg,.png"><small>Không bắt buộc. Hỗ trợ PDF, Word hoặc ảnh; tối đa 10MB.</small></div>
                 <p class="form-hint full">Chỉ kết quả đạt mới mở bước phát hành hóa đơn. Hồ sơ không đạt sẽ tự tạo công việc xử lý sai lệch.</p>
             </div>
         `, async (form) => {
-            const data = Object.fromEntries(new FormData(form));
-            data.quantity_accepted = form.elements.quantity_accepted.checked;
-            data.condition_accepted = form.elements.condition_accepted.checked;
-            data.documents_accepted = form.elements.documents_accepted.checked;
-            if (data.acceptance_status === 'rejected' && !String(data.discrepancy_note || '').trim()) {
+            const data = new FormData(form);
+            data.set('quantity_accepted', form.elements.quantity_accepted.checked ? '1' : '0');
+            data.set('condition_accepted', form.elements.condition_accepted.checked ? '1' : '0');
+            data.set('documents_accepted', form.elements.documents_accepted.checked ? '1' : '0');
+            if (data.get('acceptance_status') === 'rejected' && !String(data.get('discrepancy_note') || '').trim()) {
                 throw new Error('Vui lòng nhập sai lệch hoặc lý do nghiệm thu không đạt.');
             }
-            await VKApi.request(`/deliveries/${deliveryId}/acceptance`, { method: 'POST', body: JSON.stringify(data) });
+            if (!form.elements.acceptance_file.files?.length) data.delete('acceptance_file');
+            await VKApi.request(`/deliveries/${deliveryId}/acceptance`, { method: 'POST', body: data });
             VKModal.close();
-            VKModal.toast(data.acceptance_status === 'rejected' ? 'Đã ghi nhận nghiệm thu không đạt và tạo việc xử lý.' : 'Đã hoàn tất nghiệm thu bàn giao.', 'success');
+            VKModal.toast(data.get('acceptance_status') === 'rejected' ? 'Đã ghi nhận nghiệm thu không đạt và tạo việc xử lý.' : 'Đã hoàn tất nghiệm thu bàn giao.', 'success');
             states.deliveries.view = 'list';
             await loadDeliveries();
         }, { submitText: 'Lưu kết quả nghiệm thu' });
@@ -424,15 +430,46 @@
         }
         if (row.delivery_status === 'delivered_pending_acceptance' && can('sales.delivery.accept')) {
             const delivery = row.deliveries?.[0];
-            return delivery ? `<button class="btn primary small" type="button" data-worklist-confirm-acceptance="${delivery.id}">Nghiệm thu bàn giao</button>` : '';
+            return delivery ? `<button class="btn small" type="button" data-delivery-export-acceptance="${delivery.id}">Xuất biên bản Word</button><button class="btn primary small" type="button" data-worklist-confirm-acceptance="${delivery.id}">Nghiệm thu bàn giao</button>` : '';
         }
         if (row.delivery_status === 'delivered' && !hasInvoice && can('finance.invoice.manage')) {
-            return `<button class="btn primary small" type="button" data-delivery-issue-invoice="${row.id}">Phát hành hóa đơn</button>`;
+            const delivery = row.deliveries?.[0];
+            return `${delivery ? `<button class="btn small" type="button" data-delivery-export-acceptance="${delivery.id}">Xuất biên bản Word</button>` : ''}<button class="btn primary small" type="button" data-delivery-issue-invoice="${row.id}">Phát hành hóa đơn</button>`;
         }
         if (hasInvoice) {
             return '<a class="btn small" href="/sales-invoices">Xem hóa đơn</a>';
         }
         return '';
+    }
+
+    async function exportAcceptanceWord(deliveryId) {
+        const response = await fetch(`/api/v1/delivery-records/${encodeURIComponent(deliveryId)}/word`, {
+            headers: { Accept: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', Authorization: `Bearer ${VKApi.token()}` },
+        });
+        if (!response.ok) {
+            const body = await response.json().catch(() => ({}));
+            throw new Error(body.message || 'Không xuất được biên bản nghiệm thu.');
+        }
+        const blob = await response.blob();
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'bien-ban-nghiem-thu.docx';
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    }
+
+    async function downloadAcceptanceFile(deliveryId) {
+        const response = await fetch(`/api/v1/delivery-records/${encodeURIComponent(deliveryId)}/acceptance-file`, { headers: { Authorization: `Bearer ${VKApi.token()}` } });
+        if (!response.ok) throw new Error('Không tải được biên bản hoặc minh chứng đã ký.');
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+        const plain = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+        const blob = await response.blob();
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = encoded ? decodeURIComponent(encoded) : (plain || 'bien-ban-nghiem-thu');
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
     }
 
     function relatedInvoices(rows) {

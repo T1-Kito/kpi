@@ -27,6 +27,8 @@ class Delivery extends Model
         'condition_accepted',
         'documents_accepted',
         'acceptance_note',
+        'acceptance_file_path',
+        'acceptance_file_name',
         'discrepancy_note',
         'acceptance_confirmed_by',
     ];

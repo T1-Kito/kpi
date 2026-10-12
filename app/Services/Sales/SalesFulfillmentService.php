@@ -95,6 +95,14 @@ class SalesFulfillmentService
                 && ($data['condition_accepted'] ?? true)
                 && ($data['documents_accepted'] ?? true);
             abort_if($result === 'accepted' && ! $checklistPassed, 422, 'Kết quả “Đạt toàn bộ” yêu cầu tất cả danh mục kiểm tra đều đạt.');
+            $acceptanceFile = [];
+            if (! empty($data['acceptance_file'])) {
+                $file = $data['acceptance_file'];
+                $acceptanceFile = [
+                    'acceptance_file_path' => $file->store('delivery-acceptances/'.$actor->tenant_id, 'local'),
+                    'acceptance_file_name' => $file->getClientOriginalName(),
+                ];
+            }
             $old = $delivery->toArray();
             $delivery->update([
                 'acceptance_status' => $result,
@@ -107,6 +115,7 @@ class SalesFulfillmentService
                 'acceptance_note' => $data['acceptance_note'] ?? null,
                 'discrepancy_note' => $data['discrepancy_note'] ?? null,
                 'acceptance_confirmed_by' => $actor->id,
+                ...$acceptanceFile,
             ]);
 
             $accepted = in_array($result, ['accepted', 'accepted_with_notes'], true);

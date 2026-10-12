@@ -59,6 +59,7 @@ class PrintTemplateBoundaryTest extends TestCase
             'sales_order' => 'mau-don-ban-hang-tham-khao.docx',
             'goods_issue' => 'mau-phieu-xuat-kho-tham-khao.docx',
             'contract' => 'mau-hop-dong-tham-khao.docx',
+            'delivery_acceptance' => 'mau-bien-ban-nghiem-thu-tham-khao.docx',
         ] as $module => $fileName) {
             $response = $this->withToken($token)->get('/api/v1/print-templates/reference/'.$module);
             $response->assertOk()->assertDownload($fileName);

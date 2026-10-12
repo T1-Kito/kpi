@@ -202,7 +202,7 @@ Route::prefix('v1')->group(function () {
             Route::put('/positions/{position}', [PositionController::class, 'update']);
             Route::get('/print-templates', [PrintTemplateController::class, 'index']);
             Route::get('/print-templates/reference/{module}', [PrintTemplateController::class, 'reference'])
-                ->where('module', 'quotation|sales_order|goods_issue|contract');
+                ->where('module', 'quotation|sales_order|goods_issue|contract|delivery_acceptance');
             Route::get('/print-templates/{printTemplate}/original', [PrintTemplateController::class, 'original']);
             Route::post('/print-templates', [PrintTemplateController::class, 'store']);
             Route::post('/print-templates/{printTemplate}', [PrintTemplateController::class, 'update']);
@@ -299,6 +299,9 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:sales.delivery.view')->group(function () {
             Route::get('/deliveries', [SalesFulfillmentController::class, 'deliveries']);
             Route::get('/deliveries/{salesOrder}', [SalesFulfillmentController::class, 'delivery']);
+            Route::get('/delivery-records', [SalesFulfillmentController::class, 'deliveryRecords']);
+            Route::get('/delivery-records/{delivery}/word', [SalesFulfillmentController::class, 'exportDeliveryWord']);
+            Route::get('/delivery-records/{delivery}/acceptance-file', [SalesFulfillmentController::class, 'acceptanceFile']);
         });
 
         Route::middleware('permission:sales.delivery.confirm')->group(function () {

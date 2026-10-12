@@ -3,6 +3,7 @@
 namespace App\Services\Print;
 
 use App\Models\Contract;
+use App\Models\Delivery;
 use App\Models\GoodsIssue;
 use App\Models\PrintTemplate;
 use App\Models\Quotation;
@@ -14,9 +15,9 @@ use ZipArchive;
 
 class QuotationDocxMergeService
 {
-    public function merge(Quotation|SalesOrder|GoodsIssue|Contract $quotation, PrintTemplate $template): string
+    public function merge(Quotation|SalesOrder|GoodsIssue|Contract|Delivery $quotation, PrintTemplate $template): string
     {
-        $module = $quotation instanceof Contract ? 'contract' : ($quotation instanceof GoodsIssue ? 'goods_issue' : ($quotation instanceof SalesOrder ? 'sales_order' : 'quotation'));
+        $module = $quotation instanceof Delivery ? 'delivery_acceptance' : ($quotation instanceof Contract ? 'contract' : ($quotation instanceof GoodsIssue ? 'goods_issue' : ($quotation instanceof SalesOrder ? 'sales_order' : 'quotation')));
         if ($template->tenant_id !== $quotation->tenant_id || $template->module !== $module || $template->status !== 'active') {
             throw ValidationException::withMessages(['template_file' => 'Mẫu không thuộc công ty, sai loại chứng từ hoặc đã ngưng sử dụng.']);
         }
@@ -36,7 +37,7 @@ class QuotationDocxMergeService
             throw new RuntimeException('Khong the tao thu muc xuat file Word.');
         }
 
-        $prefix = $quotation instanceof Contract ? 'contract' : ($quotation instanceof GoodsIssue ? 'goods-issue' : ($quotation instanceof SalesOrder ? 'sales-order' : 'quotation'));
+        $prefix = $quotation instanceof Delivery ? 'delivery-acceptance' : ($quotation instanceof Contract ? 'contract' : ($quotation instanceof GoodsIssue ? 'goods-issue' : ($quotation instanceof SalesOrder ? 'sales-order' : 'quotation')));
         $target = $targetDir.'/'.$prefix.'-'.$quotation->id.'-'.time().'-'.bin2hex(random_bytes(4)).'.docx';
 
         if (! copy($source, $target)) {
@@ -201,7 +202,7 @@ class QuotationDocxMergeService
         }, $xml) ?? $xml;
     }
 
-    private function repeatItemRows(string $xml, Quotation|SalesOrder|GoodsIssue|Contract $quotation): string
+    private function repeatItemRows(string $xml, Quotation|SalesOrder|GoodsIssue|Contract|Delivery $quotation): string
     {
         $itemKeys = [
             'stt',
@@ -243,9 +244,38 @@ class QuotationDocxMergeService
         }, $xml) ?? $xml;
     }
 
-    private function mergeValues(Quotation|SalesOrder|GoodsIssue|Contract $quotation): array
+    private function mergeValues(Quotation|SalesOrder|GoodsIssue|Contract|Delivery $quotation): array
     {
         $this->loadRelations($quotation);
+
+        if ($quotation instanceof Delivery) {
+            $order = $quotation->salesOrder;
+            $customer = $order?->customer;
+
+            return [
+                'ma_chung_tu' => $quotation->code,
+                'ngay_chung_tu' => optional($quotation->accepted_at ?: $quotation->delivered_at)->format('d/m/Y H:i'),
+                'ma_don_ban' => $order?->code ?? '',
+                'ten_khach_hang' => $customer?->name ?? '',
+                'ma_khach_hang' => $customer?->code ?? '',
+                'nguoi_lien_he' => $quotation->recipient_name ?: ($customer?->contact_name ?? ''),
+                'so_dien_thoai' => $quotation->recipient_phone ?: ($customer?->phone ?? ''),
+                'dia_chi_giao_hang' => $quotation->delivery_address ?: ($customer?->address ?? ''),
+                'ngay_giao_hang' => optional($quotation->delivered_at)->format('d/m/Y H:i'),
+                'ngay_nghiem_thu' => optional($quotation->accepted_at)->format('d/m/Y H:i'),
+                'nguoi_nghiem_thu' => $quotation->accepted_by_name ?? '',
+                'chuc_vu_nghiem_thu' => $quotation->accepted_by_title ?? '',
+                'ket_qua_nghiem_thu' => $this->acceptanceStatusText($quotation->acceptance_status),
+                'kiem_tra_so_luong' => $quotation->quantity_accepted ? 'Đạt' : 'Có sai lệch',
+                'kiem_tra_tinh_trang' => $quotation->condition_accepted ? 'Đạt' : 'Có sai lệch',
+                'kiem_tra_ho_so' => $quotation->documents_accepted ? 'Đầy đủ' : 'Còn thiếu',
+                'noi_dung_nghiem_thu' => $quotation->acceptance_note ?? '',
+                'sai_lech_nghiem_thu' => $quotation->discrepancy_note ?? '',
+                'nguoi_lap' => $quotation->acceptanceConfirmedBy?->name ?? $quotation->confirmedBy?->name ?? '',
+                'trang_thai' => $this->acceptanceStatusText($quotation->acceptance_status),
+                'bang_dong_hang' => $this->itemsText($quotation),
+            ];
+        }
 
         if ($quotation instanceof GoodsIssue) {
             $order = $quotation->salesOrder;
@@ -384,7 +414,7 @@ class QuotationDocxMergeService
         ];
     }
 
-    private function itemsText(Quotation|SalesOrder|GoodsIssue|Contract $quotation): string
+    private function itemsText(Quotation|SalesOrder|GoodsIssue|Contract|Delivery $quotation): string
     {
         return $this->documentItems($quotation)
             ->values()
@@ -409,8 +439,13 @@ class QuotationDocxMergeService
             ->implode('; ');
     }
 
-    private function loadRelations(Quotation|SalesOrder|GoodsIssue|Contract $document): void
+    private function loadRelations(Quotation|SalesOrder|GoodsIssue|Contract|Delivery $document): void
     {
+        if ($document instanceof Delivery) {
+            $document->loadMissing(['salesOrder.customer', 'salesOrder.items.sku', 'goodsIssue.items.sku', 'confirmedBy', 'acceptanceConfirmedBy']);
+
+            return;
+        }
         if ($document instanceof Contract) {
             $document->loadMissing(['customer', 'owner', 'milestones', 'salesOrder.customer', 'salesOrder.items.sku', 'quotation.customer', 'quotation.items.sku']);
 
@@ -425,8 +460,11 @@ class QuotationDocxMergeService
         $document->loadMissing(['customer', 'items.sku', 'salesOwner']);
     }
 
-    private function documentItems(Quotation|SalesOrder|GoodsIssue|Contract $document)
+    private function documentItems(Quotation|SalesOrder|GoodsIssue|Contract|Delivery $document)
     {
+        if ($document instanceof Delivery) {
+            return $document->goodsIssue?->items ?? $document->salesOrder?->items ?? collect();
+        }
         if ($document instanceof Contract) {
             return $document->salesOrder?->items ?? $document->quotation?->items ?? collect();
         }
@@ -521,6 +559,16 @@ class QuotationDocxMergeService
             'ready' => 'Sẵn sàng',
             'confirmed' => 'Đã xác nhận',
             default => $status ?: '',
+        };
+    }
+
+    private function acceptanceStatusText(?string $status): string
+    {
+        return match ($status) {
+            'accepted' => 'Đạt - nghiệm thu toàn bộ',
+            'accepted_with_notes' => 'Đạt - có lưu ý',
+            'rejected' => 'Không đạt - cần xử lý lại',
+            default => 'Chờ nghiệm thu',
         };
     }
 }

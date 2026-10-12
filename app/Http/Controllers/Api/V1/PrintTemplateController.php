@@ -174,6 +174,7 @@ class PrintTemplateController extends Controller
             'sales_order' => 'mau-don-ban-hang-tham-khao.docx',
             'goods_issue' => 'mau-phieu-xuat-kho-tham-khao.docx',
             'contract' => 'mau-hop-dong-tham-khao.docx',
+            'delivery_acceptance' => 'mau-bien-ban-nghiem-thu-tham-khao.docx',
         ];
         abort_unless(isset($files[$module]), 404);
         $fileName = $files[$module];
@@ -270,6 +271,7 @@ class PrintTemplateController extends Controller
             'sales_order' => 'Đơn bán hàng',
             'goods_issue' => 'Phiếu xuất kho',
             'contract' => 'Hợp đồng',
+            'delivery_acceptance' => 'Biên bản nghiệm thu',
         ];
     }
 
@@ -294,6 +296,21 @@ class PrintTemplateController extends Controller
         ];
         if ($module === 'goods_issue') {
             return [...$common, ['key' => 'ma_don_ban', 'label' => 'Mã đơn bán'], ['key' => 'kho_xuat', 'label' => 'Kho xuất'], ['key' => 'ly_do_xuat', 'label' => 'Lý do xuất'], ['key' => 'dia_diem_giao_hang', 'label' => 'Địa điểm giao'], ['key' => 'chung_tu_goc', 'label' => 'Chứng từ gốc'], ['key' => 'co_tru_ton', 'label' => 'Có trừ tồn kho']];
+        }
+        if ($module === 'delivery_acceptance') {
+            return [...$common,
+                ['key' => 'ma_don_ban', 'label' => 'Mã đơn bán'],
+                ['key' => 'ngay_giao_hang', 'label' => 'Ngày giao hàng'],
+                ['key' => 'ngay_nghiem_thu', 'label' => 'Ngày nghiệm thu'],
+                ['key' => 'nguoi_nghiem_thu', 'label' => 'Người đại diện nghiệm thu'],
+                ['key' => 'chuc_vu_nghiem_thu', 'label' => 'Chức vụ người nghiệm thu'],
+                ['key' => 'ket_qua_nghiem_thu', 'label' => 'Kết quả nghiệm thu'],
+                ['key' => 'kiem_tra_so_luong', 'label' => 'Kết quả kiểm tra số lượng'],
+                ['key' => 'kiem_tra_tinh_trang', 'label' => 'Kết quả kiểm tra tình trạng'],
+                ['key' => 'kiem_tra_ho_so', 'label' => 'Kết quả kiểm tra hồ sơ'],
+                ['key' => 'noi_dung_nghiem_thu', 'label' => 'Nội dung nghiệm thu'],
+                ['key' => 'sai_lech_nghiem_thu', 'label' => 'Sai lệch / yêu cầu xử lý'],
+            ];
         }
         if ($module === 'sales_order') {
             return [...$common,

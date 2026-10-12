@@ -6,13 +6,16 @@ use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\CustomerPayment;
 use App\Models\Delivery;
+use App\Models\PrintTemplate;
 use App\Models\SalesInvoice;
 use App\Models\SalesOrder;
 use App\Services\Sales\SalesFulfillmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class SalesFulfillmentController extends Controller
 {
@@ -43,6 +46,24 @@ class SalesFulfillmentController extends Controller
         }
 
         return $this->paginated($query->latest('id'), $request);
+    }
+
+    public function deliveryRecords(Request $request): JsonResponse
+    {
+        $rows = Delivery::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->with('salesOrder.customer:id,name')
+            ->latest('id')
+            ->limit(100)
+            ->get()
+            ->map(fn (Delivery $delivery) => [
+                'id' => $delivery->id,
+                'code' => $delivery->code,
+                'status' => $delivery->acceptance_status,
+                'customer' => ['name' => $delivery->salesOrder?->customer?->name],
+            ]);
+
+        return response()->json(['data' => $rows]);
     }
 
     public function delivery(Request $request, SalesOrder $salesOrder): JsonResponse
@@ -266,9 +287,41 @@ class SalesFulfillmentController extends Controller
             'documents_accepted' => ['nullable', 'boolean'],
             'acceptance_note' => ['nullable', 'string', 'max:2000'],
             'discrepancy_note' => ['nullable', 'string', 'max:2000'],
+            'acceptance_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,docx', 'max:10240'],
         ]);
 
         return response()->json(['data' => $this->fulfillment->confirmAcceptance($delivery, $request->user(), $data)]);
+    }
+
+    public function acceptanceFile(Request $request, Delivery $delivery)
+    {
+        abort_if($delivery->tenant_id !== $request->user()->tenant_id, 404);
+        abort_unless($delivery->acceptance_file_path && Storage::disk('local')->exists($delivery->acceptance_file_path), 404, 'Chưa có biên bản hoặc minh chứng đã ký.');
+
+        return Storage::disk('local')->download($delivery->acceptance_file_path, $delivery->acceptance_file_name ?: 'bien-ban-nghiem-thu');
+    }
+
+    public function exportDeliveryWord(Request $request, Delivery $delivery): BinaryFileResponse|JsonResponse
+    {
+        abort_if($delivery->tenant_id !== $request->user()->tenant_id, 404);
+        $templateQuery = PrintTemplate::where('tenant_id', $request->user()->tenant_id)
+            ->where('module', 'delivery_acceptance')->where('status', 'active');
+        if ($request->filled('template_id')) {
+            $templateQuery->whereKey($request->integer('template_id'));
+        } else {
+            $templateQuery->orderByDesc('is_default')->latest('id');
+        }
+        $template = $templateQuery->first();
+        if (! $template || ! $template->file_path) {
+            return response()->json(['message' => 'Chưa có file Word cho Biên bản nghiệm thu. Vào Mẫu in để tải mẫu lên và đặt làm mặc định.'], 422);
+        }
+
+        $path = app(\App\Services\Print\QuotationDocxMergeService::class)->merge($delivery, $template);
+        $fileName = trim(preg_replace('/[^A-Za-z0-9\-_]+/', '-', $delivery->code ?: 'bien-ban-nghiem-thu'), '-') ?: 'bien-ban-nghiem-thu';
+
+        return response()->download($path, $fileName.'.docx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ])->deleteFileAfterSend(true);
     }
 
     public function issueInvoice(Request $request, SalesOrder $salesOrder): JsonResponse

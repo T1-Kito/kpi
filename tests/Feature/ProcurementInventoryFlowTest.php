@@ -225,6 +225,7 @@ class ProcurementInventoryFlowTest extends TestCase
 
     public function test_shortage_can_flow_from_purchase_request_to_purchase_order_and_goods_receipt(): void
     {
+        \Illuminate\Support\Facades\Storage::fake('local');
         $this->seed();
         $salesToken = $this->loginAs('sales@vk-kpi.local');
         $procurementToken = $this->loginAs('procurement@vk-kpi.local');
@@ -371,15 +372,48 @@ class ProcurementInventoryFlowTest extends TestCase
             ->postJson("/api/v1/sales-orders/{$salesOrderId}/invoices", ['invoice_date' => now()->toDateString()])
             ->assertUnprocessable();
 
-        $this->withToken($adminToken)
-            ->postJson("/api/v1/deliveries/{$deliveryId}/acceptance", [
+        $acceptanceResponse = $this->withToken($adminToken)
+            ->post("/api/v1/deliveries/{$deliveryId}/acceptance", [
                 'acceptance_status' => 'accepted_with_notes',
                 'accepted_by_name' => 'Anh Minh',
                 'accepted_by_title' => 'Trưởng phòng mua hàng',
                 'acceptance_note' => 'Đã nhận đủ hàng, hồ sơ bàn giao hợp lệ.',
-            ])
+                'acceptance_file' => \Illuminate\Http\UploadedFile::fake()->create('bien-ban-da-ky.pdf', 128, 'application/pdf'),
+            ], ['Accept' => 'application/json'])
             ->assertOk()
             ->assertJsonPath('data.acceptance_status', 'accepted_with_notes');
+
+        $acceptancePath = $acceptanceResponse->json('data.acceptance_file_path');
+        \Illuminate\Support\Facades\Storage::disk('local')->assertExists($acceptancePath);
+        $this->withToken($adminToken)
+            ->get("/api/v1/delivery-records/{$deliveryId}/acceptance-file")
+            ->assertOk()
+            ->assertDownload('bien-ban-da-ky.pdf');
+        $this->withToken($salesToken)
+            ->get("/api/v1/delivery-records/{$deliveryId}/acceptance-file")
+            ->assertOk();
+
+        $tenantId = \App\Models\User::where('email', 'admin@vk-kpi.local')->firstOrFail()->tenant_id;
+        $templatePath = 'print-templates/'.$tenantId.'/acceptance.docx';
+        \Illuminate\Support\Facades\Storage::disk('local')->put(
+            $templatePath,
+            file_get_contents(resource_path('templates/print/mau-bien-ban-nghiem-thu-tham-khao.docx')),
+        );
+        \App\Models\PrintTemplate::create([
+            'tenant_id' => $tenantId,
+            'code' => 'TPL-ACCEPTANCE-TEST',
+            'name' => 'Biên bản nghiệm thu',
+            'module' => 'delivery_acceptance',
+            'file_path' => $templatePath,
+            'file_name' => 'acceptance.docx',
+            'is_default' => true,
+            'status' => 'active',
+        ]);
+        $export = $this->withToken($adminToken)
+            ->get("/api/v1/delivery-records/{$deliveryId}/word")
+            ->assertOk()
+            ->assertDownload();
+        $this->assertStringStartsWith('PK', $export->streamedContent());
 
         $this->assertDatabaseHas('tasks', ['source_type' => 'SalesOrder', 'source_id' => $salesOrderId, 'task_type' => 'delivery_acceptance', 'status' => 'completed']);
 
