@@ -201,6 +201,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/positions', [PositionController::class, 'store']);
             Route::put('/positions/{position}', [PositionController::class, 'update']);
             Route::get('/print-templates', [PrintTemplateController::class, 'index']);
+            Route::get('/print-templates/reference/quotation', [PrintTemplateController::class, 'quotationReference']);
             Route::get('/print-templates/{printTemplate}/original', [PrintTemplateController::class, 'original']);
             Route::post('/print-templates', [PrintTemplateController::class, 'store']);
             Route::post('/print-templates/{printTemplate}', [PrintTemplateController::class, 'update']);

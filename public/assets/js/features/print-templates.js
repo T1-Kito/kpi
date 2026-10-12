@@ -286,7 +286,19 @@ function renderFieldChips(keys = null, module = 'quotation') {
     return Object.entries(groups).map(([group, entries]) => `<section class="template-field-group"><h4>${group}</h4>${entries.map(field => `<button class="template-field-entry" type="button" data-merge-field-entry="${VKTable.escapeHtml(`${field.label} ${field.key}`.toLocaleLowerCase('vi'))}" data-copy-merge-field="${VKTable.escapeHtml(field.key)}"><span>${VKTable.escapeHtml(field.label || field.key)}</span><code>{{${VKTable.escapeHtml(field.key)}}}</code></button>`).join('')}</section>`).join('');
 }
 
-function downloadMergeTemplate(module = 'quotation') {
+async function downloadMergeTemplate(module = 'quotation') {
+    if (module === 'quotation') {
+        try {
+            const response = await fetch('/api/v1/print-templates/reference/quotation', {
+                headers: { Authorization: `Bearer ${VKApi.token()}` },
+            });
+            if (!response.ok) throw new Error('Không tải được mẫu báo giá tham khảo.');
+            downloadBlobFile('mau-bao-gia-tham-khao.docx', await response.blob());
+        } catch (error) {
+            VKModal.toast(error.message || 'Không tải được mẫu báo giá tham khảo.', 'warning');
+        }
+        return;
+    }
     const label = templateState.modules[module] || moduleLabel(module);
     const html = `<!DOCTYPE html>
 <html xmlns:o="urn:schemas-microsoft-com:office:office"
@@ -320,6 +332,17 @@ function downloadMergeTemplate(module = 'quotation') {
 </body>
 </html>`;
     downloadTextFile(`mau-${module.replace('_', '-')}-tham-khao.doc`, `\ufeff${html}`, 'application/msword;charset=utf-8');
+}
+
+function downloadBlobFile(fileName, blob) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
 }
 
 function downloadTextFile(fileName, content, type) {

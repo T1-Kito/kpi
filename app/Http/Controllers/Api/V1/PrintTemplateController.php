@@ -167,6 +167,18 @@ class PrintTemplateController extends Controller
         return Storage::disk($disk)->download($path, basename($printTemplate->file_name ?: 'mau-word.docx'));
     }
 
+    public function quotationReference()
+    {
+        $path = resource_path('templates/print/mau-bao-gia-tham-khao.docx');
+        abort_unless(is_file($path), 404, 'Không tìm thấy mẫu báo giá tham khảo.');
+
+        return response()->download(
+            $path,
+            'mau-bao-gia-tham-khao.docx',
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+        );
+    }
+
     public function destroy(Request $request, PrintTemplate $printTemplate): JsonResponse
     {
         abort_if($printTemplate->tenant_id !== $request->user()->tenant_id, 404);

@@ -49,6 +49,20 @@ class PrintTemplateBoundaryTest extends TestCase
         $this->withToken($token)->getJson('/api/v1/print-templates/999999/original')->assertNotFound();
     }
 
+    public function test_admin_can_download_the_real_quotation_reference_docx(): void
+    {
+        $this->seed();
+        $token = $this->token('admin@vk-kpi.local');
+
+        $response = $this->withToken($token)->get('/api/v1/print-templates/reference/quotation');
+
+        $response->assertOk()->assertDownload('mau-bao-gia-tham-khao.docx');
+        $this->assertStringStartsWith('PK', $response->streamedContent());
+        $this->withToken($this->token('sales@vk-kpi.local'))
+            ->get('/api/v1/print-templates/reference/quotation')
+            ->assertForbidden();
+    }
+
     public function test_unknown_field_upload_does_not_create_template_or_change_default(): void
     {
         $this->seed();
