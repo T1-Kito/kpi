@@ -61,6 +61,14 @@ class ProcurementInventoryFlowTest extends TestCase
             ->assertDontSee('data-create-goods-receipt', false);
     }
 
+    public function test_goods_issue_page_exposes_confirmation_instead_of_manual_creation(): void
+    {
+        $this->get('/goods-issues')
+            ->assertOk()
+            ->assertSee('Phiếu xuất được tự tạo khi đơn bán giữ hàng thành công')
+            ->assertDontSee('data-create-goods-issue', false);
+    }
+
     public function test_quick_product_creation_checks_duplicate_and_permission(): void
     {
         $this->seed();

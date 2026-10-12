@@ -19,7 +19,6 @@ document.addEventListener('change', (event) => {
 });
 document.addEventListener('click', (event) => {
     if (!document.getElementById('goodsIssuesRoot')) return;
-    if (event.target.matches('[data-create-goods-issue]')) openGoodsIssueModal();
     if (event.target.matches('[data-goods-issue-word]')) {
         event.stopPropagation();
         downloadGoodsIssueWord(event.target.dataset.goodsIssueWord);
@@ -52,7 +51,7 @@ function renderGoodsIssues(total = giState.rows.length) {
     const rows = filterRows();
     document.getElementById('goodsIssuesRoot').innerHTML = VKTable.fullList({
         title: 'Danh sách phiếu xuất',
-        subtitle: 'Xuất kho theo đơn bán đã giữ hàng và hoàn tất giao dịch kho.',
+        subtitle: 'Phiếu tự sinh từ đơn bán đã giữ hàng. Kho kiểm tra chứng từ và hàng thực xuất trước khi xác nhận.',
         meta: `${VKTable.money(rows.length)} / ${VKTable.money(total)} phiếu`,
         filters: VKTable.filterBar({
             searchPlaceholder: 'Tìm mã phiếu, đơn bán hoặc kho...',
@@ -95,109 +94,9 @@ function restoreFilters() {
     if (status) status.value = giState.status;
 }
 
-async function openGoodsIssueModal() {
-    const [orders, warehouses] = await Promise.all([
-        VKApi.request('/sales-orders'),
-        VKApi.request('/warehouses'),
-    ]);
-    const activeIssueOrderIds = new Set(giState.rows
-        .filter(issue => ['draft', 'confirmed'].includes(issue.status))
-        .map(issue => String(issue.sales_order_id)));
-    const reservedOrders = orders.data
-        .filter(row => ['reserved', 'not_required'].includes(row.stock_status) && !activeIssueOrderIds.has(String(row.id)))
-        .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-    if (!reservedOrders.length) return VKModal.toast('Chưa có đơn bán cần lập phiếu xuất.');
-    if (!warehouses.data.length) return VKModal.toast('Chưa có kho xuất hàng.');
-
-    const newestOrderId = reservedOrders[0]?.id;
-    VKModal.open('Tạo phiếu xuất kho', `
-        <div class="form-grid goods-issue-create-grid">
-            ${VKModal.select('sales_order_id', 'Đơn bán cần lập phiếu xuất', reservedOrders.map(row => ({ value: row.id, label: goodsIssueOrderLabel(row, row.id === newestOrderId) })))}
-            ${VKModal.select('warehouse_id', 'Kho xuất', warehouses.data.map(row => ({ value: row.id, label: `${row.code} - ${row.name}` })))}
-        </div>
-        <div class="goods-issue-document" data-goods-issue-document></div>
-    `, async (form) => {
-        const data = Object.fromEntries(new FormData(form));
-        await VKApi.request('/goods-issues', {
-            method: 'POST',
-            body: JSON.stringify({
-                sales_order_id: Number(data.sales_order_id),
-                warehouse_id: Number(data.warehouse_id),
-                recipient_name: data.recipient_name,
-                recipient_phone: data.recipient_phone,
-                recipient_address: data.recipient_address,
-                delivery_location: data.delivery_location,
-                issue_reason: data.issue_reason,
-                source_document: data.source_document,
-            }),
-        });
-        VKModal.toast('Đã tạo phiếu xuất, kho có thể kiểm tra và xác nhận.');
-        VKModal.close();
-        loadGoodsIssues();
-    }, { className: 'goods-issue-create-modal', submitText: 'Lưu phiếu xuất kho' });
-
-    const orderSelect = document.querySelector('#modalBody [name="sales_order_id"]');
-    const documentRoot = document.querySelector('#modalBody [data-goods-issue-document]');
-    const showDocument = () => {
-        const order = reservedOrders.find(row => String(row.id) === String(orderSelect.value));
-        if (order && documentRoot) documentRoot.innerHTML = renderGoodsIssueDocument(order);
-    };
-    orderSelect?.addEventListener('change', showDocument);
-    showDocument();
-}
-
-function renderGoodsIssueDocument(order) {
-    const customer = order.customer || {};
-    const recipient = customer.contact_name || customer.name || '';
-    const address = customer.address || customer.billing_address || '';
-    const source = order.quotation?.code || order.code;
-    const isDirectDelivery = order.fulfillment_type === 'supplier_direct';
-    return `
-        <div class="goods-issue-document-heading">
-            <div><strong>Thông tin giao / xuất kho</strong><span>${isDirectDelivery ? 'Nhà cung cấp giao thẳng khách. Kho kiểm tra chứng từ, phiếu này không trừ tồn.' : 'Kho kiểm tra thông tin này trước khi xác nhận xuất hàng.'}</span></div>
-            <span class="goods-issue-order-code">Đơn: ${VKTable.escapeHtml(order.code || '')}</span>
-        </div>
-        <div class="form-grid goods-issue-document-grid">
-            ${VKModal.field('recipient_name', 'Họ và tên người nhận', 'text', recipient)}
-            ${VKModal.field('recipient_phone', 'Số điện thoại', 'text', customer.phone || '')}
-            ${VKModal.field('recipient_address', 'Địa chỉ', 'text', address)}
-            ${VKModal.field('delivery_location', 'Địa điểm giao hàng', 'text', address)}
-            ${VKModal.field('issue_reason', 'Lý do xuất', 'text', isDirectDelivery ? `NCC giao thẳng khách cho đơn ${order.code || ''} (không trừ tồn)` : `Xuất kho bán hàng cho ${customer.name || 'khách hàng'} (${order.code || ''})`)}
-            ${VKModal.field('source_document', 'Số chứng từ gốc kèm theo', 'text', source)}
-        </div>
-        <div class="goods-issue-items-wrap">
-            <div class="goods-issue-items-title">Hàng cần xuất</div>
-            <table class="goods-issue-items-table">
-                <thead><tr><th>Sản phẩm</th><th>ĐVT</th><th>SL đặt</th><th>Đã xuất</th><th>Còn lại</th><th>SL xuất lần này</th></tr></thead>
-                <tbody>${(order.items || []).map(item => `
-                    <tr>
-                        <td><strong>${VKTable.escapeHtml(item.sku?.name || '-')}</strong><small>${VKTable.escapeHtml(item.sku?.sku_code || '')}</small></td>
-                        <td>${VKTable.escapeHtml(item.sku?.unit || '-')}</td>
-                        <td>${VKTable.money(item.quantity || 0)}</td><td>0</td><td>${VKTable.money(item.quantity || 0)}</td>
-                        <td><span class="goods-issue-quantity">${VKTable.money(item.quantity || 0)}</span></td>
-                    </tr>`).join('') || '<tr><td colspan="6">Đơn bán chưa có hàng hóa.</td></tr>'}</tbody>
-            </table>
-        </div>`;
-}
-
 function renderItems(items = []) {
     if (!items.length) return '-';
     return items.slice(0, 2).map(item => `${VKTable.escapeHtml(item.sku?.sku_code || '-')}: ${VKTable.money(item.quantity)}`).join('<br>');
-}
-
-function goodsIssueOrderLabel(row, newest = false) {
-    const customer = row.customer?.name || 'Chưa có khách hàng';
-    const createdAt = formatDateTime(row.created_at);
-    const items = renderOrderItemsText(row.items || []);
-    const amount = VKTable.money(row.total_amount || 0);
-    const direct = row.fulfillment_type === 'supplier_direct' ? ' - [Giao thẳng, không trừ tồn]' : '';
-    return `${newest ? '[Mới nhất] ' : ''}${row.code} - ${customer}${direct} - Tạo ${createdAt} - ${amount}${items ? ` - ${items}` : ''}`;
-}
-
-function renderOrderItemsText(items = []) {
-    return items.slice(0, 2)
-        .map(item => `${item.sku?.sku_code || '-'}:${VKTable.money(item.quantity)}`)
-        .join(', ');
 }
 
 function formatDateTime(value) {

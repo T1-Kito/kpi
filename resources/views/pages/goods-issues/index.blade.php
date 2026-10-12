@@ -3,15 +3,12 @@
 @section('title', 'Xuất kho')
 @section('page', 'goods-issues')
 @section('page_title', 'Xuất kho')
-@section('page_subtitle', 'Tạo phiếu xuất từ đơn bán đã giữ hàng và ghi nhận giao dịch kho.')
-@section('page_actions')
-    <button class="btn primary" type="button" data-permission="inventory.issue.create" data-create-goods-issue>Tạo phiếu xuất</button>
-@endsection
+@section('page_subtitle', 'Phiếu xuất được tự tạo khi đơn bán giữ hàng thành công; kho chỉ cần kiểm tra và xác nhận xuất.')
 
 @section('content')
 <div id="goodsIssuesRoot"></div>
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/goods-issues.js?v=20261008-menu1"></script>
+<script src="/assets/js/features/goods-issues.js?v=20261012-auto-flow1"></script>
 @endpush
