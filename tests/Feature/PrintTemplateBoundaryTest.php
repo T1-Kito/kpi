@@ -49,15 +49,21 @@ class PrintTemplateBoundaryTest extends TestCase
         $this->withToken($token)->getJson('/api/v1/print-templates/999999/original')->assertNotFound();
     }
 
-    public function test_admin_can_download_the_real_quotation_reference_docx(): void
+    public function test_admin_can_download_all_real_reference_docx_files(): void
     {
         $this->seed();
         $token = $this->token('admin@vk-kpi.local');
 
-        $response = $this->withToken($token)->get('/api/v1/print-templates/reference/quotation');
-
-        $response->assertOk()->assertDownload('mau-bao-gia-tham-khao.docx');
-        $this->assertStringStartsWith('PK', $response->streamedContent());
+        foreach ([
+            'quotation' => 'mau-bao-gia-tham-khao.docx',
+            'sales_order' => 'mau-don-ban-hang-tham-khao.docx',
+            'goods_issue' => 'mau-phieu-xuat-kho-tham-khao.docx',
+            'contract' => 'mau-hop-dong-tham-khao.docx',
+        ] as $module => $fileName) {
+            $response = $this->withToken($token)->get('/api/v1/print-templates/reference/'.$module);
+            $response->assertOk()->assertDownload($fileName);
+            $this->assertStringStartsWith('PK', $response->streamedContent());
+        }
         $this->withToken($this->token('sales@vk-kpi.local'))
             ->get('/api/v1/print-templates/reference/quotation')
             ->assertForbidden();

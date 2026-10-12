@@ -287,20 +287,27 @@ function renderFieldChips(keys = null, module = 'quotation') {
 }
 
 async function downloadMergeTemplate(module = 'quotation') {
-    if (module === 'quotation') {
-        try {
-            const response = await fetch('/api/v1/print-templates/reference/quotation', {
-                headers: { Authorization: `Bearer ${VKApi.token()}` },
-            });
-            if (!response.ok) throw new Error('Không tải được mẫu báo giá tham khảo.');
-            downloadBlobFile('mau-bao-gia-tham-khao.docx', await response.blob());
-        } catch (error) {
-            VKModal.toast(error.message || 'Không tải được mẫu báo giá tham khảo.', 'warning');
-        }
-        return;
+    const names = {
+        quotation: 'mau-bao-gia-tham-khao.docx',
+        sales_order: 'mau-don-ban-hang-tham-khao.docx',
+        goods_issue: 'mau-phieu-xuat-kho-tham-khao.docx',
+        contract: 'mau-hop-dong-tham-khao.docx',
+    };
+    if (!names[module]) return;
+    try {
+        const response = await fetch(`/api/v1/print-templates/reference/${module}`, {
+            headers: { Authorization: `Bearer ${VKApi.token()}` },
+        });
+        if (!response.ok) throw new Error(`Không tải được mẫu ${moduleLabel(module).toLowerCase()} tham khảo.`);
+        downloadBlobFile(names[module], await response.blob());
+    } catch (error) {
+        VKModal.toast(error.message || 'Không tải được mẫu chứng từ tham khảo.', 'warning');
     }
+}
+
+function legacyWordTemplate(module = 'quotation') {
     const label = templateState.modules[module] || moduleLabel(module);
-    const html = `<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html xmlns:o="urn:schemas-microsoft-com:office:office"
       xmlns:w="urn:schemas-microsoft-com:office:word"
       xmlns="http://www.w3.org/TR/REC-html40">
@@ -331,7 +338,6 @@ async function downloadMergeTemplate(module = 'quotation') {
     </div>
 </body>
 </html>`;
-    downloadTextFile(`mau-${module.replace('_', '-')}-tham-khao.doc`, `\ufeff${html}`, 'application/msword;charset=utf-8');
 }
 
 function downloadBlobFile(fileName, blob) {

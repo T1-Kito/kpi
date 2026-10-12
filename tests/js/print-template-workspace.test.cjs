@@ -51,11 +51,12 @@ test('each document tab exposes a ready Word reference template',()=>{
   assert.match(source,/data-download-merge-template="\$\{templateState\.module\}"/);
   assert.match(source,/Tải mẫu \$\{VKTable\.escapeHtml\(moduleLabel\(templateState\.module\)\)\} tham khảo/);
   const downloadSource=source.slice(source.indexOf('function downloadMergeTemplate'),source.indexOf('function downloadTextFile'));
-  assert.match(downloadSource,/print-templates\/reference\/quotation/);
+  assert.match(downloadSource,/print-templates\/reference\/\$\{module\}/);
   assert.match(downloadSource,/mau-bao-gia-tham-khao\.docx/);
-  assert.match(downloadSource,/Save As thành \.docx/);
+  assert.match(downloadSource,/mau-don-ban-hang-tham-khao\.docx/);
+  assert.match(downloadSource,/mau-phieu-xuat-kho-tham-khao\.docx/);
+  assert.match(downloadSource,/mau-hop-dong-tham-khao\.docx/);
   assert.doesNotMatch(downloadSource,/Danh sách trường trộn|fieldRows|Mẫu trường trộn/);
-  assert.match(downloadSource,/wordTemplateContent\(module\)/);
   assert.match(source,/ĐƠN BÁN HÀNG/);
   assert.match(source,/PHIẾU XUẤT KHO/);
   assert.match(source,/HỢP ĐỒNG/);

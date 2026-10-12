@@ -167,14 +167,22 @@ class PrintTemplateController extends Controller
         return Storage::disk($disk)->download($path, basename($printTemplate->file_name ?: 'mau-word.docx'));
     }
 
-    public function quotationReference()
+    public function reference(string $module)
     {
-        $path = resource_path('templates/print/mau-bao-gia-tham-khao.docx');
-        abort_unless(is_file($path), 404, 'Không tìm thấy mẫu báo giá tham khảo.');
+        $files = [
+            'quotation' => 'mau-bao-gia-tham-khao.docx',
+            'sales_order' => 'mau-don-ban-hang-tham-khao.docx',
+            'goods_issue' => 'mau-phieu-xuat-kho-tham-khao.docx',
+            'contract' => 'mau-hop-dong-tham-khao.docx',
+        ];
+        abort_unless(isset($files[$module]), 404);
+        $fileName = $files[$module];
+        $path = resource_path('templates/print/'.$fileName);
+        abort_unless(is_file($path), 404, 'Không tìm thấy mẫu chứng từ tham khảo.');
 
         return response()->download(
             $path,
-            'mau-bao-gia-tham-khao.docx',
+            $fileName,
             ['Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
         );
     }
@@ -288,7 +296,18 @@ class PrintTemplateController extends Controller
             return [...$common, ['key' => 'ma_don_ban', 'label' => 'Mã đơn bán'], ['key' => 'kho_xuat', 'label' => 'Kho xuất'], ['key' => 'ly_do_xuat', 'label' => 'Lý do xuất'], ['key' => 'dia_diem_giao_hang', 'label' => 'Địa điểm giao'], ['key' => 'chung_tu_goc', 'label' => 'Chứng từ gốc'], ['key' => 'co_tru_ton', 'label' => 'Có trừ tồn kho']];
         }
         if ($module === 'sales_order') {
-            return [...$common, ['key' => 'ma_don_ban', 'label' => 'Mã đơn bán'], ['key' => 'ma_bao_gia', 'label' => 'Mã báo giá nguồn'], ['key' => 'hinh_thuc_giao_hang', 'label' => 'Hình thức giao hàng'], ['key' => 'ghi_chu_giao_hang', 'label' => 'Ghi chú giao hàng'], ['key' => 'tong_cong', 'label' => 'Tổng cộng'], ['key' => 'tong_tien_bang_chu', 'label' => 'Tổng tiền bằng chữ']];
+            return [...$common,
+                ['key' => 'ma_don_ban', 'label' => 'Mã đơn bán'],
+                ['key' => 'ma_bao_gia', 'label' => 'Mã báo giá nguồn'],
+                ['key' => 'hinh_thuc_giao_hang', 'label' => 'Hình thức giao hàng'],
+                ['key' => 'ghi_chu_giao_hang', 'label' => 'Ghi chú giao hàng'],
+                ['key' => 'don_gia', 'label' => 'Đơn giá'],
+                ['key' => 'vat_percent', 'label' => 'VAT (%)'],
+                ['key' => 'vat_dong', 'label' => 'Tiền VAT dòng'],
+                ['key' => 'thanh_tien', 'label' => 'Thành tiền dòng'],
+                ['key' => 'tong_cong', 'label' => 'Tổng cộng'],
+                ['key' => 'tong_tien_bang_chu', 'label' => 'Tổng tiền bằng chữ'],
+            ];
         }
         if ($module === 'contract') {
             return [...$common,
