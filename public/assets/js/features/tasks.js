@@ -30,6 +30,7 @@ const taskTypes = [
     { value: 'margin_approval', label: 'Duyệt biên lợi nhuận thấp', module: 'sales', priority: 'high' },
     { value: 'sales_order_confirmation', label: 'Xác nhận đơn bán', module: 'sales', priority: 'normal' },
     { value: 'delivery_confirmation', label: 'Xác nhận giao hàng', module: 'sales', priority: 'high' },
+    { value: 'delivery_acceptance', label: 'Nghiệm thu giao hàng', module: 'sales', priority: 'high' },
     { value: 'inventory_check', label: 'Kiểm tra tồn kho', module: 'inventory', priority: 'normal' },
     { value: 'warehouse_issue', label: 'Xử lý xuất kho', module: 'inventory', priority: 'high' },
     { value: 'goods_receipt', label: 'Xử lý nhập kho', module: 'inventory', priority: 'high' },

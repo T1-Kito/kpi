@@ -37,7 +37,7 @@ class SalesFulfillmentService
                 ->first();
 
             abort_if(! $issue, 422, 'Đơn bán chưa có phiếu xuất kho đã xác nhận.');
-            abort_if($order->delivery_status === 'delivered', 422, 'Đơn bán đã được xác nhận giao hàng.');
+            abort_if(in_array($order->delivery_status, ['delivered_pending_acceptance', 'delivered'], true), 422, 'Đơn bán đã được xác nhận giao hàng.');
 
             $delivery = Delivery::create([
                 'tenant_id' => $order->tenant_id,
@@ -51,12 +51,13 @@ class SalesFulfillmentService
                 'proof_note' => $data['proof_note'] ?? null,
                 'confirmed_by' => $actor->id,
                 'status' => 'delivered',
+                'acceptance_status' => 'pending',
             ]);
 
             $old = $order->only(['status', 'delivery_status', 'delivered_at']);
             $order->update([
-                'status' => 'delivered',
-                'delivery_status' => 'delivered',
+                'status' => 'awaiting_acceptance',
+                'delivery_status' => 'delivered_pending_acceptance',
                 'delivered_at' => $delivery->delivered_at,
             ]);
 
@@ -64,8 +65,74 @@ class SalesFulfillmentService
             $this->audit->record('sales_order', $order->id, 'mark_sales_order_delivered', $actor, $old, $order->fresh()->only(['status', 'delivery_status', 'delivered_at']));
             $this->events->publish($order->tenant_id, 'DeliveryConfirmed', 'Delivery', $delivery->id, ['sales_order_id' => $order->id]);
             $this->completeWork($actor, 'SalesOrder', $order->id, 'delivery_confirmation', 'delivery_confirmed');
+            $this->tasks->create($actor, [
+                'module' => 'sales',
+                'task_type' => 'delivery_acceptance',
+                'priority' => 'high',
+                'title' => 'Nghiệm thu và bàn giao đơn '.$order->code,
+                'description' => 'Xác nhận kết quả nghiệm thu với khách hàng; ghi nhận đầy đủ người nghiệm thu và sai lệch nếu có.',
+                'source_type' => 'SalesOrder',
+                'source_id' => $order->id,
+                'assignee_id' => $order->sales_owner_id,
+            ]);
 
             return $delivery->load('goodsIssue:id,code');
+        });
+    }
+
+    /** @param array<string, mixed> $data */
+    public function confirmAcceptance(Delivery $delivery, User $actor, array $data): Delivery
+    {
+        return DB::transaction(function () use ($delivery, $actor, $data) {
+            $delivery = Delivery::where('tenant_id', $actor->tenant_id)->whereKey($delivery->id)->lockForUpdate()->firstOrFail();
+            $order = SalesOrder::where('tenant_id', $actor->tenant_id)->whereKey($delivery->sales_order_id)->lockForUpdate()->firstOrFail();
+            abort_if($delivery->acceptance_status !== 'pending', 422, 'Phiếu giao hàng đã được ghi nhận kết quả nghiệm thu.');
+            abort_if($order->delivery_status !== 'delivered_pending_acceptance', 422, 'Đơn bán không ở trạng thái chờ nghiệm thu.');
+
+            $result = $data['acceptance_status'];
+            abort_if($result === 'rejected' && blank($data['discrepancy_note'] ?? null), 422, 'Vui lòng ghi rõ sai lệch hoặc lý do không nghiệm thu.');
+            $checklistPassed = ($data['quantity_accepted'] ?? true)
+                && ($data['condition_accepted'] ?? true)
+                && ($data['documents_accepted'] ?? true);
+            abort_if($result === 'accepted' && ! $checklistPassed, 422, 'Kết quả “Đạt toàn bộ” yêu cầu tất cả danh mục kiểm tra đều đạt.');
+            $old = $delivery->toArray();
+            $delivery->update([
+                'acceptance_status' => $result,
+                'accepted_at' => $data['accepted_at'] ?? now(),
+                'accepted_by_name' => $data['accepted_by_name'],
+                'accepted_by_title' => $data['accepted_by_title'] ?? null,
+                'quantity_accepted' => $data['quantity_accepted'] ?? true,
+                'condition_accepted' => $data['condition_accepted'] ?? true,
+                'documents_accepted' => $data['documents_accepted'] ?? true,
+                'acceptance_note' => $data['acceptance_note'] ?? null,
+                'discrepancy_note' => $data['discrepancy_note'] ?? null,
+                'acceptance_confirmed_by' => $actor->id,
+            ]);
+
+            $accepted = in_array($result, ['accepted', 'accepted_with_notes'], true);
+            $oldOrder = $order->only(['status', 'delivery_status']);
+            $order->update([
+                'status' => $accepted ? 'delivered' : 'awaiting_delivery',
+                'delivery_status' => $accepted ? 'delivered' : 'acceptance_rejected',
+            ]);
+
+            $this->audit->record('delivery', $delivery->id, 'confirm_delivery_acceptance', $actor, $old, $delivery->fresh()->toArray());
+            $this->audit->record('sales_order', $order->id, 'update_delivery_acceptance', $actor, $oldOrder, $order->fresh()->only(['status', 'delivery_status']));
+            $this->events->publish($order->tenant_id, 'DeliveryAcceptanceConfirmed', 'Delivery', $delivery->id, ['sales_order_id' => $order->id, 'result' => $result]);
+
+            if ($accepted) {
+                $this->completeWork($actor, 'SalesOrder', $order->id, 'delivery_acceptance', 'customer_accepted');
+            } else {
+                $this->completeWork($actor, 'SalesOrder', $order->id, 'delivery_acceptance', 'customer_rejected');
+                $this->tasks->create($actor, [
+                    'module' => 'sales', 'task_type' => 'delivery_confirmation', 'priority' => 'urgent',
+                    'title' => 'Xử lý sai lệch giao hàng '.$order->code,
+                    'description' => $data['discrepancy_note'], 'source_type' => 'SalesOrder', 'source_id' => $order->id,
+                    'assignee_id' => $order->sales_owner_id,
+                ]);
+            }
+
+            return $delivery->fresh()->load(['goodsIssue:id,code', 'acceptanceConfirmedBy:id,name,email']);
         });
     }
 

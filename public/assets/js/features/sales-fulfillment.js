@@ -46,6 +46,8 @@
 
         const confirm = event.target.closest('[data-worklist-confirm-delivery]');
         if (confirm) openDeliveryConfirmation(confirm.dataset.worklistConfirmDelivery);
+        const accept = event.target.closest('[data-worklist-confirm-acceptance]');
+        if (accept) openAcceptanceConfirmation(accept.dataset.worklistConfirmAcceptance);
         const invoiceFromDelivery = event.target.closest('[data-delivery-issue-invoice]');
         if (invoiceFromDelivery) openInvoiceFromDeliveryModal(invoiceFromDelivery.dataset.deliveryIssueInvoice);
         const receive = event.target.closest('[data-worklist-record-payment]');
@@ -105,11 +107,13 @@
                 && (!states.deliveries.status || row.delivery_status === states.deliveries.status);
         });
         const pending = states.deliveries.rows.filter(row => row.delivery_status === 'pending').length;
+        const awaitingAcceptance = states.deliveries.rows.filter(row => row.delivery_status === 'delivered_pending_acceptance').length;
         const delivered = states.deliveries.rows.filter(row => row.delivery_status === 'delivered').length;
 
         root.innerHTML = summary([
             ['Chờ giao hàng', pending, 'Cần xác nhận khách đã nhận', 'blue'],
-            ['Đã giao hàng', delivered, 'Đã có người nhận và thời gian', 'green'],
+            ['Chờ nghiệm thu', awaitingAcceptance, 'Đã giao, cần khách xác nhận', 'orange'],
+            ['Đã nghiệm thu', delivered, 'Đủ điều kiện xuất hóa đơn', 'green'],
         ]) + VKTable.fullList({
             title: 'Sổ giao hàng',
             subtitle: 'Theo dõi từ phiếu xuất kho đến lúc khách hàng xác nhận đã nhận hàng.',
@@ -118,7 +122,9 @@
                 searchPlaceholder: 'Tìm đơn bán, khách hàng hoặc người nhận...',
                 status: [
                     { value: 'pending', label: 'Chờ giao hàng' },
-                    { value: 'delivered', label: 'Đã giao hàng' },
+                    { value: 'delivered_pending_acceptance', label: 'Chờ nghiệm thu' },
+                    { value: 'acceptance_rejected', label: 'Nghiệm thu không đạt' },
+                    { value: 'delivered', label: 'Đã nghiệm thu' },
                 ],
             }),
             table: VKTable.renderTable([
@@ -233,6 +239,18 @@
                     ['Người xác nhận', delivery?.confirmed_by?.name || '-'],
                     ['Ghi chú giao nhận', delivery?.proof_note || '-'],
                 ])}
+                ${delivery ? detailGrid('Biên bản nghiệm thu', [
+                    ['Kết quả', status(delivery.acceptance_status), true],
+                    ['Người nghiệm thu', delivery.accepted_by_name || 'Chưa nghiệm thu'],
+                    ['Chức vụ', delivery.accepted_by_title || '-'],
+                    ['Số lượng', delivery.quantity_accepted ? 'Đạt' : 'Có sai lệch'],
+                    ['Tình trạng hàng', delivery.condition_accepted ? 'Đạt' : 'Có sai lệch'],
+                    ['Hồ sơ kèm theo', delivery.documents_accepted ? 'Đủ' : 'Còn thiếu'],
+                    ['Thời gian nghiệm thu', formatDateTime(delivery.accepted_at)],
+                    ['Ghi chú nghiệm thu', delivery.acceptance_note || '-'],
+                    ['Sai lệch / lý do không đạt', delivery.discrepancy_note || '-'],
+                    ['Người ghi nhận trên hệ thống', delivery.acceptance_confirmed_by?.name || '-'],
+                ]) : ''}
                 ${(row.invoices || []).length ? relatedInvoices(row.invoices) : ''}
                 ${itemsTable(row.items || [])}
             `, deliveryActions(row, hasInvoice));
@@ -331,6 +349,45 @@
         }, { submitText: 'Phát hành hóa đơn' });
     }
 
+    async function openAcceptanceConfirmation(deliveryId) {
+        const order = states.deliveries.rows.find(row => String(row.deliveries?.[0]?.id) === String(deliveryId)) || {};
+        const delivery = order.deliveries?.[0] || {};
+        VKModal.open('Xác nhận nghiệm thu và bàn giao', `
+            <div class="form-grid">
+                ${VKModal.select('acceptance_status', 'Kết quả nghiệm thu', [
+                    { value: 'accepted', label: 'Đạt - nghiệm thu toàn bộ' },
+                    { value: 'accepted_with_notes', label: 'Đạt - có lưu ý' },
+                    { value: 'rejected', label: 'Không đạt - cần xử lý lại' },
+                ])}
+                ${VKModal.field('accepted_at', 'Thời gian nghiệm thu', 'datetime-local', localDateTimeValue())}
+                ${VKModal.field('accepted_by_name', 'Người đại diện khách hàng', 'text', delivery.recipient_name || order.customer?.contact_name || '')}
+                ${VKModal.field('accepted_by_title', 'Chức vụ người đại diện', 'text')}
+                <div class="field full acceptance-checklist">
+                    <label>Danh mục kiểm tra</label>
+                    <label><input type="checkbox" name="quantity_accepted" value="1" checked> Đủ số lượng theo chứng từ</label>
+                    <label><input type="checkbox" name="condition_accepted" value="1" checked> Hàng hóa / dịch vụ đạt yêu cầu</label>
+                    <label><input type="checkbox" name="documents_accepted" value="1" checked> Đủ hồ sơ, tài liệu bàn giao</label>
+                </div>
+                <div class="field full"><label for="acceptance_note">Nội dung nghiệm thu / bàn giao</label><textarea id="acceptance_note" name="acceptance_note" rows="3" placeholder="Hàng hóa, số lượng, tình trạng, tài liệu đi kèm..."></textarea></div>
+                <div class="field full"><label for="discrepancy_note">Sai lệch hoặc yêu cầu xử lý</label><textarea id="discrepancy_note" name="discrepancy_note" rows="3" placeholder="Bắt buộc khi nghiệm thu không đạt"></textarea></div>
+                <p class="form-hint full">Chỉ kết quả đạt mới mở bước phát hành hóa đơn. Hồ sơ không đạt sẽ tự tạo công việc xử lý sai lệch.</p>
+            </div>
+        `, async (form) => {
+            const data = Object.fromEntries(new FormData(form));
+            data.quantity_accepted = form.elements.quantity_accepted.checked;
+            data.condition_accepted = form.elements.condition_accepted.checked;
+            data.documents_accepted = form.elements.documents_accepted.checked;
+            if (data.acceptance_status === 'rejected' && !String(data.discrepancy_note || '').trim()) {
+                throw new Error('Vui lòng nhập sai lệch hoặc lý do nghiệm thu không đạt.');
+            }
+            await VKApi.request(`/deliveries/${deliveryId}/acceptance`, { method: 'POST', body: JSON.stringify(data) });
+            VKModal.close();
+            VKModal.toast(data.acceptance_status === 'rejected' ? 'Đã ghi nhận nghiệm thu không đạt và tạo việc xử lý.' : 'Đã hoàn tất nghiệm thu bàn giao.', 'success');
+            states.deliveries.view = 'list';
+            await loadDeliveries();
+        }, { submitText: 'Lưu kết quả nghiệm thu' });
+    }
+
     async function openPaymentModal(invoiceId) {
         const invoice = states.invoices.rows.find(item => String(item.id) === String(invoiceId))
             || (await VKApi.request(`/sales-invoices/${invoiceId}`)).data;
@@ -362,8 +419,12 @@
     }
 
     function deliveryActions(row, hasInvoice) {
-        if (row.delivery_status === 'pending' && can('sales.delivery.confirm')) {
-            return `<button class="btn primary small" type="button" data-worklist-confirm-delivery="${row.id}">Xác nhận đã giao hàng</button>`;
+        if (['pending', 'acceptance_rejected'].includes(row.delivery_status) && can('sales.delivery.confirm')) {
+            return `<button class="btn primary small" type="button" data-worklist-confirm-delivery="${row.id}">${row.delivery_status === 'acceptance_rejected' ? 'Giao lại sau xử lý' : 'Xác nhận đã giao hàng'}</button>`;
+        }
+        if (row.delivery_status === 'delivered_pending_acceptance' && can('sales.delivery.accept')) {
+            const delivery = row.deliveries?.[0];
+            return delivery ? `<button class="btn primary small" type="button" data-worklist-confirm-acceptance="${delivery.id}">Nghiệm thu bàn giao</button>` : '';
         }
         if (row.delivery_status === 'delivered' && !hasInvoice && can('finance.invoice.manage')) {
             return `<button class="btn primary small" type="button" data-delivery-issue-invoice="${row.id}">Phát hành hóa đơn</button>`;

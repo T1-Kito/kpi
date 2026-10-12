@@ -305,6 +305,10 @@ Route::prefix('v1')->group(function () {
             Route::post('/sales-orders/{salesOrder}/deliveries', [SalesFulfillmentController::class, 'confirmDelivery']);
         });
 
+        Route::middleware('permission:sales.delivery.accept')->group(function () {
+            Route::post('/deliveries/{delivery}/acceptance', [SalesFulfillmentController::class, 'confirmAcceptance']);
+        });
+
         Route::middleware('permission:finance.invoice.view')->group(function () {
             Route::get('/sales-invoices', [SalesFulfillmentController::class, 'invoices']);
             Route::get('/sales-invoices/{salesInvoice}', [SalesFulfillmentController::class, 'invoice']);

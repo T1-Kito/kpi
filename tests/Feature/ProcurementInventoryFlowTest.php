@@ -361,6 +361,28 @@ class ProcurementInventoryFlowTest extends TestCase
             ->assertJsonPath('data.status', 'delivered')
             ->json('data.id');
 
+        $this->assertDatabaseHas('sales_orders', [
+            'id' => $salesOrderId,
+            'status' => 'awaiting_acceptance',
+            'delivery_status' => 'delivered_pending_acceptance',
+        ]);
+        $this->assertDatabaseHas('tasks', ['source_type' => 'SalesOrder', 'source_id' => $salesOrderId, 'task_type' => 'delivery_acceptance', 'status' => 'new']);
+        $this->withToken($adminToken)
+            ->postJson("/api/v1/sales-orders/{$salesOrderId}/invoices", ['invoice_date' => now()->toDateString()])
+            ->assertUnprocessable();
+
+        $this->withToken($adminToken)
+            ->postJson("/api/v1/deliveries/{$deliveryId}/acceptance", [
+                'acceptance_status' => 'accepted_with_notes',
+                'accepted_by_name' => 'Anh Minh',
+                'accepted_by_title' => 'Trưởng phòng mua hàng',
+                'acceptance_note' => 'Đã nhận đủ hàng, hồ sơ bàn giao hợp lệ.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.acceptance_status', 'accepted_with_notes');
+
+        $this->assertDatabaseHas('tasks', ['source_type' => 'SalesOrder', 'source_id' => $salesOrderId, 'task_type' => 'delivery_acceptance', 'status' => 'completed']);
+
         $invoiceId = $this->withToken($adminToken)
             ->postJson("/api/v1/sales-orders/{$salesOrderId}/invoices", [
                 'invoice_date' => now()->toDateString(),

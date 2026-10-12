@@ -204,6 +204,43 @@
     grid-column: 1 / -1;
 }
 
+.acceptance-checklist {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid #dbe5f3;
+    border-radius: 10px;
+    background: #f8fbff;
+}
+
+.acceptance-checklist > label:first-child {
+    grid-column: 1 / -1;
+    color: #334155;
+    font-weight: 700;
+}
+
+.acceptance-checklist > label:not(:first-child) {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    color: #475569;
+    font-weight: 500;
+}
+
+.acceptance-checklist input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    min-height: auto;
+    margin: 0;
+    accent-color: #2563eb;
+}
+
+@media (max-width: 720px) {
+    .acceptance-checklist { grid-template-columns: 1fr; }
+}
+
 .quotation-lines {
     display: grid;
     gap: 8px;

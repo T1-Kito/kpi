@@ -789,6 +789,7 @@ function translateTaskType(value) {
         margin_approval: 'Duyệt biên lợi nhuận thấp',
         sales_order_confirmation: 'Xác nhận đơn bán',
         delivery_confirmation: 'Xác nhận giao hàng',
+        delivery_acceptance: 'Nghiệm thu giao hàng',
         inventory_check: 'Kiểm tra tồn kho',
         warehouse_issue: 'Xử lý xuất kho',
         goods_receipt: 'Xử lý nhập kho',

@@ -23,7 +23,7 @@ class TaskService
     {
         return DB::transaction(function () use ($actor, $data, $generated) {
             if ($generated && !empty($data['source_type']) && !empty($data['source_id'])
-                && in_array($data['task_type'] ?? '', ['lead_follow_up', 'warehouse_issue', 'goods_receipt', 'purchase_request'], true)) {
+                && in_array($data['task_type'] ?? '', ['lead_follow_up', 'warehouse_issue', 'goods_receipt', 'purchase_request', 'delivery_acceptance'], true)) {
                 // Serialize generated work per tenant, including the duplicate check.
                 \App\Models\Tenant::whereKey($actor->tenant_id)->lockForUpdate()->firstOrFail();
                 $existing = Task::where('tenant_id', $actor->tenant_id)

@@ -19,11 +19,24 @@ class Delivery extends Model
         'proof_note',
         'confirmed_by',
         'status',
+        'acceptance_status',
+        'accepted_at',
+        'accepted_by_name',
+        'accepted_by_title',
+        'quantity_accepted',
+        'condition_accepted',
+        'documents_accepted',
+        'acceptance_note',
+        'discrepancy_note',
+        'acceptance_confirmed_by',
     ];
 
     protected function casts(): array
     {
-        return ['delivered_at' => 'datetime'];
+        return [
+            'delivered_at' => 'datetime', 'accepted_at' => 'datetime',
+            'quantity_accepted' => 'boolean', 'condition_accepted' => 'boolean', 'documents_accepted' => 'boolean',
+        ];
     }
 
     public function salesOrder(): BelongsTo
@@ -39,5 +52,10 @@ class Delivery extends Model
     public function confirmedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'confirmed_by');
+    }
+
+    public function acceptanceConfirmedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'acceptance_confirmed_by');
     }
 }

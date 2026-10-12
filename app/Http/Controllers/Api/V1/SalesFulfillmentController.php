@@ -24,7 +24,7 @@ class SalesFulfillmentController extends Controller
     {
         $query = SalesOrder::query()
             ->where('tenant_id', $request->user()->tenant_id)
-            ->whereIn('delivery_status', ['pending', 'delivered'])
+            ->whereIn('delivery_status', ['pending', 'delivered_pending_acceptance', 'acceptance_rejected', 'delivered'])
             ->with([
                 'customer:id,code,name,contact_name,phone,address,billing_address',
                 'deliveries' => fn ($delivery) => $delivery->latest('delivered_at'),
@@ -48,13 +48,14 @@ class SalesFulfillmentController extends Controller
     public function delivery(Request $request, SalesOrder $salesOrder): JsonResponse
     {
         abort_if($salesOrder->tenant_id !== $request->user()->tenant_id, 404);
-        abort_if(! in_array($salesOrder->delivery_status, ['pending', 'delivered'], true), 404);
+        abort_if(! in_array($salesOrder->delivery_status, ['pending', 'delivered_pending_acceptance', 'acceptance_rejected', 'delivered'], true), 404);
 
         return response()->json(['data' => $salesOrder->load([
             'customer:id,code,name,contact_name,phone,email,address,billing_address',
             'items.sku:id,sku_code,name,unit',
             'deliveries.goodsIssue.warehouse:id,code,name',
             'deliveries.confirmedBy:id,name,email',
+            'deliveries.acceptanceConfirmedBy:id,name,email',
             'invoices.payments',
         ])]);
     }
@@ -250,6 +251,24 @@ class SalesFulfillmentController extends Controller
         ]);
 
         return response()->json(['data' => $this->fulfillment->confirmDelivery($salesOrder, $request->user(), $data)], 201);
+    }
+
+    public function confirmAcceptance(Request $request, Delivery $delivery): JsonResponse
+    {
+        abort_if($delivery->tenant_id !== $request->user()->tenant_id, 404);
+        $data = $request->validate([
+            'acceptance_status' => ['required', Rule::in(['accepted', 'accepted_with_notes', 'rejected'])],
+            'accepted_at' => ['nullable', 'date'],
+            'accepted_by_name' => ['required', 'string', 'max:150'],
+            'accepted_by_title' => ['nullable', 'string', 'max:150'],
+            'quantity_accepted' => ['nullable', 'boolean'],
+            'condition_accepted' => ['nullable', 'boolean'],
+            'documents_accepted' => ['nullable', 'boolean'],
+            'acceptance_note' => ['nullable', 'string', 'max:2000'],
+            'discrepancy_note' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        return response()->json(['data' => $this->fulfillment->confirmAcceptance($delivery, $request->user(), $data)]);
     }
 
     public function issueInvoice(Request $request, SalesOrder $salesOrder): JsonResponse

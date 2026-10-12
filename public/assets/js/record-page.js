@@ -991,7 +991,8 @@
                 <h3>Tiến độ giao hàng và thanh toán</h3>
                 <div class="sales-fulfillment-steps">
                     ${fulfillmentStep('Xuất kho', row.delivery_status !== 'not_ready', row.delivery_status === 'not_ready' ? 'Chưa xuất kho' : 'Đã rời kho')}
-                    ${fulfillmentStep('Giao hàng', row.delivery_status === 'delivered', delivery ? `${delivery.recipient_name} · ${formatDateTime(delivery.delivered_at)}` : 'Chờ khách xác nhận nhận hàng')}
+                    ${fulfillmentStep('Giao hàng', ['delivered_pending_acceptance', 'acceptance_rejected', 'delivered'].includes(row.delivery_status), delivery ? `${delivery.recipient_name} · ${formatDateTime(delivery.delivered_at)}` : 'Chờ xác nhận giao hàng')}
+                    ${fulfillmentStep('Nghiệm thu', row.delivery_status === 'delivered', row.delivery_status === 'acceptance_rejected' ? 'Không đạt, đang xử lý sai lệch' : (delivery?.accepted_at ? `${delivery.accepted_by_name || 'Khách hàng'} · ${formatDateTime(delivery.accepted_at)}` : 'Chờ khách hàng nghiệm thu'))}
                     ${fulfillmentStep('Hóa đơn', Boolean(invoice), invoice ? `${invoice.code} · ${VKTable.translateStatus(invoice.status)}` : 'Chưa phát hành hóa đơn', 'invoice')}
                     ${fulfillmentStep('Thanh toán', row.payment_status === 'paid', invoice ? `Đã thu ${VKTable.money(paidAmount)} · Còn ${VKTable.money(balanceAmount)}` : 'Chưa phát sinh công nợ', 'payment')}
                 </div>

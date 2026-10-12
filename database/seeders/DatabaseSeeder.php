@@ -133,6 +133,7 @@ class DatabaseSeeder extends Seeder
             'sales.order.delete' => 'Xóa đơn hàng nháp',
             'sales.delivery.view' => 'Xem sổ giao hàng',
             'sales.delivery.confirm' => 'Xác nhận giao hàng',
+            'sales.delivery.accept' => 'Xác nhận nghiệm thu giao hàng',
             'finance.invoice.view' => 'Xem hóa đơn bán hàng',
             'finance.invoice.manage' => 'Phát hành hóa đơn bán hàng',
             'finance.payment.view' => 'Xem phiếu thu khách hàng',
@@ -165,9 +166,9 @@ class DatabaseSeeder extends Seeder
 
         $roleDefinitions = [
             'ROLE-ADMIN' => ['name' => 'Quản trị hệ thống', 'scope' => 'company', 'permissions' => $permissions->keys()->all()],
-            'ROLE-DIR' => ['name' => 'Ban giám đốc', 'scope' => 'company', 'permissions' => ['dashboard.executive.view', 'dashboard.manager.view', 'master.view', 'task.view', 'task.approve', 'alert.view', 'audit.view', 'kpi.lock', 'sales.lead.view', 'sales.deal.view', 'sales.margin.approve', 'procurement.pr.view', 'procurement.pr.approve', 'procurement.sq.view', 'procurement.po.view', 'procurement.po.approve', 'sales.order.view', 'sales.delivery.view', 'finance.invoice.view', 'finance.payment.view', 'service.ticket.view', 'service.ticket.manage']],
+            'ROLE-DIR' => ['name' => 'Ban giám đốc', 'scope' => 'company', 'permissions' => ['dashboard.executive.view', 'dashboard.manager.view', 'master.view', 'task.view', 'task.approve', 'alert.view', 'audit.view', 'kpi.lock', 'sales.lead.view', 'sales.deal.view', 'sales.margin.approve', 'procurement.pr.view', 'procurement.pr.approve', 'procurement.sq.view', 'procurement.po.view', 'procurement.po.approve', 'sales.order.view', 'sales.delivery.view', 'sales.delivery.accept', 'finance.invoice.view', 'finance.payment.view', 'service.ticket.view', 'service.ticket.manage']],
             'ROLE-MGR' => ['name' => 'Trưởng phòng', 'scope' => 'department', 'permissions' => ['dashboard.manager.view', 'master.view', 'task.view', 'task.create', 'task.approve', 'alert.view', 'sales.margin.approve', 'procurement.pr.view', 'procurement.pr.approve', 'sales.order.view']],
-            'ROLE-SALES' => ['name' => 'Kinh doanh', 'scope' => 'own', 'permissions' => ['master.view', 'task.view', 'task.create', 'alert.view', 'sales.lead.view', 'sales.lead.manage', 'sales.deal.view', 'sales.deal.manage', 'sales.contract.manage', 'sales.quotation.view', 'sales.quotation.create', 'sales.quotation.edit', 'sales.order.view', 'sales.order.create', 'sales.order.edit', 'sales.delivery.view', 'sales.delivery.confirm', 'finance.invoice.view', 'finance.payment.view', 'service.ticket.view', 'service.ticket.manage']],
+            'ROLE-SALES' => ['name' => 'Kinh doanh', 'scope' => 'own', 'permissions' => ['master.view', 'task.view', 'task.create', 'alert.view', 'sales.lead.view', 'sales.lead.manage', 'sales.deal.view', 'sales.deal.manage', 'sales.contract.manage', 'sales.quotation.view', 'sales.quotation.create', 'sales.quotation.edit', 'sales.order.view', 'sales.order.create', 'sales.order.edit', 'sales.delivery.view', 'sales.delivery.confirm', 'sales.delivery.accept', 'finance.invoice.view', 'finance.payment.view', 'service.ticket.view', 'service.ticket.manage']],
             'ROLE-WH' => ['name' => 'Kho', 'scope' => 'warehouse', 'permissions' => ['master.view', 'task.view', 'task.create', 'alert.view', 'inventory.receipt.view', 'inventory.receipt.create', 'inventory.receipt.confirm', 'inventory.issue.view', 'inventory.issue.create', 'inventory.issue.confirm', 'inventory.stocktake.view', 'inventory.stocktake.create', 'inventory.stocktake.confirm']],
             'ROLE-PUR' => ['name' => 'Mua hàng', 'scope' => 'department', 'permissions' => ['master.view', 'task.view', 'task.create', 'alert.view', 'procurement.pr.view', 'procurement.pr.create', 'procurement.pr.approve', 'procurement.sq.view', 'procurement.sq.manage', 'procurement.po.view', 'procurement.po.create', 'procurement.po.approve']],
             'ROLE-MKT' => ['name' => 'Marketing', 'scope' => 'department', 'permissions' => ['master.view', 'task.view', 'task.create', 'alert.view', 'marketing.campaign.manage']],
@@ -369,6 +370,7 @@ class DatabaseSeeder extends Seeder
             ['sales', 'margin_approval', 'high', 120, 20],
             ['sales', 'sales_order_confirmation', 'normal', 180, 30],
             ['sales', 'delivery_confirmation', 'high', 180, 30],
+            ['sales', 'delivery_acceptance', 'high', 1440, 120],
             ['inventory', 'inventory_check', 'normal', 240, 30],
             ['inventory', 'warehouse_issue', 'high', 180, 30],
             ['inventory', 'goods_receipt', 'high', 180, 30],

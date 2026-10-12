@@ -40,6 +40,7 @@ class AdminOnlySeeder extends Seeder
             'sales.order.delete' => 'Xóa đơn hàng nháp',
             'sales.delivery.view' => 'Xem sổ giao hàng',
             'sales.delivery.confirm' => 'Xác nhận giao hàng',
+            'sales.delivery.accept' => 'Xác nhận nghiệm thu giao hàng',
             'finance.invoice.view' => 'Xem hóa đơn bán hàng',
             'finance.invoice.manage' => 'Phát hành hóa đơn bán hàng',
             'finance.payment.view' => 'Xem phiếu thu khách hàng',
