@@ -882,7 +882,15 @@ function openQuotationWorkflow(action) {
     VKModal.open(title, body, async data => {
         const payload = Object.fromEntries(new FormData(data));
         const response = await VKApi.request(`/quotations/${row.id}/workflow/${action}`, {method:'POST',body:JSON.stringify(payload)});
-        VKModal.close(); quotationState.detailCache = {}; await loadQuotations(); await openQuotationDetail(response.data.id);
+        VKModal.close();
+        quotationState.detailCache = {};
+        if (response.sales_order) {
+            VKModal.toast(`Khách đã đồng ý. Hệ thống đã tự tạo đơn hàng ${response.sales_order.code}.`, 'success');
+            await VKLayout.navigatePjax(`/sales-orders?open=${response.sales_order.id}`);
+            return;
+        }
+        await loadQuotations();
+        await openQuotationDetail(response.data.id);
         VKModal.toast('Đã cập nhật luồng báo giá.');
     }, {submitText:submit,className:'modal-wide'});
 }

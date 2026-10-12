@@ -75,6 +75,34 @@ class SalesQuotationWorkflowTest extends TestCase
         $this->denied(fn () => app(SalesOrderService::class)->createFromQuotation($quote, $sales), 422);
     }
 
+    public function test_customer_acceptance_automatically_creates_sales_order_for_authorized_owner(): void
+    {
+        [$sales, $admin] = $this->actors();
+        $workflow = app(QuotationWorkflow::class);
+        $quote = $workflow->submit($this->draft($sales), $sales);
+        $quote = $workflow->decide($quote, $admin, 'approved', null);
+
+        Storage::fake('local');
+        PrintTemplate::create(['tenant_id' => $sales->tenant_id, 'code' => 'TEST-AUTO-ORDER', 'name' => 'Auto order template', 'module' => 'quotation', 'status' => 'active', 'file_path' => 'auto.docx', 'is_default' => true]);
+        $temp = tempnam(sys_get_temp_dir(), 'quote-auto-');
+        file_put_contents($temp, 'auto-order-document');
+        $this->mock(QuotationDocxMergeService::class)->shouldReceive('merge')->once()->andReturn($temp);
+        $quote = $workflow->issue($quote, $sales, ['recipient' => 'Customer', 'channel' => 'email', 'delivery_evidence' => 'Email AUTO-1']);
+
+        $token = $this->postJson('/api/v1/auth/login', [
+            'email' => 'sales@vk-kpi.local',
+            'password' => 'Admin@123',
+        ])->assertOk()->json('data.access_token');
+        $response = $this->withToken($token)->postJson("/api/v1/quotations/{$quote->id}/workflow/customer-response", [
+            'decision' => 'accepted',
+            'evidence' => 'Customer accepted AUTO-2',
+        ])->assertOk()->assertJsonPath('data.status', 'accepted');
+
+        $orderId = $response->json('sales_order.id');
+        $this->assertNotNull($orderId);
+        $this->assertDatabaseHas('sales_orders', ['id' => $orderId, 'quotation_id' => $quote->id, 'status' => 'draft']);
+    }
+
     public function test_creator_can_approve_only_when_assigned_with_permission_and_at_their_turn(): void
     {
         [$sales, $admin] = $this->actors();

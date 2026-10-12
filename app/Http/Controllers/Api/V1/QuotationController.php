@@ -291,7 +291,12 @@ class QuotationController extends Controller
             ])),
             default => abort(404),
         };
-        return response()->json(['data' => $result]);
+        $salesOrder = null;
+        if ($action === 'customer-response' && $result->status === 'accepted' && $actor->hasPermission('sales.order.create')) {
+            $salesOrder = app(\App\Support\SalesOrderService::class)->createFromQuotation($result->loadMissing('items'), $actor);
+        }
+
+        return response()->json(['data' => $result, 'sales_order' => $salesOrder]);
     }
 
     public function issuedFile(Request $request, Quotation $quotation): BinaryFileResponse
