@@ -2207,6 +2207,13 @@
 .customer-detail-page .quick-customer-section h4 .customer-detail-actions{margin-left:auto;border:0;padding:0;gap:8px;display:flex;align-items:center;flex-wrap:wrap}
 .customer-detail-page .quick-customer-section h4 .customer-detail-actions .btn{font-size:12px;font-weight:500;min-height:32px}
 .modal.customer-transactions-modal{width:min(1060px,calc(100vw - 48px));max-height:calc(100dvh - 48px);display:flex;flex-direction:column;border-radius:12px;overflow:hidden}
+.modal.supplier-form-modal{width:min(1080px,calc(100vw - 40px));max-width:1080px;max-height:calc(100dvh - 32px);display:flex;flex-direction:column;overflow:hidden;border-radius:12px;box-shadow:0 24px 72px rgba(15,23,42,.22)}
+.supplier-form-modal #modalForm{display:flex;flex:1;min-height:0;flex-direction:column}
+.supplier-form-modal .modal-head,.supplier-form-modal .modal-foot{flex:none;padding:18px 24px;background:#fff}
+.supplier-form-modal .modal-body{flex:1;min-height:0;overflow-y:auto;padding:22px 24px}
+.supplier-form-modal .modal-body .form-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 24px}
+.supplier-form-modal .modal-foot{border-top:1px solid #e5eaf1;background:#f8faff}
+@media(max-width:700px){.modal.supplier-form-modal{width:calc(100vw - 16px);max-height:calc(100dvh - 16px)}.supplier-form-modal .modal-head,.supplier-form-modal .modal-body,.supplier-form-modal .modal-foot{padding:16px}.supplier-form-modal .modal-body .form-grid{grid-template-columns:1fr}}
 .customer-transactions-modal #modalForm{display:flex;flex-direction:column;min-height:0}
 .customer-transactions-modal #modalBody{overflow:auto;padding:20px}
 .customer-transactions-modal #modalSubmit[hidden]{display:none}

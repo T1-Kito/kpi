@@ -126,6 +126,9 @@ function openSupplierModal(id = null) {
         VKModal.toast(id ? 'Đã cập nhật nhà cung cấp.' : 'Đã tạo nhà cung cấp.');
         VKModal.close();
         loadSuppliers();
+    }, {
+        className: 'supplier-form-modal',
+        submitText: id ? 'Cập nhật nhà cung cấp' : 'Tạo nhà cung cấp',
     });
 }
 
