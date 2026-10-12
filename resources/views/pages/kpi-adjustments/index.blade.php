@@ -6,7 +6,6 @@
 @section('page_subtitle', 'Cộng/trừ điểm có duyệt và truy vết; dữ liệu hiển thị theo phạm vi quyền của bạn.')
 
 @section('content')
-@include('partials.kpi-navigation')
 <div id="kpiAdjustmentsRoot">
     <section class="module-panel"><p class="form-note">Đang xác thực và tải sổ điểm…</p></section>
 </div>

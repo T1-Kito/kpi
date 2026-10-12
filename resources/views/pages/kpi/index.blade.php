@@ -6,7 +6,6 @@
 @section('page_subtitle', 'Tổng hợp hiệu suất bán hàng, mua hàng, kho, công việc và cảnh báo từ dữ liệu thực tế.')
 
 @section('content')
-@include('partials.kpi-navigation')
 <div id="kpiRoot"></div>
 @endsection
 

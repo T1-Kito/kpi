@@ -4,7 +4,6 @@
 @section('page_title', 'Điều hành KPI và công việc')
 @section('page_subtitle', 'Theo dõi người được giao, mức đạt KPI và tiến độ công việc theo kỳ.')
 @section('content')
-@include('partials.kpi-navigation')
 <section class="module-panel">
     <div class="panel-head"><div><h2>KPI theo nhân viên</h2><span id="kpiReportSync" role="status">Số liệu tự cập nhật khi màn hình đang mở.</span></div><button type="button" class="btn primary" data-kpi-report-export disabled>Xuất Excel</button></div>
     <form id="kpiReportFilters" class="kpi-report-filters">
