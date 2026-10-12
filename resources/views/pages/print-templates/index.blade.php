@@ -13,5 +13,5 @@
 @endsection
 
 @push('scripts')
-    <script src="/assets/js/features/print-templates.js?v=20261010-workspace2"></script>
+    <script src="/assets/js/features/print-templates.js?v=20261012-clean-modal1"></script>
 @endpush

@@ -116,7 +116,7 @@ function openPrintTemplateModal(id = null) {
             <section class="template-preview-panel">
                 <div class="template-preview-toolbar"><strong>Bản xem trước Word</strong><span class="badge muted" data-preview-caption>Mẫu gốc · chưa trộn dữ liệu</span></div>
                 ${id && row?.file_path ? `<div class="template-preview-toolbar"><select data-template-record aria-label="Chọn hồ sơ trộn thử"><option value="">Đang tải hồ sơ được phép xem…</option></select><button class="btn secondary" type="button" data-preview-merged>Trộn thử</button><button class="btn secondary" type="button" data-preview-original>Mẫu gốc</button></div><p class="form-note" data-template-merge-note>Trộn thử dùng mẫu đã lưu. Hồ sơ đã phát hành trả về bản lưu, không tạo lại.</p>` : '<p class="form-note">Lưu mẫu trước để chọn hồ sơ và trộn thử dữ liệu thật.</p>'}
-                <div class="template-word-preview" data-template-word-preview><div class="template-preview-empty"><strong>Giữ nguyên bố cục Word của bạn</strong><p>Chọn file .docx để xem trước ngay tại đây.</p><small>Chèn trường từ danh sách bên phải vào file Word, sau đó tải lên.</small></div></div>
+                <div class="template-word-preview" data-template-word-preview><div class="template-preview-empty"><strong>Giữ nguyên bố cục Word của bạn</strong><p>Chọn file .docx đã soạn sẵn để xem trước ngay tại đây.</p><small>Hệ thống giữ bố cục gốc và trộn dữ liệu khi xuất chứng từ.</small></div></div>
                 <p class="form-note">Bản xem trước trên trình duyệt có thể khác cách ngắt trang trong Microsoft Word. Dữ liệu thật được trộn khi xuất từ hồ sơ.</p>
             </section>
         <aside class="template-form template-settings-panel">
@@ -134,14 +134,6 @@ function openPrintTemplateModal(id = null) {
                     <small>${row?.file_name ? `Đang lưu: ${VKTable.escapeHtml(row.file_name)}` : 'Chọn file Word mẫu đã soạn sẵn.'}</small>
                 </div>
             </div>
-            <div class="template-merge-guide">
-                <strong>Trường trộn mẫu Word</strong>
-                <p class="form-note">Bấm trường để sao chép, rồi dán vào Word.</p>
-                <button class="btn secondary" type="button" data-download-current-guide>Tải hướng dẫn trường trộn</button>
-                <input type="search" data-merge-field-search placeholder="Tìm tên hoặc mã trường…" aria-label="Tìm trường trộn">
-                <div class="template-field-list" data-template-modal-fields>${renderFieldChips(null, row?.module || templateState.module)}</div>
-                <small>Đặt các trường dòng hàng trong cùng một hàng bảng Word để hệ thống tự tạo dòng theo chứng từ.</small>
-            </div>
         </aside></div>
     `, async (form) => {
         const data = new FormData(form);
@@ -157,12 +149,6 @@ function openPrintTemplateModal(id = null) {
         loadPrintTemplates();
     }, { submitText: 'Lưu mẫu', className: 'modal-wide template-editor-modal' });
 
-    document.querySelector('#modalBody [name="module"]')?.addEventListener('change', (event) => {
-        const fieldRoot = document.querySelector('#modalBody [data-template-modal-fields]');
-        if (fieldRoot) fieldRoot.innerHTML = renderFieldChips(null, event.target.value);
-        const search = document.querySelector('[data-merge-field-search]');
-        if (search) search.value = '';
-    });
     const preview = document.querySelector('[data-template-word-preview]');
     if (id && row?.file_path) {
         const endpoint = {quotation:'quotations', sales_order:'sales-orders', goods_issue:'goods-issues', contract:'contracts'}[row.module];
@@ -198,14 +184,9 @@ function openPrintTemplateModal(id = null) {
             } catch (error) { if (preview.isConnected && preview.dataset.previewVersion === version) preview.textContent = error.message; }
         });
     }
-    document.querySelector('[data-download-current-guide]')?.addEventListener('click', () => downloadMergeTemplate(document.querySelector('#modalBody [name="module"]').value));
     document.querySelector('#modalBody [name="template_file"]')?.addEventListener('change', event => {
         const file = event.target.files?.[0];
         if (file) previewWord(file, preview);
-    });
-    document.querySelector('[data-merge-field-search]')?.addEventListener('input', event => {
-        const q = event.target.value.toLocaleLowerCase('vi');
-        document.querySelectorAll('[data-merge-field-entry]').forEach(node => { node.hidden = !node.dataset.mergeFieldEntry.includes(q); });
     });
     if (row?.file_path) {
         const path = String(row.file_path);

@@ -33,3 +33,9 @@ test('workspace labels original preview honestly and preserves explicit default 
   assert.match(source,/renderAltChunks:false/);
   assert.match(source,/checked \? '1' : '0'/);
 });
+
+test('template editor does not crowd the upload form with the merge field catalogue',()=>{
+  const modalSource=source.slice(source.indexOf('function openPrintTemplateModal'),source.indexOf('async function copyMergeField'));
+  assert.doesNotMatch(modalSource,/Trường trộn mẫu Word|data-template-modal-fields|data-merge-field-search|data-download-current-guide/);
+  assert.match(modalSource,/Hệ thống giữ bố cục gốc và trộn dữ liệu khi xuất chứng từ/);
+});
