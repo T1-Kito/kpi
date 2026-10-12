@@ -36,7 +36,9 @@ class KpiReportWorkbook
         $path = tempnam(sys_get_temp_dir(), 'kpi-xlsx-');
         $zip = new ZipArchive;
         try {
-            if ($zip->open($path, ZipArchive::OVERWRITE) !== true) {
+            // tempnam creates an empty file. Linux ZipArchive needs CREATE in
+            // addition to OVERWRITE, while Windows accepted OVERWRITE alone.
+            if ($zip->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
                 throw new RuntimeException('Không thể tạo Excel.');
             }
             $types = '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>';
