@@ -193,6 +193,31 @@ class MasterDataApiTest extends TestCase
         $this->withToken($token)->postJson('/api/v1/customers', ['name' => 'Khách chưa cung cấp CCCD', 'customer_type' => 'person'])->assertCreated();
     }
 
+    public function test_person_customer_discards_organization_only_fields(): void
+    {
+        $this->seed();
+        $token = $this->loginAs('admin@vk-kpi.local');
+
+        $response = $this->withToken($token)->postJson('/api/v1/customers', [
+            'name' => 'Khách cá nhân sạch dữ liệu',
+            'customer_type' => 'person',
+            'identity_number' => '001234567891',
+            'tax_code' => '0312345678',
+            'contact_name' => 'Không được lưu',
+            'billing_address' => 'Không được lưu',
+            'legal_representative' => 'Không được lưu',
+            'representative_position' => 'Không được lưu',
+            'bank_name' => 'Không được lưu',
+            'bank_account_no' => '123456789',
+            'bank_account_name' => 'Không được lưu',
+        ])->assertCreated();
+
+        foreach (['tax_code', 'contact_name', 'billing_address', 'legal_representative', 'representative_position', 'bank_name', 'bank_account_no', 'bank_account_name'] as $field) {
+            $response->assertJsonPath('data.'.$field, null);
+        }
+        $response->assertJsonPath('data.identity_number', '001234567891');
+    }
+
     private function loginAs(string $email): string
     {
         return $this->postJson('/api/v1/auth/login', [

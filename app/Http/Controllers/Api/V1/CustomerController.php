@@ -102,6 +102,7 @@ class CustomerController extends Controller
             'sales_owner_id' => ['nullable', Rule::exists('users', 'id')->where('tenant_id', $tenantId)],
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
         ]);
+        $data = $this->normalizeTypeSpecificFields($data);
         $data['tax_code'] = $this->normalizeTaxCode($data['tax_code'] ?? null);
         if ($data['tax_code'] && Customer::where('tenant_id', $tenantId)->where('tax_code', $data['tax_code'])->exists()) {
             return response()->json(['message' => 'Mã số thuế đã thuộc một khách hàng trong hệ thống.'], 409);
@@ -140,6 +141,7 @@ class CustomerController extends Controller
             'credit_limit' => ['nullable', 'numeric', 'min:0'],
         ]);
 
+        $data = $this->normalizeTypeSpecificFields($data);
         $taxCode = $this->normalizeTaxCode($data['tax_code'] ?? null);
         $phone = preg_replace('/\s+/', '', trim($data['phone']));
         if ($taxCode) {
@@ -358,6 +360,7 @@ class CustomerController extends Controller
             'sales_owner_id' => ['nullable', Rule::exists('users', 'id')->where('tenant_id', $tenantId)],
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
         ]);
+        $data = $this->normalizeTypeSpecificFields($data);
         $data['tax_code'] = $this->normalizeTaxCode($data['tax_code'] ?? null);
         if ($data['tax_code'] && Customer::where('tenant_id', $tenantId)->whereKeyNot($customer->id)->where('tax_code', $data['tax_code'])->exists()) {
             return response()->json(['message' => 'Mã số thuế đã thuộc một khách hàng trong hệ thống.'], 409);
@@ -380,6 +383,19 @@ class CustomerController extends Controller
         $value = preg_replace('/[^0-9-]/', '', trim((string) $taxCode));
 
         return $value !== '' ? $value : null;
+    }
+
+    private function normalizeTypeSpecificFields(array $data): array
+    {
+        if (($data['customer_type'] ?? 'organization') === 'person') {
+            foreach (['tax_code', 'contact_name', 'billing_address', 'legal_representative', 'representative_position', 'bank_name', 'bank_account_no', 'bank_account_name'] as $field) {
+                $data[$field] = null;
+            }
+        } else {
+            $data['identity_number'] = null;
+        }
+
+        return $data;
     }
 
     private function syncPrimaryContact(Customer $customer, array $data): void

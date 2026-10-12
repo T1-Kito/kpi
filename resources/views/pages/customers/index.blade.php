@@ -14,5 +14,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/customers.js?v=20261011-position1"></script>
+<script src="/assets/js/features/customers.js?v=20261012-business-fields"></script>
 @endpush

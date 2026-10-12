@@ -33,12 +33,21 @@ test('legal representative appears once inside invoice information', () => {
     assert.ok(!form.includes('Gán người liên hệ có sẵn'));
 });
 
-test('representative position appears once in customer information', () => {
+test('representative position sits beside legal representative in invoice information', () => {
     const form = source.slice(source.indexOf('async function openCustomerModal('), source.indexOf('function syncCustomerBusinessFields('));
     assert.equal((form.match(/customerField\('representative_position'/g) || []).length, 1);
-    assert.ok(form.indexOf("customerField('representative_position'") < form.indexOf('Thông tin xuất hóa đơn'));
-    assert.ok(form.indexOf("customerField('representative_position'") > form.indexOf("customerSelect('status'"));
+    assert.ok(form.indexOf("customerField('representative_position'") > form.indexOf('Thông tin xuất hóa đơn'));
+    assert.ok(form.indexOf("customerField('representative_position'") > form.indexOf("customerField('legal_representative'"));
     assert.match(form, /Cá nhân \/ khách lẻ \/ vãng lai/);
+});
+
+test('individual customers omit organization-only legal and banking data', () => {
+    const form = source.slice(source.indexOf('async function openCustomerModal('), source.indexOf('function syncCustomerBusinessFields('));
+    for (const field of ['legal_representative', 'representative_position', 'billing_address', 'bank_name', 'bank_account_no', 'bank_account_name']) {
+        assert.match(form, new RegExp(`data-customer-business-field[^>]*>[\\s\\S]*?customerField\\('${field}'`));
+        assert.match(form, new RegExp(`${field}: null`));
+    }
+    assert.match(form, /Thông tin định danh cá nhân/);
 });
 
 test('business fields are hidden and excluded from submission for individual customers', () => {

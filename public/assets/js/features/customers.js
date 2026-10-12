@@ -226,17 +226,17 @@ async function openCustomerModal(id = null, readOnly = false, asPage = false) {
                         { value: 'active', label: 'Hoạt động' },
                         { value: 'inactive', label: 'Không hoạt động' },
                     ], row?.status || 'active', 'TT')}
-                    <div data-customer-business-field>${customerField('representative_position', 'Chức vụ đại diện', 'text', row?.representative_position || '', 'CV')}</div>
                     ${customerField('address', 'Địa chỉ liên hệ', 'text', row?.address || '', 'DC', true)}
                 </div>
             </section>
-            <section class="quick-customer-section">
-                <h4><span aria-hidden="true">${customerFormIcon('document')}</span>Thông tin xuất hóa đơn</h4>
+            <section class="quick-customer-section" data-customer-invoice-section>
+                <h4><span aria-hidden="true">${customerFormIcon('document')}</span><span data-customer-invoice-title>Thông tin xuất hóa đơn</span></h4>
                 <div class="quick-customer-grid">
                     <div data-customer-business-field>${customerField('legal_representative', 'Người đại diện pháp luật', 'text', row?.legal_representative || '', 'ĐD')}</div>
+                    <div data-customer-business-field>${customerField('representative_position', 'Chức vụ đại diện', 'text', row?.representative_position || '', 'CV')}</div>
                     <div data-customer-tax-field>${customerField('tax_code', 'Mã số thuế', 'text', row?.tax_code || '', 'MST')}</div>
                     <div data-customer-identity-field>${customerField('identity_number', 'Số CCCD', 'text', row?.identity_number || '', 'CCCD')}</div>
-                    ${customerField('billing_address', 'Địa chỉ xuất hóa đơn', 'text', row?.billing_address || '', 'DC', true)}
+                    <div data-customer-business-field class="customer-field-full-wrap">${customerField('billing_address', 'Địa chỉ xuất hóa đơn', 'text', row?.billing_address || '', 'DC', true)}</div>
                 </div>
             </section>
             <section class="quick-customer-section">
@@ -244,15 +244,28 @@ async function openCustomerModal(id = null, readOnly = false, asPage = false) {
                 <div class="quick-customer-grid">
                     ${customerField('credit_limit', 'Hạn mức công nợ', 'number', row?.credit_limit || '0', 'VND')}
                     ${customerField('payment_terms', 'Điều khoản thanh toán', 'text', row?.payment_terms || '', 'TT')}
-                    ${customerField('bank_name', 'Ngân hàng', 'text', row?.bank_name || '', 'NH')}
-                    ${customerField('bank_account_no', 'Số tài khoản', 'text', row?.bank_account_no || '', 'STK')}
-                    ${customerField('bank_account_name', 'Tên tài khoản', 'text', row?.bank_account_name || '', 'TK', true)}
+                    <div data-customer-business-field>${customerField('bank_name', 'Ngân hàng', 'text', row?.bank_name || '', 'NH')}</div>
+                    <div data-customer-business-field>${customerField('bank_account_no', 'Số tài khoản', 'text', row?.bank_account_no || '', 'STK')}</div>
+                    <div data-customer-business-field class="customer-field-full-wrap">${customerField('bank_account_name', 'Tên tài khoản', 'text', row?.bank_account_name || '', 'TK', true)}</div>
                 </div>
             </section>
         </div>
     `, async (form) => {
         const data = Object.fromEntries(new FormData(form));
         if (!data.name && data.contact_name) data.name = data.contact_name;
+        if (data.customer_type === 'person') {
+            Object.assign(data, {
+                primary_contact_id: null,
+                contact_name: null,
+                tax_code: null,
+                billing_address: null,
+                legal_representative: null,
+                representative_position: null,
+                bank_name: null,
+                bank_account_no: null,
+                bank_account_name: null,
+            });
+        }
         const duplicateQuery = new URLSearchParams({
             tax_code: data.tax_code || '',
             phone: data.phone || '',
@@ -300,6 +313,8 @@ async function openCustomerModal(id = null, readOnly = false, asPage = false) {
         }
         const taxField = document.querySelector('#modalBody [data-customer-tax-field]');
         const identityField = document.querySelector('#modalBody [data-customer-identity-field]');
+        const invoiceTitle = document.querySelector('#modalBody [data-customer-invoice-title]');
+        if (invoiceTitle) invoiceTitle.textContent = person ? 'Thông tin định danh cá nhân' : 'Thông tin xuất hóa đơn';
         taxField.hidden = person;
         identityField.hidden = !person;
         taxField.querySelector('input').disabled = person || readOnly;
