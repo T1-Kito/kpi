@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@yield('title', 'VK-KPI')</title>
     <link rel="stylesheet" href="/assets/css/app.css?v=20261011-close1">
-    <link rel="stylesheet" href="/assets/css/components.css?v=20261011-close1">
-    <link rel="stylesheet" href="/assets/css/pages.css?v=20261013-modal2">
+    <link rel="stylesheet" href="/assets/css/components.css?v=20261013-heading1">
+    <link rel="stylesheet" href="/assets/css/pages.css?v=20261013-heading1">
 </head>
 <body data-page="@yield('page', 'dashboard')">
     <main class="app-shell">

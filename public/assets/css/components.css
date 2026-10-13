@@ -2808,7 +2808,8 @@ tbody tr[data-row-detail] {
     gap: 8px;
 }
 
-.customer-form-modal .quick-customer-section h4 span {
+.customer-form-modal .quick-customer-section h4 > span[aria-hidden="true"] {
+    flex-shrink: 0;
     min-width: 24px;
     height: 22px;
     border-radius: 999px;
