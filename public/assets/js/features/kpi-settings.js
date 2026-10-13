@@ -387,6 +387,7 @@
     }
 
     function openAssignmentModal(row = null) {
+        const esc = VKTable.escapeHtml;
         if (!data.activeDefinitions.length) return VKModal.toast('Hãy tạo chỉ tiêu đang dùng trước.', 'warning');
         const metrics = Object.entries(data.assignmentMeta.metrics || {}).map(([value, item]) => ({value,label:item.label}));
         const selectedDefinition = data.activeDefinitions.find(item=>Number(item.id)===Number(row?.kpi_definition_id)) || data.activeDefinitions.find(item=>item.code==='KPI-WORKFLOW') || data.activeDefinitions[0];

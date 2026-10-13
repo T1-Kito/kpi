@@ -10,6 +10,7 @@ function setup(request) {
     const root = {innerHTML:'',textContent:''};
     const field = {innerHTML:''};
     const elements = {
+        kpi_definition_id:{value:'1',addEventListener(){}},
         audience_type:{value:'company',addEventListener(){}},
         metric:{value:'tasks_completed',addEventListener(){}},
     };
