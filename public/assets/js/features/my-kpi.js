@@ -41,8 +41,9 @@
             ]);
             if (current !== version || document.getElementById('myKpiRoot') !== root) return;
             if (!Array.isArray(result.data)) throw new Error('Không nhận được KPI được phân.');
-            const html = result.data.length ? `<div class="my-kpi-grid">${result.data.map((row) => `<article class="my-kpi-card"><div class="my-kpi-code">${escape(row.code)}</div><h3>${escape(row.name)}</h3><p class="form-note">${escape(row.period_start)} — ${escape(row.period_end)} · ${row.status === 'locked' ? 'Đã chốt kỳ' : 'Đang theo dõi'}</p><strong>${number(row.actual)} <small>/ ${number(row.target)} ${escape(row.unit)}</small></strong><div class="my-kpi-progress"><span style="width:${Math.max(0,Math.min(100,Number(row.score)))}%"></span></div><p>Điểm chỉ tiêu: <b>${number(row.score)}/100</b> · Trọng số: ${number(row.weight)}</p><p class="form-note">${escape(row.description)}</p></article>`).join('')}</div>` : '<p class="form-note">Bạn chưa được phân KPI trong kỳ này. Khi admin phân cho bạn, phòng ban hoặc chức vụ của bạn, chỉ tiêu sẽ tự xuất hiện.</p>';
-            const summary = `<div class="kpi-report-summary" style="padding:20px 20px 0">${(result.meta.summaries || []).map(item => `<div><small>${escape(({month:'Tháng',quarter:'Quý',year:'Năm'})[item.period_type])}: ${escape(item.period_start)} — ${escape(item.period_end)}</small><strong>${number(item.score)}/100</strong><small>${item.indicators} chỉ tiêu · ${item.locked ? 'Đã chốt' : 'Đang theo dõi'}</small></div>`).join('')}</div>`;
+            const html = result.data.length ? `<div class="my-kpi-grid">${result.data.map(renderIndicator).join('')}</div>` : '<div class="my-kpi-empty"><span class="my-kpi-empty-icon" aria-hidden="true">◎</span><div><strong>Chưa có KPI trong kỳ này</strong><p>Chỉ tiêu sẽ tự cập nhật khi được phân công.</p></div></div>';
+            const summaries = result.meta?.summaries || [];
+            const summary = summaries.length ? `<div class="kpi-report-summary my-kpi-summary">${summaries.map(item => `<div><small>${escape(({month:'Tháng',quarter:'Quý',year:'Năm'})[item.period_type])}: ${escape(item.period_start)} — ${escape(item.period_end)}</small><strong>${number(item.score)}/100</strong><small>${item.indicators} chỉ tiêu · ${item.locked ? 'Đã chốt' : 'Đang theo dõi'}</small></div>`).join('')}</div>` : '';
             const review = renderConfirmations((confirmations.data || []).filter(item => item.closure?.period_start?.slice(0,10) <= date.value && item.closure?.period_end?.slice(0,10) >= date.value));
             const content = review + summary + html;
             if (root.dataset.content !== content) { root.innerHTML = content; root.dataset.content = content; }
@@ -54,6 +55,13 @@
                 root.insertAdjacentHTML('beforeend', `<p class="form-note" data-my-kpi-error>Chưa cập nhật được số liệu mới: ${escape(error.message)}</p>`);
             } else { root.innerHTML = `<p class="form-note">${escape(error.message)}</p>`; delete root.dataset.content; }
         } finally { if (current === version) pending = false; }
+    }
+
+    function renderIndicator(row) {
+        const score = Number(row.score) || 0;
+        const progress = Math.max(0, Math.min(100, score));
+        const tone = score >= 100 ? 'complete' : score >= 70 ? 'on-track' : 'in-progress';
+        return `<article class="my-kpi-card ${tone}"><div class="my-kpi-card-head"><span class="my-kpi-code">${escape(row.code)}</span><span class="my-kpi-state">${row.status === 'locked' ? 'Đã chốt kỳ' : 'Đang theo dõi'}</span></div><h3>${escape(row.name)}</h3><div class="my-kpi-values"><strong>${number(row.actual)}<small> / ${number(row.target)} ${escape(row.unit)}</small></strong><span>${number(score)}<small> điểm</small></span></div><div class="my-kpi-progress" role="progressbar" aria-label="Điểm chỉ tiêu ${escape(row.name)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span style="width:${progress}%"></span></div><div class="my-kpi-card-meta"><span>${escape(row.period_start)} — ${escape(row.period_end)}</span><span>Trọng số ${number(row.weight)}</span></div>${row.description ? `<p class="my-kpi-description">${escape(row.description)}</p>` : ''}</article>`;
     }
 
     function renderConfirmations(rows) {

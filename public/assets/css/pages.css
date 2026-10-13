@@ -4844,7 +4844,18 @@ small {
 @media(max-width:1050px) { .kpi-bundle-item { grid-template-columns:repeat(2,minmax(0,1fr)); } .kpi-bundle-item > .btn { justify-self:start; } }
 @media(max-width:620px) { .kpi-bundle-modal { width:calc(100vw - 16px); max-height:calc(100dvh - 16px); } .kpi-bundle-modal .modal-head,.kpi-bundle-modal .modal-foot,.kpi-bundle-modal .modal-body { padding:14px; } .kpi-bundle-modal .form-grid,.kpi-bundle-item { grid-template-columns:1fr; } }
 @media(max-width:800px) { .kpi-report-summary { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-.my-kpi-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;padding:20px;}
+.assigned-kpi-panel{margin-bottom:16px;overflow:hidden}
+.assigned-kpi-panel .panel-head{padding:16px 20px;align-items:center;gap:12px;flex-wrap:wrap}
+.assigned-kpi-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.assigned-kpi-tools label{display:flex;align-items:center;gap:8px;color:#64748b;font-size:12px}
+.assigned-kpi-tools input{border:1px solid #dbe3ef;border-radius:8px;padding:8px 10px;background:#fff;color:#334155;font:inherit}
+.my-kpi-empty{display:flex;align-items:center;gap:14px;padding:22px 20px}
+.my-kpi-empty-icon{display:grid;place-items:center;width:44px;height:44px;flex:none;border-radius:12px;background:#eef4ff;color:#2563eb;font-size:28px}
+.my-kpi-empty strong{font-size:14px;color:#334155}
+.my-kpi-empty p{margin:5px 0 0;color:#7b879a;font-size:12px}
+.my-kpi-summary{padding:16px 20px 0}
+.executive-heading{justify-content:flex-end}
+.my-kpi-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:14px;padding:20px;}
 .my-kpi-card {border:1px solid #dbeafe;border-radius:12px;padding:20px;background:#fff;}
 .my-kpi-code {color:#ec008c;font-weight:600;font-size:12px;}
 .my-kpi-card h3 {margin:10px 0;font-size:17px;}
@@ -4852,6 +4863,20 @@ small {
 .my-kpi-card > strong small {font-size:14px;color:#64748b;font-weight:400;}
 .my-kpi-progress {height:7px;background:#e2e8f0;border-radius:5px;overflow:hidden;}
 .my-kpi-progress span {display:block;height:100%;background:#2563eb;transition:width .2s ease;}
+.my-kpi-card{border-color:#e2e8f0;padding:18px;box-shadow:0 3px 12px rgba(15,23,42,.025)}
+.my-kpi-card-head,.my-kpi-values,.my-kpi-card-meta{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.my-kpi-state{font-size:11px;color:#64748b}
+.my-kpi-card h3{margin:14px 0 18px;font-size:15px;line-height:1.5}
+.my-kpi-values{margin-bottom:12px;flex-wrap:wrap}
+.my-kpi-values strong{font-size:24px;color:#0f172a}
+.my-kpi-values small{font-size:12px;font-weight:400;color:#64748b}
+.my-kpi-values>span{font-size:18px;font-weight:600;color:#2563eb}
+.my-kpi-card-meta{margin-top:12px;font-size:11px;color:#7b879a;flex-wrap:wrap}
+.my-kpi-description{margin:12px 0 0;font-size:12px;line-height:1.5;color:#64748b}
+.my-kpi-card.complete .my-kpi-progress span{background:#10b981}
+.my-kpi-card.complete .my-kpi-values>span{color:#059669}
+.my-kpi-card.on-track .my-kpi-progress span{background:#6366f1}
+@media(max-width:600px){.assigned-kpi-tools{width:100%;justify-content:space-between}.my-kpi-grid{padding:14px}.my-kpi-empty{padding:18px 14px}}
 .settings-launcher header .ui-close-button{display:inline-grid;width:38px;min-width:38px;height:38px;padding:0;place-items:center;border:1px solid #cbd5e1;border-radius:9px;background:#f8fafc;color:#334155;font-size:0;box-shadow:none}
 .settings-launcher header .ui-close-button:hover{border-color:#fca5a5;background:#fef2f2;color:#dc2626}
 .settings-launcher header .ui-close-button svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}

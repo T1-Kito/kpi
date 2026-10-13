@@ -240,7 +240,6 @@ function renderExecutiveDashboard(executive, data) {
     return `
         <div class="executive-dashboard">
             <div class="executive-heading">
-                <div><span class="executive-eyebrow">BAN ĐIỀU HÀNH · DỮ LIỆU THỰC</span><h2>Toàn cảnh doanh nghiệp</h2><p>Doanh thu và chứng từ theo tháng; công nợ, tồn kho và việc quá hạn là số dư hiện tại.</p></div>
                 <div class="executive-filters"><label>Tháng xem <input type="month" data-executive-month value="${month}"></label><button type="button" class="btn secondary" onclick="window.print()">In báo cáo</button></div>
             </div>
             <div class="executive-metrics" data-executive-panel="overview">${metrics.map(([label, value, note, href, money]) => `<a href="${href}" class="executive-metric"><span>${label}</span><strong>${money ? VKTable.money(value) + ' đ' : VKTable.money(value)}</strong><small>${VKTable.escapeHtml(note)}</small></a>`).join('')}</div>

@@ -6,7 +6,7 @@
     <title>@yield('title', 'VK-KPI')</title>
     <link rel="stylesheet" href="/assets/css/app.css?v=20261011-close1">
     <link rel="stylesheet" href="/assets/css/components.css?v=20261011-close1">
-    <link rel="stylesheet" href="/assets/css/pages.css?v=20261012-template-sample1">
+    <link rel="stylesheet" href="/assets/css/pages.css?v=20261013-kpi-ui1">
 </head>
 <body data-page="@yield('page', 'dashboard')">
     <main class="app-shell">

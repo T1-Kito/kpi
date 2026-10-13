@@ -10,14 +10,14 @@
 @endsection
 
 @section('content')
-<section class="module-panel" style="margin-bottom:20px">
-    <div class="panel-head"><div><h2>KPI được giao cho tôi</h2><a href="/my-kpi">Xem chi tiết KPI</a></div><label>Ngày thuộc kỳ <input type="date" id="myKpiDate"></label></div>
+<section class="module-panel assigned-kpi-panel">
+    <div class="panel-head"><div><h2>KPI của tôi</h2></div><div class="assigned-kpi-tools"><label for="myKpiDate">Kỳ xem <input type="date" id="myKpiDate"></label><a class="btn secondary small" href="/my-kpi">Xem chi tiết →</a></div></div>
     <div id="myKpiRoot" aria-live="polite"><p class="form-note">Đang tải chỉ tiêu được phân…</p></div>
 </section>
 <div id="dashboardRoot" class="dashboard-root"></div>
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/dashboard.js?v=20261008-2"></script>
-<script src="/assets/js/features/my-kpi.js?v=20261011-assign2"></script>
+<script src="/assets/js/features/dashboard.js?v=20261013-ui1"></script>
+<script src="/assets/js/features/my-kpi.js?v=20261013-ui1"></script>
 @endpush
