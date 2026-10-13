@@ -77,7 +77,7 @@
         'audit-logs': ['audit-logs.js', 'loadAuditLogs'],
         'service-tickets': ['service-desk.js', 'loadServiceTickets'],
         'warranty-claims': ['service-desk.js', 'loadWarrantyClaims'],
-        settings: ['settings.js?v=20261013-policy1', 'loadSettings'],
+        settings: ['settings.js?v=20261013-policy-ui2', 'loadSettings'],
     };
     const routePrefetch = {
         '/dashboard': ['dashboard', [
