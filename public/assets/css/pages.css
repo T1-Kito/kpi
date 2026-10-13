@@ -2343,7 +2343,9 @@
 .modal.purchase-request-create-modal{width:min(1180px,calc(100vw - 40px));max-width:1180px;max-height:calc(100dvh - 32px)}
 .purchase-request-create-modal .modal-head,.purchase-request-create-modal .modal-foot{padding:18px 24px;flex:none}
 .purchase-request-create-modal .modal-body{padding:22px 24px;min-height:0;overflow-y:auto}
-.purchase-request-create-modal .modal-body > .form-grid{gap:18px 20px}
+.purchase-request-create-modal .modal-body > .form-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) minmax(0,.7fr);gap:18px 20px}
+.purchase-request-create-modal [data-pr-selected-name]{background:#f7f9fd;color:#253650}
+@media(max-width:600px){.purchase-request-create-modal .modal-body > .form-grid{grid-template-columns:1fr}}
 .purchase-request-create-modal .pr-selected-item{padding:16px 20px;background:#f7f9fd}
 .purchase-request-create-modal .pr-selected-item dl{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 20px;margin:12px 0}
 .purchase-request-create-modal .procurement-quick-product{padding:18px 20px;border:1px solid #dce6f5;border-radius:10px;background:#fff}

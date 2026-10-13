@@ -13,5 +13,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/purchase-requests.js?v=20261013-quick1"></script>
+<script src="/assets/js/features/purchase-requests.js?v=20261013-quick2"></script>
 @endpush

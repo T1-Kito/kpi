@@ -150,8 +150,9 @@ async function openPurchaseRequestModal() {
         <div class="form-grid">
             ${VKModal.select('sku_id', 'Mã hàng cần mua', purchaseRequestSkus.map(row => ({
                 value: row.id,
-                label: `${row.sku_code} - ${row.name || ''}`,
+                label: row.sku_code,
             })))}
+            <div class="field"><label for="pr_selected_name">Tên hàng</label><input id="pr_selected_name" type="text" readonly placeholder="Tự hiện khi chọn mã hàng" data-pr-selected-name></div>
             ${VKModal.field('quantity', 'Số lượng cần mua', 'number', '1')}
             <div class="field full pr-selected-item" data-pr-selected-item aria-live="polite"></div>
             <details class="field full procurement-quick-product">
@@ -205,11 +206,12 @@ function renderSelectedPurchaseItem() {
     if (!box) return;
     const form = box.closest('form');
     const sku = purchaseRequestSkus.find(row => String(row.id) === form.elements.sku_id.value);
+    const nameField = form.querySelector('[data-pr-selected-name]');
+    if (nameField) nameField.value = sku?.name || '';
     if (!sku) { box.innerHTML = '<p>Chọn mặt hàng hoặc tạo nhanh mặt hàng mới để xem thông tin.</p>'; return; }
     const quantity = Number(form.elements.quantity.value || 0);
     const value = text => VKTable.escapeHtml(text || 'Chưa khai báo');
-    box.innerHTML = `<div class="pr-item-heading"><span>${value(sku.sku_code)}</span><div>${value(sku.name)}</div></div>
-        <dl><div><dt>Đơn vị tính</dt><dd>${value(sku.unit)}</dd></div><div><dt>Số lượng đề nghị</dt><dd>${VKTable.money(quantity)} ${value(sku.unit)}</dd></div><div><dt>Giá mua tham khảo</dt><dd>${Number(sku.cost_price) > 0 ? `${VKTable.money(sku.cost_price)} đ` : 'Chưa có giá'}</dd></div><div><dt>Giá trị dự kiến</dt><dd>${Number(sku.cost_price) > 0 ? `${VKTable.money(quantity * Number(sku.cost_price))} đ` : 'Chờ báo giá NCC'}</dd></div></dl>
+    box.innerHTML = `<dl><div><dt>Đơn vị tính</dt><dd>${value(sku.unit)}</dd></div><div><dt>Số lượng đề nghị</dt><dd>${VKTable.money(quantity)} ${value(sku.unit)}</dd></div><div><dt>Giá mua tham khảo</dt><dd>${Number(sku.cost_price) > 0 ? `${VKTable.money(sku.cost_price)} đ` : 'Chưa có giá'}</dd></div><div><dt>Giá trị dự kiến</dt><dd>${Number(sku.cost_price) > 0 ? `${VKTable.money(quantity * Number(sku.cost_price))} đ` : 'Chờ báo giá NCC'}</dd></div></dl>
         ${sku.product?.description ? `<p>${value(sku.product.description)}</p>` : ''}<small>Giá tham khảo từ danh mục, không phải giá đã được nhà cung cấp xác nhận.</small>`;
 }
 
@@ -280,7 +282,7 @@ document.addEventListener('click', async event => {
         }) });
         const sku = response.data;
         purchaseRequestSkus.push(sku);
-        const option = new Option(`${sku.sku_code} - ${sku.name}`, sku.id, true, true);
+        const option = new Option(sku.sku_code, sku.id, true, true);
         form.elements.sku_id.add(option);
         renderSelectedPurchaseItem();
         feedback.textContent = `Đã tạo ${sku.sku_code} và chọn cho yêu cầu mua.`;
