@@ -17,5 +17,5 @@
 </section>
 @endsection
 @push('scripts')
-<script src="/assets/js/features/kpi-reports.js?v=20261011-live1"></script>
+<script src="/assets/js/features/kpi-reports.js?v=20261013-export1"></script>
 @endpush

@@ -72,6 +72,7 @@ Route::get('/alerts', AlertController::class)->name('alerts.index');
 Route::get('/approvals', ApprovalCenterController::class)->name('approvals.index');
 Route::get('/kpi', KpiController::class)->name('kpi.index');
 Route::view('/kpi-reports', 'pages.kpi-reports.index')->name('kpi-reports.index');
+Route::view('/business-reports', 'pages.business-reports.index')->name('business-reports.index');
 Route::view('/my-kpi', 'pages.my-kpi.index')->name('my-kpi.index');
 Route::get('/kpi-adjustments', KpiAdjustmentController::class)->name('kpi-adjustments.index');
 Route::get('/kpi-settings', KpiSettingController::class)->name('kpi-settings.index');

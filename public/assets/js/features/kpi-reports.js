@@ -132,7 +132,7 @@
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = 'KPI-nhan-vien.xlsx';
+            link.download = /filename="?([^";]+)"?/.exec(response.headers.get('Content-Disposition') || '')?.[1] || 'KPI-nhan-vien.xlsx';
             link.click();
             setTimeout(() => URL.revokeObjectURL(url), 1000);
         } catch (error) {

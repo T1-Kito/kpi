@@ -11,27 +11,32 @@ class KpiReportWorkbook
     {
         $names = array_column($report['rows'], 'name', 'user_id');
         $meta = $report['meta'];
-        $summary = [['BÁO CÁO NHÂN VIÊN THEO KỲ'], ['Từ ngày', $meta['period_start'], 'Đến ngày', $meta['period_end']],
-            ['Thời điểm xem', $meta['as_of']], [$meta['task_basis']], [$meta['points_basis']],
+        $summary = [['BÁO CÁO NHÂN VIÊN THEO KỲ'], ['Từ ngày', $this->dateCell($meta['period_start']), 'Đến ngày', $this->dateCell($meta['period_end'])],
+            ['Thời điểm xem (giờ Việt Nam)', $this->dateCell($meta['as_of'], false)], [$meta['task_basis']], [$meta['points_basis']],
             ['Nhân viên', 'Phòng ban', 'Chức vụ', 'Tạo trong kỳ', 'Đã hoàn thành', 'Đang quá hạn', 'Điểm cộng', 'Điểm trừ', 'Điểm ròng', 'Phiếu chờ duyệt', 'Chỉ tiêu được phân', 'Điểm KPI /100']];
         foreach ($report['rows'] as $row) {
             $summary[] = [$row['name'], $row['department'] ?? 'Chưa gán', $row['position'] ?? 'Chưa gán', $row['tasks_created'], $row['tasks_completed'], $row['tasks_overdue'], $row['bonus_points'], $row['penalty_points'], $row['net_points'], $row['pending_adjustments'], $row['kpi_indicators'] ?? 0, $row['kpi_score'] ?? 'Chưa phân'];
         }
-        $ledger = [['PHIẾU ĐIỂM TRONG KỲ'], ['Từ ngày', $meta['period_start'], 'Đến ngày', $meta['period_end']], [],
+        $ledger = [['PHIẾU ĐIỂM TRONG KỲ'], ['Từ ngày', $this->dateCell($meta['period_start']), 'Đến ngày', $this->dateCell($meta['period_end'])], [],
             ['Mã phiếu', 'Nhân viên', 'Loại', 'Điểm', 'Trạng thái', 'Lý do', 'Nguồn', 'Mã nguồn']];
         foreach ($report['adjustments'] as $row) {
-            $ledger[] = ['KPA-'.$row['id'], $names[$row['user_id']] ?? '', $row['adjustment_type'] === 'bonus' ? 'Cộng' : 'Trừ', (float) $row['points'], $row['status'], $row['reason'], $row['source_type'] ?? '', (string) ($row['source_id'] ?? '')];
+            $ledger[] = ['KPA-'.$row['id'], $names[$row['user_id']] ?? '', $row['adjustment_type'] === 'bonus' ? 'Cộng' : 'Trừ', (float) $row['points'], $this->status($row['status']), $row['reason'], $row['source_type'] ?? '', (string) ($row['source_id'] ?? '')];
         }
         $tasks = [['CÔNG VIỆC TẠO TRONG KỲ'], [$meta['task_basis']], [], ['Mã', 'Tiêu đề', 'Nhân viên', 'Trạng thái', 'Hạn xử lý', 'Ngày tạo']];
         foreach ($report['tasks'] as $row) {
-            $tasks[] = [$row['code'], $row['title'], $names[$row['assignee_id']] ?? '', $row['status'], $row['due_at'] ?? '', $row['created_at']];
+            $tasks[] = [$row['code'], $row['title'], $names[$row['assignee_id']] ?? '', $this->status($row['status']), $this->dateCell($row['due_at'] ?? null, false), $this->dateCell($row['created_at'], false)];
         }
-        $kpis = [['KPI ĐƯỢC PHÂN TRONG KỲ'], ['Từ ngày', $meta['period_start'], 'Đến ngày', $meta['period_end']], ['Điểm chỉ tiêu theo nguồn tự động, tổng KPI theo trọng số. Phiếu cộng/trừ hiển thị riêng.'],
+        $kpis = [['KPI ĐƯỢC PHÂN TRONG KỲ'], ['Từ ngày', $this->dateCell($meta['period_start']), 'Đến ngày', $this->dateCell($meta['period_end'])], ['Điểm chỉ tiêu theo nguồn tự động, tổng KPI theo trọng số. Phiếu cộng/trừ hiển thị riêng.'],
             ['Nhân viên', 'Mã chỉ tiêu', 'Chỉ tiêu', 'Nguồn', 'Mục tiêu', 'Thực tế', 'Đơn vị', 'Trọng số', 'Điểm /100', 'Trạng thái']];
         foreach ($report['kpis'] ?? [] as $row) {
-            $kpis[] = [$row['employee_name'], $row['code'], $row['name'], $row['metric_label'], $row['target'], $row['actual'], $row['unit'], $row['weight'], $row['score'], $row['status']];
+            $kpis[] = [$row['employee_name'], $row['code'], $row['name'], $row['metric_label'], (float) $row['target'], (float) $row['actual'], $row['unit'], (float) $row['weight'], (float) $row['score'], $this->status($row['status'])];
         }
         $sheets = [['Tổng hợp', $summary, 6], ['KPI được phân', $kpis, 4], ['Phiếu điểm', $ledger, 4], ['Công việc', $tasks, 4]];
+        return $this->writeSheets($sheets);
+    }
+
+    public function writeSheets(array $sheets): string
+    {
         $path = tempnam(sys_get_temp_dir(), 'kpi-xlsx-');
         try {
             $types = '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>';
@@ -50,6 +55,9 @@ class KpiReportWorkbook
             $files['xl/workbook.xml'] = $book.'</sheets></workbook>';
             $files['xl/_rels/workbook.xml.rels'] = $rels.'<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
             $files['xl/styles.xml'] = '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF2563EB"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="3"><xf fontId="0" fillId="0" borderId="0" xfId="0"><alignment vertical="top" wrapText="1"/></xf><xf fontId="1" fillId="2" borderId="0" xfId="0" applyFill="1" applyFont="1"><alignment wrapText="1"/></xf><xf fontId="0" fillId="0" borderId="0" xfId="0" numFmtId="4" applyNumberFormat="1"/></cellXfs></styleSheet>';
+            $files['xl/styles.xml'] = str_replace('<fonts count="2">', '<numFmts count="2"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/><numFmt numFmtId="165" formatCode="dd/mm/yyyy hh:mm"/></numFmts><fonts count="2">', $files['xl/styles.xml']);
+            $files['xl/styles.xml'] = str_replace('<cellXfs count="3">', '<cellXfs count="6">', $files['xl/styles.xml']);
+            $files['xl/styles.xml'] = str_replace('</cellXfs>', '<xf fontId="0" fillId="0" borderId="0" xfId="0" numFmtId="164" applyNumberFormat="1"/><xf fontId="0" fillId="0" borderId="0" xfId="0" numFmtId="165" applyNumberFormat="1"/><xf fontId="0" fillId="0" borderId="0" xfId="0" numFmtId="3" applyNumberFormat="1"/></cellXfs>', $files['xl/styles.xml']);
             if (file_put_contents($path, $this->zip($files)) === false) {
                 throw new RuntimeException('Không thể hoàn tất Excel.');
             }
@@ -85,14 +93,21 @@ class KpiReportWorkbook
 
     private function sheet(array $rows, int $header): string
     {
-        $xml = '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="'.$header.'" topLeftCell="A'.($header + 1).'" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols><col min="1" max="3" width="28" customWidth="1"/><col min="4" max="10" width="20" customWidth="1"/></cols><sheetData>';
+        $xml = '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="'.$header.'" topLeftCell="A'.($header + 1).'" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols><col min="1" max="3" width="28" customWidth="1"/><col min="4" max="26" width="22" customWidth="1"/></cols><sheetData>';
         foreach ($rows as $index => $row) {
             $number = $index + 1;
             $xml .= '<row r="'.$number.'">';
             foreach ($row as $column => $value) {
                 $ref = chr(65 + $column).$number;
-                if (is_int($value) || is_float($value)) {
-                    $xml .= '<c r="'.$ref.'" s="2"><v>'.$value.'</v></c>';
+                $dateOnly = is_array($value) && ($value['date_only'] ?? false);
+                $date = $value instanceof \DateTimeInterface ? $value : (is_array($value) && isset($value['excel_date']) ? new \DateTimeImmutable($value['excel_date']) : null);
+                if ($date) {
+                    if (! $dateOnly) $date = \DateTimeImmutable::createFromInterface($date)->setTimezone(new \DateTimeZone('Asia/Ho_Chi_Minh'));
+                    $local = new \DateTimeImmutable($date->format('Y-m-d H:i:s'), new \DateTimeZone('UTC'));
+                    $serial = ($local->getTimestamp() - (new \DateTimeImmutable('1899-12-30', new \DateTimeZone('UTC')))->getTimestamp()) / 86400;
+                    $xml .= '<c r="'.$ref.'" s="'.($dateOnly ? 3 : 4).'"><v>'.$serial.'</v></c>';
+                } elseif (is_int($value) || is_float($value)) {
+                    $xml .= '<c r="'.$ref.'" s="'.(is_int($value) ? 5 : 2).'"><v>'.$value.'</v></c>';
                 } else {
                     $clean = preg_replace('/[^\x{9}\x{A}\x{D}\x{20}-\x{D7FF}\x{E000}-\x{FFFD}\x{10000}-\x{10FFFF}]/u', '', (string) $value);
                     $xml .= '<c r="'.$ref.'" t="inlineStr" s="'.($number === $header ? 1 : 0).'"><is><t xml:space="preserve">'.htmlspecialchars($clean, ENT_XML1 | ENT_QUOTES, 'UTF-8').'</t></is></c>';
@@ -103,5 +118,15 @@ class KpiReportWorkbook
         $lastColumn = chr(64 + count($rows[$header - 1]));
 
         return $xml.'</sheetData><autoFilter ref="A'.$header.':'.$lastColumn.max($header, count($rows)).'"/></worksheet>';
+    }
+
+    private function status(string $value): string
+    {
+        return ['new'=>'Chưa bắt đầu','in_progress'=>'Đang thực hiện','completed'=>'Hoàn thành','overdue'=>'Quá hạn','cancelled'=>'Đã hủy','pending'=>'Chờ duyệt','approved'=>'Đã duyệt','rejected'=>'Từ chối','active'=>'Đang theo dõi','locked'=>'Đã chốt'][$value] ?? $value;
+    }
+
+    public function dateCell(?string $value, bool $dateOnly = true): array|string
+    {
+        return $value ? ['excel_date' => $value, 'date_only' => $dateOnly] : '';
     }
 }

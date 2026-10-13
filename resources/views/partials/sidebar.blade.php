@@ -115,6 +115,7 @@
                     <a href="/kpi">Tổng quan KPI</a>
                     <a href="/my-kpi">KPI của tôi</a>
                     <a href="/kpi-reports">Báo cáo theo kỳ</a>
+                    <a href="/business-reports">Báo cáo nghiệp vụ</a>
                     <a href="/kpi-adjustments">Sổ điểm nhân viên</a>
                     <a data-permission="kpi.lock" href="/kpi-settings">Thiết lập KPI</a>
                 </div>

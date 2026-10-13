@@ -42,7 +42,8 @@ class EmployeeKpiReport
             $employees = $users->orderBy('name')->get(['id', 'name', 'department_id', 'position_id', 'is_active']);
             $ids = $employees->modelKeys();
             $tasks = Task::where('tenant_id', $actor->tenant_id)->whereIn('assignee_id', $ids)
-                ->where('created_at', '>=', $start)->where('created_at', '<', $end->addDay()->startOfDay())
+                ->where('created_at', '>=', CarbonImmutable::parse($start->toDateString(), 'Asia/Ho_Chi_Minh')->startOfDay()->utc())
+                ->where('created_at', '<', CarbonImmutable::parse($end->toDateString(), 'Asia/Ho_Chi_Minh')->addDay()->startOfDay()->utc())
                 ->orderBy('id')->limit(10001)->get(['id', 'code', 'title', 'assignee_id', 'status', 'due_at', 'created_at']);
             $points = KpiAdjustment::where('tenant_id', $actor->tenant_id)->whereIn('user_id', $ids)
                 ->where('period_type', $type)->whereDate('period_start', $start->toDateString())

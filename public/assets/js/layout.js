@@ -8,7 +8,7 @@
         inventory: 'Kho vận', finance: 'Tài chính', service: 'Dịch vụ khách hàng', kpi: 'KPI', admin: 'Quản trị',
     };
     const moduleRoutes = {
-        work: ['dashboard', 'tasks', 'approvals', 'alerts'],
+        work: ['dashboard', 'tasks', 'approvals', 'alerts', 'business-reports'],
         sales: ['deals', 'quotations', 'sales-orders', 'contracts', 'deliveries'],
         customer: ['customers', 'leads', 'customer-contacts'],
         product: ['skus', 'product-categories', 'product-brands'],
@@ -64,7 +64,8 @@
         approvals: ['approvals.js?v=20261011-2', 'loadApprovals'],
         alerts: ['alerts.js?v=20260615-2', 'loadAlerts'],
         kpi: ['kpi.js?v=20261011-scope1', 'loadKpi'],
-        'kpi-reports': ['kpi-reports.js?v=20261011-live1', 'loadKpiReports'],
+        'kpi-reports': ['kpi-reports.js?v=20261013-export1', 'loadKpiReports'],
+        'business-reports': ['business-reports.js?v=20261013-1', 'loadBusinessReports'],
         'my-kpi': ['my-kpi.js?v=20261011-assign2', 'loadMyKpi'],
         'kpi-adjustments': ['kpi-adjustments.js?v=20261009-permissions1', 'loadKpiAdjustments'],
         'kpi-settings': ['kpi-settings.js?v=20261011-modal1', 'loadKpiSettings'],

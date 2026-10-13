@@ -28,7 +28,7 @@ class EmployeeKpiReportTest extends TestCase
         Task::query()->delete();
         KpiAdjustment::query()->delete();
         foreach ([$sales, $admin] as $employee) {
-            foreach (['2026-10-01 00:00:00', '2026-10-31 23:59:59', '2026-11-01 00:00:00'] as $index => $date) {
+            foreach (['2026-09-30 17:00:00', '2026-10-31 16:59:59', '2026-10-31 17:00:00'] as $index => $date) {
                 $task = Task::create(['tenant_id' => $employee->tenant_id, 'assignee_id' => $employee->id, 'code' => 'T-'.$employee->id.'-'.$index, 'title' => 'Report task', 'module' => 'sales', 'task_type' => 'manual', 'priority' => 'normal', 'status' => 'completed', 'created_by' => $admin->id]);
                 $task->forceFill(['created_at' => $date])->save();
             }

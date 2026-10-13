@@ -138,6 +138,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/kpi/period-closures/{kpiPeriodClosure}/respond', [KpiPeriodClosureController::class, 'respond']);
         Route::get('/kpi/employee-report', [KpiController::class, 'employeeReport']);
         Route::get('/kpi/employee-report/export', [KpiController::class, 'exportEmployeeReport']);
+        Route::get('/business-reports', [\App\Http\Controllers\Api\V1\BusinessReportController::class, 'index']);
+        Route::get('/business-reports/export', [\App\Http\Controllers\Api\V1\BusinessReportController::class, 'export']);
         Route::get('/kpi/snapshots', [KpiController::class, 'snapshots']);
         Route::get('/kpi/exceptions', [KpiController::class, 'exceptions']);
         Route::get('/kpi/adjustments', [KpiController::class, 'adjustments']);

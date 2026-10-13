@@ -4844,6 +4844,15 @@ small {
 @media(max-width:1050px) { .kpi-bundle-item { grid-template-columns:repeat(2,minmax(0,1fr)); } .kpi-bundle-item > .btn { justify-self:start; } }
 @media(max-width:620px) { .kpi-bundle-modal { width:calc(100vw - 16px); max-height:calc(100dvh - 16px); } .kpi-bundle-modal .modal-head,.kpi-bundle-modal .modal-foot,.kpi-bundle-modal .modal-body { padding:14px; } .kpi-bundle-modal .form-grid,.kpi-bundle-item { grid-template-columns:1fr; } }
 @media(max-width:800px) { .kpi-report-summary { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+.business-report-panel [hidden]{display:none!important}
+.business-report-panel{min-width:0;overflow:hidden}
+.business-report-panel .kpi-report-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));padding:16px 0;gap:14px}
+.business-report-panel .kpi-report-filters label{min-width:0}
+.business-report-panel .kpi-report-filters input,.business-report-panel .kpi-report-filters select{min-width:0;width:100%;box-sizing:border-box}
+.business-report-panel #businessReportRoot{overflow-x:auto}
+.business-report-totals{display:flex;flex-wrap:wrap;gap:24px;padding:16px 0}
+.business-report-totals small{display:block;color:#64748b;margin-bottom:6px}
+.business-report-totals strong{font-size:20px;color:#111827}
 .assigned-kpi-panel{margin-bottom:14px;overflow:hidden;padding:0}
 .assigned-kpi-panel .panel-head{padding:14px 20px;align-items:center;gap:12px;flex-wrap:wrap;margin:0}
 .assigned-kpi-panel.is-empty{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;padding:14px 20px;gap:4px 20px}
