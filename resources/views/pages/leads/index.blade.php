@@ -13,5 +13,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/leads.js?v=20261011-permissions1"></script>
+<script src="/assets/js/features/leads.js?v=20261013-modal1"></script>
 @endpush

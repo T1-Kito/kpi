@@ -2340,6 +2340,13 @@
 .sq-request-active{background:#eff6ff!important}
 .supplier-quotation-modal .supplier-quotation-line{grid-template-columns:minmax(140px,1.2fr) minmax(160px,1.5fr) 65px 80px 110px minmax(120px,1fr) 32px;gap:10px}
 .supplier-quotation-modal input[readonly]{background:#f8faff;color:#526986}
+.modal.lead-create-modal{width:min(1040px,calc(100vw - 40px));max-width:1040px;max-height:calc(100dvh - 32px)}
+.lead-create-modal .modal-head,.lead-create-modal .modal-foot{padding:18px 26px;flex:none}
+.lead-create-modal .modal-body{padding:24px 26px;min-height:0;overflow-y:auto}
+.lead-create-modal .form-grid{gap:20px 24px}
+.lead-create-modal .field:has(select[name="assigned_to"]){grid-column:1/-1}
+.lead-create-modal .crm-optional-fields{margin-top:20px}
+@media(max-width:600px){.modal.lead-create-modal{width:calc(100vw - 16px);max-height:calc(100dvh - 16px)}.lead-create-modal .modal-head,.lead-create-modal .modal-body,.lead-create-modal .modal-foot{padding:16px}.lead-create-modal .form-grid{grid-template-columns:1fr}}
 .modal.purchase-request-create-modal{width:min(1180px,calc(100vw - 40px));max-width:1180px;max-height:calc(100dvh - 32px)}
 .purchase-request-create-modal .modal-head,.purchase-request-create-modal .modal-foot{padding:18px 24px;flex:none}
 .purchase-request-create-modal .modal-body{padding:22px 24px;min-height:0;overflow-y:auto}

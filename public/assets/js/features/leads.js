@@ -182,7 +182,7 @@ async function openLeadModal() {
         VKModal.toast(response.data.assigned_to ? 'Đã tạo hồ sơ, phân công và tạo việc chăm sóc.' : 'Đã tạo hồ sơ trong hàng chờ phân công.');
         VKModal.close();
         loadLeads();
-    });
+    }, { className: 'lead-create-modal', submitText: 'Tạo khách hàng tiềm năng' });
 }
 
 async function openAssignLeadModal(id) {
