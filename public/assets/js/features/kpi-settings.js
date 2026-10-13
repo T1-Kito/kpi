@@ -394,7 +394,8 @@
         const date = dateInputValue(row?.period_start) || `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
         const types = [{value:'user',label:'Nhân viên cụ thể'},{value:'department',label:'Mỗi nhân viên trong phòng ban'},{value:'position',label:'Mỗi nhân viên có chức vụ'},{value:'company',label:'Mỗi nhân viên toàn công ty'}];
         VKModal.open(row ? 'Sửa phân KPI' : 'Phân KPI tự động', `<div class="form-grid two">
-            ${VKModal.select('kpi_definition_id','Chỉ tiêu',data.activeDefinitions.map(item=>({value:item.id,label:item.code+' — '+item.name})),selectedDefinition.id)}
+            ${VKModal.select('kpi_definition_id','Mã chỉ tiêu',data.activeDefinitions.map(item=>({value:item.id,label:item.code})),selectedDefinition.id)}
+            <div class="field"><label for="kpi_selected_definition_name">Tên chỉ tiêu</label><input id="kpi_selected_definition_name" readonly value="${esc(selectedDefinition.name)}" style="background:#f7f9fd"></div>
             ${VKModal.select('metric','Nguồn số liệu tự động',metrics,row?.metric || metrics[0]?.value)}
             ${VKModal.select('audience_type','Phân cho',types,row?.audience_type || 'user')}
             <div id="kpiAudienceField"></div>
@@ -416,6 +417,9 @@
                 await loadKpiSettings();
             }, {className:'wide-modal',submitText:'Lưu phân KPI'});
         const form = document.getElementById('modalForm');
+        form.elements.kpi_definition_id.addEventListener('change', () => {
+            form.querySelector('#kpi_selected_definition_name').value = data.activeDefinitions.find(item => String(item.id) === form.elements.kpi_definition_id.value)?.name || '';
+        });
         let previewVersion = 0;
         const previewAudience = async () => {
             const version = ++previewVersion;

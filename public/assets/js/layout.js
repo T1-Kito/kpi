@@ -68,7 +68,7 @@
         'business-reports': ['business-reports.js?v=20261013-permissions1', 'loadBusinessReports'],
         'my-kpi': ['my-kpi.js?v=20261011-assign2', 'loadMyKpi'],
         'kpi-adjustments': ['kpi-adjustments.js?v=20261009-permissions1', 'loadKpiAdjustments'],
-        'kpi-settings': ['kpi-settings.js?v=20261011-modal1', 'loadKpiSettings'],
+        'kpi-settings': ['kpi-settings.js?v=20261013-fields1', 'loadKpiSettings'],
         workflows: ['workflows.js?v=20260618-2', 'loadWorkflows'],
         users: ['users.js?v=20261009-permissions1', 'loadUsers'],
         roles: ['roles.js?v=20261008-1', 'loadRoles'],
