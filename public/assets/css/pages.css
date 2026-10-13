@@ -2340,6 +2340,19 @@
 .sq-request-active{background:#eff6ff!important}
 .supplier-quotation-modal .supplier-quotation-line{grid-template-columns:minmax(140px,1.2fr) minmax(160px,1.5fr) 65px 80px 110px minmax(120px,1fr) 32px;gap:10px}
 .supplier-quotation-modal input[readonly]{background:#f8faff;color:#526986}
+.modal.purchase-request-create-modal{width:min(1180px,calc(100vw - 40px));max-width:1180px;max-height:calc(100dvh - 32px)}
+.purchase-request-create-modal .modal-head,.purchase-request-create-modal .modal-foot{padding:18px 24px;flex:none}
+.purchase-request-create-modal .modal-body{padding:22px 24px;min-height:0;overflow-y:auto}
+.purchase-request-create-modal .modal-body > .form-grid{gap:18px 20px}
+.purchase-request-create-modal .pr-selected-item{padding:16px 20px;background:#f7f9fd}
+.purchase-request-create-modal .pr-selected-item dl{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 20px;margin:12px 0}
+.purchase-request-create-modal .procurement-quick-product{padding:18px 20px;border:1px solid #dce6f5;border-radius:10px;background:#fff}
+.purchase-request-create-modal .procurement-quick-product summary{font-size:14px;font-weight:600;color:#2459aa}
+.purchase-request-create-modal .procurement-quick-product p{margin:10px 0 16px}
+.purchase-request-create-modal .procurement-quick-product .form-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px 20px;margin-bottom:16px}
+.purchase-request-create-modal textarea{width:100%;min-height:80px;resize:vertical}
+@media(max-width:900px){.purchase-request-create-modal .procurement-quick-product .form-grid,.purchase-request-create-modal .pr-selected-item dl{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.modal.purchase-request-create-modal{width:calc(100vw - 16px);max-height:calc(100dvh - 16px)}.purchase-request-create-modal .modal-head,.purchase-request-create-modal .modal-body,.purchase-request-create-modal .modal-foot{padding:16px}.purchase-request-create-modal .procurement-quick-product{padding:14px}.purchase-request-create-modal .procurement-quick-product .form-grid,.purchase-request-create-modal .pr-selected-item dl{grid-template-columns:1fr}}
 .modal.sq-create-modal{width:min(1200px,calc(100vw - 40px));max-width:1200px;max-height:calc(100dvh - 32px)}
 .sq-create-modal .modal-head,.sq-create-modal .modal-foot{padding:18px 24px;flex:none}
 .sq-create-modal .modal-body{padding:22px 24px;min-height:0;overflow-y:auto}
