@@ -135,6 +135,9 @@ function renderRequestSummary(row) {
 }
 
 async function openPurchaseRequestModal() {
+    const [categories, brands] = await Promise.all([
+        VKApi.request('/product-categories'), VKApi.request('/product-brands'),
+    ]);
     const skus = await VKApi.request('/skus?page_size=100');
     purchaseRequestSkus = skus.data || [];
     for (let page = 2; purchaseRequestSkus.length < Number(skus.meta?.total || 0); page++) {
@@ -151,7 +154,19 @@ async function openPurchaseRequestModal() {
             })))}
             ${VKModal.field('quantity', 'Số lượng cần mua', 'number', '1')}
             <div class="field full pr-selected-item" data-pr-selected-item aria-live="polite"></div>
-            <details class="field full procurement-quick-product"><summary>+ Tạo mặt hàng nhanh nếu chưa có trong danh mục</summary><p>Mã hàng được cấp tự động. Cần quyền quản lý dữ liệu nền; không làm tăng tồn kho.</p><div class="form-grid">${VKModal.field('quick_name', 'Tên mặt hàng mới', 'text', '')}${VKModal.field('quick_unit', 'Đơn vị tính', 'text', 'cái')}</div><button class="btn small" type="button" data-pr-quick-product>Tạo và chọn mặt hàng</button><span data-pr-quick-feedback role="status"></span></details>
+            <details class="field full procurement-quick-product">
+                <summary>+ Tạo mặt hàng nhanh nếu chưa có trong danh mục</summary>
+                <p>Bỏ trống mã hàng để tự sinh. Mặt hàng được lưu ngay vào danh mục, kể cả khi hủy yêu cầu mua; không làm tăng tồn kho.</p>
+                <div class="form-grid">
+                    ${VKModal.field('quick_code', 'Mã hàng (không bắt buộc)', 'text', '')}
+                    ${VKModal.field('quick_name', 'Tên mặt hàng mới *', 'text', '')}
+                    ${VKModal.field('quick_unit', 'Đơn vị tính *', 'text', 'cái')}
+                    ${VKModal.select('quick_category', 'Danh mục sản phẩm', [{value:'',label:'Chưa phân loại'}, ...(categories.data || []).map(row => ({value:row.id,label:row.name}))])}
+                    ${VKModal.select('quick_brand', 'Hãng / thương hiệu', [{value:'',label:'Chưa chọn hãng'}, ...(brands.data || []).map(row => ({value:row.id,label:row.name}))])}
+                    <div class="field full"><label for="quick_description">Mô tả / quy cách</label><textarea id="quick_description" name="quick_description" rows="3" maxlength="5000" placeholder="Quy cách, đặc điểm cần mua..."></textarea></div>
+                </div>
+                <button class="btn small" type="button" data-pr-quick-product>Tạo và chọn mặt hàng</button><span data-pr-quick-feedback role="status"></span>
+            </details>
             <div class="field full">
                 <label for="reason">Lý do mua</label>
                 <input id="reason" name="reason" type="text" value="Yêu cầu mua bổ sung">
@@ -256,7 +271,13 @@ document.addEventListener('click', async event => {
     if (!name || !unit) { feedback.textContent = 'Nhập tên hàng và đơn vị tính trước.'; return; }
     button.disabled = true;
     try {
-        const response = await VKApi.request('/skus', { method:'POST', body:JSON.stringify({name, unit, quick_create:true}) });
+        const response = await VKApi.request('/skus', { method:'POST', body:JSON.stringify({
+            name, unit, quick_create:true,
+            sku_code: form.elements.quick_code.value.trim() || null,
+            category_id: form.elements.quick_category.value || null,
+            brand_id: form.elements.quick_brand.value || null,
+            description: form.elements.quick_description.value.trim() || null,
+        }) });
         const sku = response.data;
         purchaseRequestSkus.push(sku);
         const option = new Option(`${sku.sku_code} - ${sku.name}`, sku.id, true, true);
@@ -264,6 +285,8 @@ document.addEventListener('click', async event => {
         renderSelectedPurchaseItem();
         feedback.textContent = `Đã tạo ${sku.sku_code} và chọn cho yêu cầu mua.`;
         form.elements.quick_name.value = '';
+        form.elements.quick_code.value = '';
+        form.elements.quick_description.value = '';
     } catch (error) { feedback.textContent = error.message || 'Không thể tạo mặt hàng.'; }
     finally { button.disabled = false; }
 });

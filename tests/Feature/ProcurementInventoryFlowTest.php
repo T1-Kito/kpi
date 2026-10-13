@@ -76,6 +76,14 @@ class ProcurementInventoryFlowTest extends TestCase
         $payload = ['name' => 'Mặt hàng mua mới', 'unit' => 'cái', 'quick_create' => true];
         $this->withToken($admin)->postJson('/api/v1/skus', $payload)->assertCreated()->assertJsonPath('data.name', $payload['name']);
         $this->withToken($admin)->postJson('/api/v1/skus', $payload)->assertStatus(422);
+        $custom = $payload + ['sku_code' => 'MY-ITEM-001', 'description' => 'Quy cách mua hàng'];
+        $custom['name'] = 'Mặt hàng mã tự nhập';
+        $created = $this->withToken($admin)->postJson('/api/v1/skus', $custom)
+            ->assertCreated()->assertJsonPath('data.sku_code', 'MY-ITEM-001')
+            ->assertJsonPath('data.product.description', 'Quy cách mua hàng');
+        $this->assertNotEmpty($created->json('data.product.code'));
+        $custom['name'] = 'Mặt hàng khác mã trùng';
+        $this->withToken($admin)->postJson('/api/v1/skus', $custom)->assertUnprocessable();
         $user = \App\Models\User::where('email', 'sales@vk-kpi.local')->firstOrFail();
         foreach ($user->roles as $role) $role->permissions()->detach();
         $sales = $this->loginAs('sales@vk-kpi.local');
