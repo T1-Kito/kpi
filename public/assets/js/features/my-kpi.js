@@ -41,7 +41,8 @@
             ]);
             if (current !== version || document.getElementById('myKpiRoot') !== root) return;
             if (!Array.isArray(result.data)) throw new Error('Không nhận được KPI được phân.');
-            const html = result.data.length ? `<div class="my-kpi-grid">${result.data.map(renderIndicator).join('')}</div>` : '<div class="my-kpi-empty"><span class="my-kpi-empty-icon" aria-hidden="true">◎</span><div><strong>Chưa có KPI trong kỳ này</strong><p>Chỉ tiêu sẽ tự cập nhật khi được phân công.</p></div></div>';
+            root.closest('.assigned-kpi-panel')?.classList.toggle('is-empty', result.data.length === 0);
+            const html = result.data.length ? `<div class="my-kpi-grid">${result.data.map(renderIndicator).join('')}</div>` : '<div class="my-kpi-empty"><strong>Chưa có KPI trong kỳ này</strong><p>Tự cập nhật khi được phân công.</p></div>';
             const summaries = result.meta?.summaries || [];
             const summary = summaries.length ? `<div class="kpi-report-summary my-kpi-summary">${summaries.map(item => `<div><small>${escape(({month:'Tháng',quarter:'Quý',year:'Năm'})[item.period_type])}: ${escape(item.period_start)} — ${escape(item.period_end)}</small><strong>${number(item.score)}/100</strong><small>${item.indicators} chỉ tiêu · ${item.locked ? 'Đã chốt' : 'Đang theo dõi'}</small></div>`).join('')}</div>` : '';
             const review = renderConfirmations((confirmations.data || []).filter(item => item.closure?.period_start?.slice(0,10) <= date.value && item.closure?.period_end?.slice(0,10) >= date.value));
