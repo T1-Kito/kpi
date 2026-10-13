@@ -29,5 +29,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/supplier-quotations.js?v=20261011-4"></script>
+<script src="/assets/js/features/supplier-quotations.js?v=20261013-modal2"></script>
 @endpush

@@ -253,7 +253,7 @@
             VKModal.toast('Đã tạo báo giá nhà cung cấp.');
             VKModal.close();
             await refreshSupplierQuotationPage();
-        }, { className: 'modal-wide supplier-quotation-modal', submitText: 'Lưu báo giá' });
+        }, { className: 'modal-wide supplier-quotation-modal sq-create-modal', submitText: 'Lưu báo giá' });
     }
 
     async function refreshSupplierQuotationPage() {

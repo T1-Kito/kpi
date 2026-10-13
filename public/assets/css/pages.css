@@ -2340,6 +2340,12 @@
 .sq-request-active{background:#eff6ff!important}
 .supplier-quotation-modal .supplier-quotation-line{grid-template-columns:minmax(140px,1.2fr) minmax(160px,1.5fr) 65px 80px 110px minmax(120px,1fr) 32px;gap:10px}
 .supplier-quotation-modal input[readonly]{background:#f8faff;color:#526986}
+.modal.sq-create-modal{width:min(1200px,calc(100vw - 40px));max-width:1200px;max-height:calc(100dvh - 32px)}
+.sq-create-modal .modal-head,.sq-create-modal .modal-foot{padding:18px 24px;flex:none}
+.sq-create-modal .modal-body{padding:22px 24px;min-height:0;overflow-y:auto}
+.sq-create-modal .supplier-quotation-line{grid-template-columns:minmax(150px,1.2fr) minmax(200px,1.8fr) 70px 90px 130px minmax(150px,1.2fr) 36px}
+@media(max-width:1000px){.sq-create-modal .supplier-quotation-line{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.modal.sq-create-modal{width:calc(100vw - 16px);max-height:calc(100dvh - 16px)}.sq-create-modal .modal-head,.sq-create-modal .modal-body,.sq-create-modal .modal-foot{padding:16px}}
 @media(max-width:900px){.supplier-quotation-modal .supplier-quotation-line{grid-template-columns:repeat(2,minmax(0,1fr))}.supplier-quotation-modal .supplier-quotation-line label{grid-column:auto}}
 #supplierQuotationsRoot tr[hidden]{display:none}
 .sq-approval-ticks{display:flex;align-items:center;gap:6px;min-width:72px}.sq-approval-tick{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:13px;line-height:1;font-weight:500;flex-shrink:0}.sq-approval-tick.is-approved{color:#058457;background:#e5f8ef}.sq-approval-tick.is-pending{color:#8b98aa;background:#f0f3f7}.sq-approval-tick.is-final{border:1px solid #cbd5e1}

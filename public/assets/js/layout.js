@@ -55,7 +55,7 @@
         'inventory-transactions': ['inventory.js?v=20260615-3', 'loadInventory'],
         warehouses: ['warehouses.js', 'loadWarehouses'],
         'purchase-requests': ['purchase-requests.js?v=20261008-menu1', 'loadPurchaseRequests'],
-        'supplier-quotations': ['supplier-quotations.js?v=20261011-4', 'loadSupplierQuotations'],
+        'supplier-quotations': ['supplier-quotations.js?v=20261013-modal2', 'loadSupplierQuotations'],
         'purchase-orders': ['purchase-orders.js?v=20261009-workflow1', 'loadPurchaseOrders'],
         'goods-receipts': ['goods-receipts.js?v=20261008-menu1', 'loadGoodsReceipts'],
         'goods-issues': ['goods-issues.js?v=20261008-menu1', 'loadGoodsIssues'],
