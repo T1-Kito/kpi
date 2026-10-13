@@ -39,7 +39,7 @@
         deals: ['deals.js?v=20261011-permissions1', 'loadDeals'],
         'sales-master-data': ['sales-master-data.js?v=20260923-1', 'loadSalesMasterData'],
         contracts: ['contracts.js?v=20260923-6', 'loadContracts'],
-        quotations: ['quotations.js?v=20261011-navigation1', 'loadQuotations'],
+        quotations: ['quotations.js?v=20261013-policy1', 'loadQuotations'],
         'sales-orders': ['sales-orders.js?v=20261008-menu1', 'loadSalesOrders'],
         deliveries: ['sales-fulfillment.js?v=20261009-codes1', 'loadDeliveries'],
         'sales-invoices': ['sales-fulfillment.js?v=20261009-codes1', 'loadSalesInvoices'],
@@ -64,8 +64,8 @@
         approvals: ['approvals.js?v=20261011-2', 'loadApprovals'],
         alerts: ['alerts.js?v=20260615-2', 'loadAlerts'],
         kpi: ['kpi.js?v=20261011-scope1', 'loadKpi'],
-        'kpi-reports': ['kpi-reports.js?v=20261013-export1', 'loadKpiReports'],
-        'business-reports': ['business-reports.js?v=20261013-1', 'loadBusinessReports'],
+        'kpi-reports': ['kpi-reports.js?v=20261013-permissions1', 'loadKpiReports'],
+        'business-reports': ['business-reports.js?v=20261013-permissions1', 'loadBusinessReports'],
         'my-kpi': ['my-kpi.js?v=20261011-assign2', 'loadMyKpi'],
         'kpi-adjustments': ['kpi-adjustments.js?v=20261009-permissions1', 'loadKpiAdjustments'],
         'kpi-settings': ['kpi-settings.js?v=20261011-modal1', 'loadKpiSettings'],
@@ -77,7 +77,7 @@
         'audit-logs': ['audit-logs.js', 'loadAuditLogs'],
         'service-tickets': ['service-desk.js', 'loadServiceTickets'],
         'warranty-claims': ['service-desk.js', 'loadWarrantyClaims'],
-        settings: ['settings.js?v=20261009-icons2', 'loadSettings'],
+        settings: ['settings.js?v=20261013-policy1', 'loadSettings'],
     };
     const routePrefetch = {
         '/dashboard': ['dashboard', [

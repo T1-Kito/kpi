@@ -1,6 +1,6 @@
 (function () {
     let version = 0;
-    let loadedQuery = null;
+    let loadedQuery = null, canExport = false;
     let employees = [];
     let poll = null, pending = false;
     const exportButton = () => document.querySelector('[data-kpi-report-export]');
@@ -82,7 +82,7 @@
             }
             if (sync) sync.textContent = `Tự cập nhật mỗi 30 giây · Cập nhật lúc ${new Date(result.meta.as_of).toLocaleTimeString('vi-VN')}`;
             // Changing a filter while the request is running must not export the older selection.
-            if (queryFor(form) === query) { loadedQuery = query; button.disabled = false; }
+            if (queryFor(form) === query) { loadedQuery = query; canExport = result.meta.can_export === true; button.disabled = !canExport; button.title = canExport ? 'Xuất theo kỳ và bộ lọc đang xem' : 'Chưa được cấp quyền xuất Excel KPI'; }
         } catch (error) {
             if (current !== version || document.getElementById('kpiReportRoot') !== root) return;
             if (sameQuery) {
@@ -115,7 +115,7 @@
         return work + `<div class="kpi-indicator-details">${row.kpi_details.map(item => `<article><span class="kpi-indicator-code">${escape(item.code)}</span><h3>${escape(item.name)}</h3><p>${escape(item.metric_label)}</p><strong>${number(item.actual)} <small>/ ${number(item.target)} ${escape(item.unit)}</small></strong><div class="my-kpi-progress"><span style="width:${Math.max(0,Math.min(100,Number(item.score)))}%"></span></div><p>Điểm: ${number(item.score)}/100 · Trọng số: ${number(item.weight)} · ${item.direction === 'increase' ? 'Tăng là tốt' : 'Giảm là tốt'}</p><p class="form-note">${escape(item.description)}</p></article>`).join('')}</div>`;
     }
     async function exportReport() {
-        if (loadedQuery === null) return;
+        if (!canExport || loadedQuery === null) return;
         const button = document.querySelector('[data-kpi-report-export]');
         const query = loadedQuery;
         button.disabled = true;
@@ -140,7 +140,7 @@
         } finally {
             clearTimeout(timeout);
             button.textContent = 'Xuất Excel';
-            button.disabled = loadedQuery === null;
+            button.disabled = !canExport || loadedQuery === null;
         }
     }
 })();

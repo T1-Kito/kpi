@@ -40,7 +40,7 @@ class QuotationController extends Controller
             ])
             ->withCount('salesOrders');
         $user = $request->user();
-        $assigned = Approval::where('tenant_id', $user->tenant_id)->where('source_type', 'Quotation')->where('approver_id', $user->id)->select('source_id');
+        $assigned = Approval::where('tenant_id', $user->tenant_id)->where('source_type', 'Quotation')->whereIn('approver_id', app(\App\Support\SalesApprovalAccess::class)->principals($user))->select('source_id');
         $query->where(function ($scope) use ($user, $assigned) {
             if ($user->hasPermission('sales.quotation.view')) {
                 $scope->whereIn('id', DataScope::owned(Quotation::where('tenant_id', $user->tenant_id)->select('id'), $user, 'sales_owner_id', 'salesOwner'));
@@ -54,7 +54,7 @@ class QuotationController extends Controller
 
         $quotations = $query->latest('id')->paginate($pageSize);
         $quotations->getCollection()->each(function ($quote) use ($user) {
-            $quote->setAttribute('can_approve', $user->hasPermission('sales.margin.approve') && collect($quote->approval_steps ?? [])->contains(fn ($step) => $step['status'] === 'pending' && (int) $step['user_id'] === (int) $user->id));
+            $quote->setAttribute('can_approve', app(\App\Support\SalesApprovalAccess::class)->canApprove($quote, $user));
         });
 
         return response()->json([
@@ -138,7 +138,7 @@ class QuotationController extends Controller
             'issue' => \App\Models\QuotationIssue::where('quotation_id', $quotation->id)->first(),
             'is_expired' => $quotation->valid_until && $quotation->valid_until->endOfDay()->isPast(),
             'revisions' => Quotation::where('tenant_id', $quotation->tenant_id)->where(fn ($query) => $query->whereKey($rootId)->orWhere('revision_root_id', $rootId))->orderBy('revision_number')->get(['id', 'code', 'revision_number', 'status', 'created_at']),
-            'can_approve' => $request->user()->hasPermission('sales.margin.approve') && collect($quotation->approval_steps ?? [])->contains(fn ($step) => $step['status'] === 'pending' && (int) $step['user_id'] === (int) $request->user()->id),
+            'can_approve' => app(\App\Support\SalesApprovalAccess::class)->canApprove($quotation, $request->user()),
             'approval' => $approvals->first(),
             'approvals' => $approvals,
             'tasks' => Task::where('tenant_id', $quotation->tenant_id)
@@ -314,7 +314,7 @@ class QuotationController extends Controller
     {
         $user = $request->user();
         $owned = $user->hasPermission('sales.quotation.view') && DataScope::owned(Quotation::whereKey($quotation->id), $user, 'sales_owner_id', 'salesOwner')->exists();
-        $assigned = $user->hasPermission('sales.margin.approve') && Approval::where('tenant_id', $user->tenant_id)->where('source_type', 'Quotation')->where('source_id', $quotation->id)->where('approver_id', $user->id)->exists();
+        $assigned = $user->hasPermission('sales.margin.approve') && Approval::where('tenant_id', $user->tenant_id)->where('source_type', 'Quotation')->where('source_id', $quotation->id)->whereIn('approver_id', app(\App\Support\SalesApprovalAccess::class)->principals($user))->exists();
         abort_unless($owned || $assigned, 404);
     }
 

@@ -4,6 +4,7 @@ let approvalRuleSequence = 0;
 let salesQuotationApproval = null;
 let workAssignment = null;
 let operationalApproval = null;
+let salesApprovalRowSequence = 0;
 document.addEventListener('vk:ready', () => loadSettings());
 document.addEventListener('vk:settings-menu', () => toggleSettingsLauncher(true));
 
@@ -25,6 +26,17 @@ document.addEventListener('click', (event) => {
     if (!document.getElementById('settingsRoot')) return;
     const sectionButton = event.target.closest('[data-settings-nav]');
     if (event.target.closest('[data-save-sales-approval]')) saveSalesQuotationApproval();
+    if (event.target.closest('[data-add-sales-approver]')) {
+        const box = document.querySelector('[data-sales-people]');
+        if (box.children.length < 10) box.insertAdjacentHTML('beforeend', salesApprovalPerson('', box.children.length));
+    }
+    event.target.closest('[data-remove-sales-approver]')?.closest('[data-sales-approver]')?.remove();
+    if (event.target.closest('[data-add-sales-approver], [data-remove-sales-approver]')) document.querySelectorAll('[data-sales-approver]').forEach((row,index)=>{row.querySelector('label').textContent=`Cấp duyệt ${index+1}`;});
+    if (event.target.closest('[data-add-sales-delegation]')) {
+        const box = document.querySelector('[data-sales-delegations]');
+        if (box.children.length < 20) box.insertAdjacentHTML('beforeend', salesDelegationRow({}));
+    }
+    event.target.closest('[data-remove-sales-delegation]')?.closest('[data-sales-delegation]')?.remove();
     if (event.target.closest('[data-save-work-assignment]')) saveWorkAssignment();
     const addPerson = event.target.closest('[data-add-approval-person]');
     if (addPerson) {
@@ -216,18 +228,37 @@ function renderSalesQuotationApproval() {
     if (!salesQuotationApproval) return '<p class="form-note">Cần quyền quản lý người dùng để tải và thiết lập luồng duyệt.</p>';
     const config = salesQuotationApproval.data || {};
     const options = [{value:'',label:'Chọn người duyệt'},...(salesQuotationApproval.users || []).map(user => ({value:user.id,label:user.name}))];
-    return `<section class="module-panel settings-section"><div class="panel-head"><div><h2>Duyệt báo giá bán hàng</h2><span>Thiết lập một lần. Báo giá gửi duyệt tự lấy người duyệt, khóa giá và nội dung.</span></div><button class="btn primary" data-save-sales-approval>Lưu thiết lập</button></div><p class="form-note">Duyệt lần lượt theo thứ tự. Người lập được duyệt nếu có quyền, được phân công và đến đúng lượt. Không đổi luồng của báo giá đã gửi duyệt.</p><div class="form-grid">${[0,1,2].map(index => VKModal.select(`sales_approver_${index}`,`Người duyệt ${index + 1}${index === 0 ? ' *' : ' (tùy chọn)'}`, options, config.approvers?.[index] || '')).join('')}${VKModal.select('sales_exception_approver','Người duyệt thêm khi vượt ngưỡng (tùy chọn)',options,config.exception_approvers?.[0] || '')}${VKModal.field('sales_minimum_margin','Biên lợi nhuận tối thiểu (%)','number',config.minimum_margin ?? 15)}${VKModal.field('sales_maximum_discount','Chiết khấu tối đa không cần duyệt thêm (%)','number',config.maximum_discount ?? 0)}${VKModal.field('sales_amount_threshold','Giá trị cần duyệt thêm (VND, bỏ trống nếu không dùng)','number',config.amount_threshold ?? '')}</div><p class="form-note">Dưới biên lợi nhuận, vượt chiết khấu hoặc đạt mức tiền sẽ thêm người duyệt ngoại lệ. Nếu chưa cấu hình, hệ thống chỉ dùng quản lý trực tiếp hợp lệ; không tự chọn Admin.</p></section>`;
+    return `<section class="module-panel settings-section"><div class="panel-head"><div><h2>Duyệt báo giá bán hàng</h2><span>Duyệt lần lượt. Chỉ cấp cuối hoàn tất báo giá.</span></div><button class="btn primary" data-save-sales-approval>Lưu thiết lập</button></div><div class="form-grid" data-sales-people>${(config.approvers?.length ? config.approvers : ['']).map(salesApprovalPerson).join('')}</div><button class="btn secondary small" data-add-sales-approver>Thêm cấp duyệt</button><div class="form-grid">${VKModal.select('sales_self_approval','Người lập tự duyệt',[{value:'allow',label:'Cho phép nếu được phân công và đúng lượt'},{value:'block',label:'Không cho người lập tự duyệt'}],config.separation_of_duties ? 'block' : 'allow')}${VKModal.select('sales_exception_approver','Người duyệt thêm khi vượt ngưỡng (tùy chọn)',options,config.exception_approvers?.[0] || '')}${VKModal.field('sales_minimum_margin','Biên lợi nhuận tối thiểu (%)','number',config.minimum_margin ?? 15)}${VKModal.field('sales_maximum_discount','Chiết khấu tối đa không cần duyệt thêm (%)','number',config.maximum_discount ?? 0)}${VKModal.field('sales_amount_threshold','Giá trị cần duyệt thêm (VND, bỏ trống nếu không dùng)','number',config.amount_threshold ?? '')}</div><p class="form-note">Thứ tự và chính sách tự duyệt được giữ trên báo giá đã gửi duyệt. Thay đổi áp dụng cho lần gửi duyệt sau.</p>${salesQuotationApproval.can_manage_delegation ? `<h3>Người duyệt thay có thời hạn</h3><p class="form-note">Người thay cần có quyền duyệt, chỉ xử lý cấp được giao trong thời hạn. Người duyệt chính vẫn được duyệt; không chuyển quyền quản trị hoặc cấp khác.</p><div data-sales-delegations>${(config.delegations || []).map(salesDelegationRow).join('')}</div><button class="btn secondary small" data-add-sales-delegation>Thêm người duyệt thay</button>` : '<p class="form-note">Thiết lập người duyệt thay cần quyền Vai trò & phân quyền.</p>'}</section>`;
+}
+
+function salesApprovalPerson(id, index) {
+    const options = [{value:'',label:'Chọn người duyệt'},...(salesQuotationApproval.users || []).map(user => ({value:user.id,label:user.name}))];
+    return `<div data-sales-approver>${VKModal.select(`sales_level_${++salesApprovalRowSequence}`,`Cấp duyệt ${index + 1}`,options,id)}<button class="btn secondary small" data-remove-sales-approver>Bỏ cấp</button></div>`;
+}
+
+function salesDelegationRow(rule) {
+    const key = ++salesApprovalRowSequence;
+    const options = [{value:'',label:'Chọn người'},...(salesQuotationApproval.users || []).map(user=>({value:user.id,label:user.name}))];
+    if (rule.from_user_id && !options.some(option=>Number(option.value)===Number(rule.from_user_id))) options.push({value:rule.from_user_id,label:'Người duyệt đã ngừng hoạt động #'+rule.from_user_id});
+    const local = value => { if(!value) return ''; const date = new Date(value); return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}T${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`; };
+    return `<section class="approval-setting-rule" data-sales-delegation><div class="form-grid">${VKModal.select(`delegate_from_${key}`,'Người được thay',options,rule.from_user_id || '')}${VKModal.select(`delegate_to_${key}`,'Người duyệt thay',options,rule.to_user_id || '')}${VKModal.field(`delegate_start_${key}`,'Bắt đầu (giờ đang hiển thị trên máy)','datetime-local',local(rule.starts_at))}${VKModal.field(`delegate_end_${key}`,'Kết thúc','datetime-local',local(rule.ends_at))}${VKModal.field(`delegate_reason_${key}`,'Lý do thay','text',rule.reason || '')}</div><button class="btn secondary small" data-remove-sales-delegation>Bỏ người thay</button></section>`;
 }
 
 async function saveSalesQuotationApproval() {
     const button = document.querySelector('[data-save-sales-approval]'); button.disabled = true;
     try {
         const value = name => document.getElementById(name)?.value || '';
-        const approvers = [0,1,2].map(index => value(`sales_approver_${index}`)).filter(Boolean).map(Number);
+        const approvers = Array.from(document.querySelectorAll('[data-sales-approver] select')).map(select=>select.value).filter(Boolean).map(Number);
         const exception = value('sales_exception_approver');
         const payload = {approvers,exception_approvers:exception ? [Number(exception)] : [],minimum_margin:Number(value('sales_minimum_margin')),maximum_discount:Number(value('sales_maximum_discount')),amount_threshold:value('sales_amount_threshold') ? Number(value('sales_amount_threshold')) : null};
+        payload.separation_of_duties = value('sales_self_approval') === 'block';
+        if(salesQuotationApproval.can_manage_delegation) payload.delegations = Array.from(document.querySelectorAll('[data-sales-delegation]')).map(row=>{
+            const field = prefix=>row.querySelector(`[id^="${prefix}"]`)?.value || '';
+            if(!field('delegate_from_') || !field('delegate_to_') || !field('delegate_start_') || !field('delegate_end_') || field('delegate_reason_').trim().length < 5) throw new Error('Chọn đủ hai người, thời hạn và lý do thay tối thiểu 5 ký tự.');
+            return {from_user_id:Number(field('delegate_from_')),to_user_id:Number(field('delegate_to_')),starts_at:new Date(field('delegate_start_')).toISOString(),ends_at:new Date(field('delegate_end_')).toISOString(),reason:field('delegate_reason_').trim()};
+        });
         await VKApi.request('/tenant/sales-quotation-approval',{method:'POST',body:JSON.stringify(payload)});
-        salesQuotationApproval.data = payload; VKModal.toast('Đã lưu luồng duyệt cho báo giá gửi duyệt sau này.');
+        salesQuotationApproval.data = payload; VKModal.toast('Đã lưu cấu hình duyệt và thời hạn người thay.');
     } catch(error) { VKModal.toast(error.message,'danger'); }
     finally { button.disabled = false; }
 }

@@ -51,6 +51,8 @@ class BusinessReportTest extends TestCase
             $order->forceFill(['created_at'=>'2026-10-01 00:00:00'])->save();
         }
         $token = $this->token($sales);
+        $this->withToken($token)->get('/api/v1/business-reports/export?type=sales&from=2026-10-01&to=2026-10-01')->assertForbidden();
+        $sales->roles()->first()->permissions()->syncWithoutDetaching([\App\Models\Permission::where('code', 'sales.report.export')->value('id')]);
         $query='type=sales&from=2026-10-01&to=2026-10-01&q=REPORT-';
         $this->withToken($token)->getJson('/api/v1/business-reports?'.$query)->assertOk()->assertJsonCount(50,'data.rows')->assertJsonPath('data.meta.count',55)->assertJsonPath('data.totals.5',5500);
         $this->withToken($token)->getJson('/api/v1/business-reports?'.$query.'&page=2')->assertOk()->assertJsonCount(5,'data.rows');

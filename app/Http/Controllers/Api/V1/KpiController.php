@@ -34,13 +34,24 @@ class KpiController extends Controller
     public function employeeReport(Request $request, \App\Services\Kpi\EmployeeKpiReport $reports): JsonResponse
     {
         $report = $reports->build($request->user(), $this->reportFilters($request));
+        $report['meta']['can_export'] = $request->user()->hasPermission('kpi.report.export');
         return response()->json(['data' => $report['rows'], 'meta' => $report['meta'], 'employees' => $report['employees']]);
     }
 
     public function exportEmployeeReport(Request $request, \App\Services\Kpi\EmployeeKpiReport $reports, \App\Services\Kpi\KpiReportWorkbook $workbooks)
     {
+        abort_unless($request->user()->hasPermission('kpi.report.export'), 403, 'Bạn có thể xem báo cáo nhưng chưa được cấp quyền xuất Excel KPI.');
         $report = $reports->build($request->user(), $this->reportFilters($request));
         $path = $workbooks->write($report);
+        try {
+            $this->audit->record('kpi_report', null, 'export_kpi_report', $request->user(), null, [
+                'filters' => $this->reportFilters($request), 'scope' => $report['meta']['scope'], 'period_start' => $report['meta']['period_start'], 'period_end' => $report['meta']['period_end'],
+                'employee_count' => count($report['rows']), 'kpi_count' => count($report['kpis']), 'task_count' => count($report['tasks']), 'adjustment_count' => count($report['adjustments']),
+            ], $request);
+        } catch (\Throwable $error) {
+            @unlink($path);
+            throw $error;
+        }
         return response()->download($path, 'KPI-nhan-vien-'.$report['meta']['period_start'].'.xlsx', [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'Cache-Control' => 'private, no-store',

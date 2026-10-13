@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const source = fs.readFileSync(require('node:path').join(__dirname,'../../public/assets/js/features/kpi-reports.js'),'utf8');
 const tick = () => new Promise(resolve=>setImmediate(resolve));
 const row = {user_id:1,name:'Employee',department:'Sales',is_active:true,tasks_created:2,tasks_completed:1,tasks_overdue:0,tasks_not_started:1,net_points:0,bonus_points:0,penalty_points:0,pending_adjustments:0,kpi_score:null,kpi_indicators:0,kpi_status:'unassigned',kpi_details:[]};
-const result = () => ({data:[{...row}],employees:[],meta:{period_start:'2026-10-01',period_end:'2026-10-31',as_of:'2026-10-11T10:00:00Z',scope:'company',task_basis:'Tasks',points_basis:'Points'}});
+const result = () => ({data:[{...row}],employees:[],meta:{period_start:'2026-10-01',period_end:'2026-10-31',as_of:'2026-10-11T10:00:00Z',scope:'company',task_basis:'Tasks',points_basis:'Points',can_export:true}});
 function setup(request) {
     const listeners = {}, events = {}, fields = {};
     for (const key of ['date','period_type','department_id','user_id']) fields[key]={value:key==='period_type'?'month':'',innerHTML:''};
@@ -42,6 +42,14 @@ test('poll failure retains last report and shows freshness warning',async()=>{
     ui.poll();await tick();
     assert.equal(ui.root.innerHTML,content);
     assert.match(ui.sync.textContent,/giữ số liệu lần gần nhất/);
+});
+test('view-only report keeps export disabled even after successful refresh',async()=>{
+    const ui=setup(async()=>{const report=result();report.meta.can_export=false;return report;});
+    ui.window.loadKpiReports();await tick();
+    assert.equal(ui.button.disabled,true);
+    assert.match(ui.button.title,/Chưa được cấp quyền/);
+    ui.poll();await tick();
+    assert.equal(ui.button.disabled,true);
 });
 test('filter changes reload automatically and stale requests cannot replace the new selection',async()=>{
     const pending=[];

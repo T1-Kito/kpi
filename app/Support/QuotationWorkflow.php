@@ -48,8 +48,12 @@ class QuotationWorkflow
             abort_unless($ids, 422, 'Chưa thiết lập người duyệt báo giá bán hàng. Vui lòng cấu hình trong Thiết lập.');
             $steps = [];
             foreach ($ids as $id) {
-                $user = User::where('tenant_id', $actor->tenant_id)->where('is_active', true)->find($id);
-                abort_unless($user && $user->hasPermission('sales.margin.approve'), 422, 'Người duyệt chưa hoạt động hoặc thiếu quyền duyệt báo giá.');
+                $user = User::where('tenant_id', $actor->tenant_id)->find($id);
+                abort_unless($user && app(SalesApprovalAccess::class)->recipients($actor->tenant_id, $id), 422, 'Người duyệt và người thay không còn hoạt động hoặc thiếu quyền duyệt báo giá.');
+                if ($policy['separation_of_duties'] ?? false) {
+                    $eligible = array_diff(app(SalesApprovalAccess::class)->recipients($actor->tenant_id, $id), [(int) $quote->created_by]);
+                    abort_unless($eligible, 422, 'Luồng duyệt chỉ có người lập báo giá tại một cấp. Hãy chọn người duyệt độc lập hoặc người thay hợp lệ.');
+                }
                 $steps[] = ['user_id' => $id, 'name' => $user->name, 'status' => 'waiting'];
             }
             $steps[0]['status'] = 'pending';
@@ -71,7 +75,10 @@ class QuotationWorkflow
 
     private function notify(Quotation $quote, int $id): void
     {
-        VkNotification::create(['tenant_id' => $quote->tenant_id, 'recipient_id' => $id, 'title' => 'Báo giá cần duyệt', 'message' => $quote->code, 'source_type' => 'Quotation', 'source_id' => $quote->id, 'action_url' => '/quotations?open='.$quote->id, 'status' => 'unread']);
+        foreach (app(SalesApprovalAccess::class)->recipients($quote->tenant_id, $id) as $recipient) {
+            if (($quote->approval_policy_snapshot['separation_of_duties'] ?? false) && (int) $recipient === (int) $quote->created_by) continue;
+            VkNotification::create(['tenant_id' => $quote->tenant_id, 'recipient_id' => $recipient, 'title' => 'Báo giá cần duyệt', 'message' => $quote->code, 'source_type' => 'Quotation', 'source_id' => $quote->id, 'action_url' => '/quotations?open='.$quote->id, 'status' => 'unread']);
+        }
     }
 
     public function decide(Quotation $quote, User $actor, string $decision, ?string $reason): Quotation
@@ -85,14 +92,14 @@ class QuotationWorkflow
             $steps = $quote->approval_steps ?? [];
             $index = collect($steps)->search(fn ($step) => $step['status'] === 'pending');
             abort_if($index === false, 422, 'Không có bước duyệt đang chờ.');
-            abort_unless($steps[$index]['user_id'] === $actor->id && $actor->is_active && $actor->hasPermission('sales.margin.approve'), 403, 'Chưa đến lượt duyệt của bạn.');
+            abort_unless(app(SalesApprovalAccess::class)->canApprove($quote, $actor), 403, 'Bạn chưa đến lượt duyệt, ủy quyền đã hết hạn hoặc cấu hình không cho người lập tự duyệt.');
             Approval::whereKey($steps[$index]['approval_id'])->where('status', 'pending')->update(['status' => $decision, 'reason' => $reason, 'decided_at' => now()]);
-            $steps[$index] = [...$steps[$index], 'status' => $decision, 'reason' => $reason, 'decided_at' => now()->toIso8601String()];
+            $steps[$index] = [...$steps[$index], 'status' => $decision, 'reason' => $reason, 'decided_at' => now()->toIso8601String(), 'decided_by' => $actor->id, 'decided_by_name' => $actor->name, 'delegated' => (int) $steps[$index]['user_id'] !== (int) $actor->id];
             $status = $decision;
             if ($decision === 'approved' && isset($steps[$index + 1])) {
                 $next = $index + 1;
-                $user = User::where('tenant_id', $actor->tenant_id)->where('is_active', true)->find($steps[$next]['user_id']);
-                abort_unless($user && $user->hasPermission('sales.margin.approve'), 422, 'Người duyệt tiếp theo không còn hợp lệ.');
+                $user = User::where('tenant_id', $actor->tenant_id)->find($steps[$next]['user_id']);
+                abort_unless($user && app(SalesApprovalAccess::class)->recipients($actor->tenant_id, $user->id), 422, 'Người duyệt tiếp theo và người thay không còn hợp lệ.');
                 $approval = Approval::create(['tenant_id' => $actor->tenant_id, 'source_type' => 'Quotation', 'source_id' => $quote->id, 'approver_id' => $user->id, 'status' => 'pending']);
                 $steps[$next]['status'] = 'pending';
                 $steps[$next]['approval_id'] = $approval->id;
@@ -103,7 +110,7 @@ class QuotationWorkflow
                 unset($step);
             }
             $quote->update(['status' => $status, 'approval_steps' => $steps]);
-            $this->record($quote, $actor, $decision.'_quotation', ['reason' => $reason, 'step' => $index + 1, 'creator_approved' => (int) $quote->created_by === (int) $actor->id]);
+            $this->record($quote, $actor, $decision.'_quotation', ['reason' => $reason, 'step' => $index + 1, 'creator_approved' => (int) $quote->created_by === (int) $actor->id, 'original_approver_id' => $steps[$index]['user_id'], 'delegated' => $steps[$index]['delegated']]);
             return $quote->refresh();
         });
     }

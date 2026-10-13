@@ -7,7 +7,7 @@
         transactions: ['Giao dịch kho', 'master.view', 'warehouse_id', ['receipt','issue','stock_take_adjustment']],
         receivables: ['Công nợ theo hóa đơn', 'finance.payment.view', 'customer_id', []],
     };
-    let version = 0, loadedQuery = null, page = 1, polling = null, loading = false, choices = {};
+    let version = 0, loadedQuery = null, page = 1, polling = null, loading = false, choices = {}, canExport = false;
     const escape = value => VKTable.escapeHtml(String(value ?? ''));
     const form = () => document.getElementById('businessReportFilters');
     const exportButton = () => document.getElementById('businessReportExport');
@@ -70,13 +70,14 @@
             const pages = Math.max(1, Math.ceil(report.meta.count / 50));
             document.getElementById('businessReportPages').innerHTML = `<button class="btn small" data-report-page="${page-1}" ${page<=1?'disabled':''}>Trước</button><span>Trang ${page}/${pages} · ${report.meta.count} dòng</span><button class="btn small" data-report-page="${page+1}" ${page>=pages?'disabled':''}>Sau</button>`;
             sync.textContent = `${report.meta.basis} Cập nhật ${new Date(report.meta.generated_at).toLocaleTimeString('vi-VN')}.`;
-            loadedQuery = key; exportButton().disabled = false;
+            loadedQuery = key; canExport = report.meta.can_export === true; exportButton().disabled = !canExport;
+            exportButton().title = canExport ? 'Xuất toàn bộ kết quả theo bộ lọc' : 'Chưa được cấp quyền xuất Excel';
         } catch(error) {
             if (current === version && form() === f) sync.textContent = error.message || 'Không tải được báo cáo.';
         } finally { if (current === version) loading = false; }
     }
     async function download() {
-        if (!loadedQuery || loadedQuery !== query()) return;
+        if (!canExport || !loadedQuery || loadedQuery !== query()) return;
         const key = loadedQuery, button = exportButton(); button.disabled = true; button.textContent = 'Đang xuất…';
         const controller = new AbortController(), timer = setTimeout(()=>controller.abort(),60000);
         try {
@@ -86,7 +87,7 @@
             link.href = url; link.download = /filename="?([^";]+)"?/.exec(response.headers.get('Content-Disposition') || '')?.[1] || 'Bao-cao.xlsx'; link.click();
             setTimeout(()=>URL.revokeObjectURL(url),1000);
         } catch(error) { VKModal.toast(error.name === 'AbortError' ? 'Xuất quá lâu. Hãy thu hẹp bộ lọc.' : error.message, 'danger'); }
-        finally { clearTimeout(timer); if(button.isConnected) {button.textContent='Xuất Excel';button.disabled=!form() || loadedQuery===null || loadedQuery!==query();} }
+        finally { clearTimeout(timer); if(button.isConnected) {button.textContent='Xuất Excel';button.disabled=!canExport || !form() || loadedQuery===null || loadedQuery!==query();} }
     }
     function initialize() {
         const f = form(); if (!f || f.dataset.bound) return; f.dataset.bound = '1';

@@ -9,6 +9,15 @@ use Illuminate\Validation\ValidationException;
 
 class BusinessReport
 {
+    public static function exportPermission(string $type): string
+    {
+        return match ($type) {
+            'sales' => 'sales.report.export',
+            'invoices', 'receivables' => 'finance.report.export',
+            'purchase' => 'procurement.report.export',
+            'inventory', 'transactions' => 'inventory.report.export',
+        };
+    }
     public const TYPES = [
         'sales' => ['Đơn bán hàng', 'sales.order.view'],
         'invoices' => ['Hóa đơn bán hàng', 'finance.invoice.view'],
@@ -111,7 +120,7 @@ class BusinessReport
         }
         $options = array_map(fn ($items) => array_values($items), $options);
         return ['title' => self::TYPES[$type][0], 'columns' => $columns, 'rows' => $rows, 'totals' => $totals, 'options' => $options,
-            'meta' => ['count' => count($rows), 'filters' => $filters, 'generated_at' => now()->toIso8601String(), 'scope' => $actor->dataScope(),
+            'meta' => ['count' => count($rows), 'filters' => $filters, 'generated_at' => now()->toIso8601String(), 'scope' => $actor->dataScope(), 'can_export' => $actor->hasPermission(self::exportPermission($type)),
                 'basis' => in_array($type, ['inventory', 'receivables']) ? 'Số dư hiện tại tại thời điểm xuất; không phải số dư lịch sử.' : ($type === 'invoices' ? 'Lọc theo ngày hóa đơn. Tổng gồm các trạng thái đã chọn.' : 'Lọc theo ngày tạo chứng từ. Tổng gồm các trạng thái đã chọn.')]];
     }
 

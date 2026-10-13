@@ -101,22 +101,48 @@ class TenantSettingController extends Controller
 
     public function salesQuotationApproval(Request $request): JsonResponse
     {
-        return response()->json(['data' => $request->user()->tenant->ui_settings['sales_quotation_approval'] ?? ['approvers' => [], 'exception_approvers' => [], 'minimum_margin' => 15, 'maximum_discount' => 0, 'amount_threshold' => null],
+        return response()->json(['data' => $request->user()->tenant->ui_settings['sales_quotation_approval'] ?? ['approvers' => [], 'exception_approvers' => [], 'minimum_margin' => 15, 'maximum_discount' => 0, 'amount_threshold' => null, 'separation_of_duties' => false, 'delegations' => []],
+            'can_manage_delegation' => $request->user()->hasPermission('role.manage'),
             'users' => \App\Models\User::where('tenant_id', $request->user()->tenant_id)->where('is_active', true)->get()->filter(fn ($user) => $user->hasPermission('sales.margin.approve'))->map(fn ($user) => ['id' => $user->id, 'name' => $user->name])->values()]);
     }
 
     public function saveSalesQuotationApproval(Request $request): JsonResponse
     {
         $userRule = ['integer', 'distinct', Rule::exists('users', 'id')->where('tenant_id', $request->user()->tenant_id)->where('is_active', true)];
-        $data = $request->validate(['approvers' => ['required', 'array', 'min:1', 'max:3'], 'approvers.*' => $userRule,
+        $data = $request->validate(['approvers' => ['required', 'array', 'min:1', 'max:10'], 'approvers.*' => $userRule,
             'exception_approvers' => ['present', 'array', 'max:1'], 'exception_approvers.*' => $userRule,
-            'minimum_margin' => ['required', 'numeric', 'min:0', 'max:100'], 'maximum_discount' => ['required', 'numeric', 'min:0', 'max:99.99'], 'amount_threshold' => ['nullable', 'numeric', 'min:1']]);
+            'minimum_margin' => ['required', 'numeric', 'min:0', 'max:100'], 'maximum_discount' => ['required', 'numeric', 'min:0', 'max:99.99'], 'amount_threshold' => ['nullable', 'numeric', 'min:1'],
+            'separation_of_duties' => ['sometimes', 'boolean'],
+            'delegations' => ['sometimes', 'array', 'max:20'],
+            'delegations.*.from_user_id' => ['required', 'integer', Rule::exists('users', 'id')->where('tenant_id', $request->user()->tenant_id)],
+            'delegations.*.to_user_id' => ['required', 'integer', Rule::exists('users', 'id')->where('tenant_id', $request->user()->tenant_id)->where('is_active', true)],
+            'delegations.*.starts_at' => ['required', 'date'], 'delegations.*.ends_at' => ['required', 'date', 'after:delegations.*.starts_at'],
+            'delegations.*.reason' => ['required', 'string', 'min:5', 'max:500'],
+        ]);
+        if ($request->has('delegations')) {
+            abort_unless($request->user()->hasPermission('role.manage'), 403, 'Cần quyền phân quyền để thiết lập người duyệt thay.');
+            foreach ($data['delegations'] as $index => &$rule) {
+                abort_if((int) $rule['from_user_id'] === (int) $rule['to_user_id'], 422, 'Người duyệt thay phải khác người được thay.');
+                foreach ([$rule['from_user_id'], $rule['to_user_id']] as $id) abort_unless(\App\Models\User::findOrFail($id)->hasPermission('sales.margin.approve'), 422, 'Cả hai người cần quyền duyệt báo giá.');
+                $start = \Carbon\CarbonImmutable::parse($rule['starts_at']);
+                $end = \Carbon\CarbonImmutable::parse($rule['ends_at']);
+                abort_unless($end->gt($start), 422, 'Thời gian kết thúc phải sau thời gian bắt đầu.');
+                foreach (array_slice($data['delegations'], 0, $index) as $previous) {
+                    abort_if((int) $previous['from_user_id'] === (int) $rule['from_user_id'] && $start->lt(\Carbon\CarbonImmutable::parse($previous['ends_at'])) && $end->gt(\Carbon\CarbonImmutable::parse($previous['starts_at'])), 422, 'Các thời hạn thay cùng người không được chồng nhau.');
+                }
+                $rule['starts_at'] = $start->utc()->toIso8601String(); $rule['ends_at'] = $end->utc()->toIso8601String();
+                $rule['configured_by'] = $request->user()->id;
+            }
+            unset($rule);
+        }
         foreach (array_merge($data['approvers'], $data['exception_approvers']) as $id) abort_unless(\App\Models\User::findOrFail($id)->hasPermission('sales.margin.approve'), 422, 'Người được chọn chưa có quyền duyệt báo giá.');
-        \Illuminate\Support\Facades\DB::transaction(function () use ($request, $data) {
+        $data = \Illuminate\Support\Facades\DB::transaction(function () use ($request, $data) {
             $tenant = \App\Models\Tenant::whereKey($request->user()->tenant_id)->lockForUpdate()->firstOrFail();
             $settings = $tenant->ui_settings ?? []; $old = $settings['sales_quotation_approval'] ?? null;
+            $data = [...($old ?? []), ...$data];
             $settings['sales_quotation_approval'] = $data; $tenant->update(['ui_settings' => $settings]);
             $this->audit->record('tenant', $tenant->id, 'update_sales_quotation_approval', $request->user(), $old, $data, $request);
+            return $data;
         });
         return response()->json(['data' => $data]);
     }

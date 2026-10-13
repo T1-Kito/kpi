@@ -48,6 +48,8 @@ class EmployeeKpiReportTest extends TestCase
             ->assertJsonPath('data.0.kpi_score', null)->assertJsonCount(0, 'data.0.kpi_details')
             ->assertJsonPath('data.0.tasks_not_started', 0)->assertJsonPath('data.0.tasks_in_progress', 0);
         $this->withToken($token)->getJson($query.'&user_id='.$admin->id)->assertOk()->assertJsonCount(0, 'data');
+        $this->withToken($token)->get('/api/v1/kpi/employee-report/export?date=2026-10-15')->assertForbidden();
+        $sales->roles()->first()->permissions()->syncWithoutDetaching([\App\Models\Permission::where('code', 'kpi.report.export')->value('id')]);
         $response = $this->withToken($token)->get('/api/v1/kpi/employee-report/export?date=2026-10-15')->assertOk();
         $path = $response->baseResponse->getFile()->getPathname();
         $zip = new ZipArchive;

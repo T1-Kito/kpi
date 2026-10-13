@@ -26,5 +26,5 @@
 </section>
 @endsection
 @push('scripts')
-<script src="/assets/js/features/business-reports.js?v=20261013-1"></script>
+<script src="/assets/js/features/business-reports.js?v=20261013-permissions1"></script>
 @endpush
