@@ -10,6 +10,8 @@ use App\Models\SalesPriceBook;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class SalesMasterDataController extends Controller
 {
@@ -66,31 +68,58 @@ class SalesMasterDataController extends Controller
     {
         $tenantId = $request->user()->tenant_id;
         $data = $request->validate(['code' => ['required', 'alpha_dash', 'max:50', Rule::unique('sales_price_books')->where('tenant_id', $tenantId)], 'name' => ['required', 'string', 'max:100'], 'discount_percent' => ['required', 'numeric', 'between:0,100'], 'effective_from' => ['nullable', 'date'], 'effective_to' => ['nullable', 'date', 'after_or_equal:effective_from'], 'is_default' => ['nullable', 'boolean'], 'is_active' => ['nullable', 'boolean']]);
-        if ($data['is_default'] ?? false) SalesPriceBook::where('tenant_id', $tenantId)->update(['is_default' => false]);
-        return response()->json(['data' => SalesPriceBook::create($data + ['tenant_id' => $tenantId, 'is_default' => $data['is_default'] ?? false, 'is_active' => $data['is_active'] ?? true])], 201);
+        $this->validateDefaultStatus($data);
+        $record = DB::transaction(function () use ($data, $tenantId) {
+            DB::table('tenants')->where('id', $tenantId)->lockForUpdate()->first();
+            if ($data['is_default'] ?? false) SalesPriceBook::where('tenant_id', $tenantId)->update(['is_default' => false]);
+            return SalesPriceBook::create($data + ['tenant_id' => $tenantId, 'is_default' => false, 'is_active' => true]);
+        });
+        return response()->json(['data' => $record], 201);
     }
 
     public function updatePriceBook(Request $request, SalesPriceBook $priceBook): JsonResponse
     {
         abort_if($priceBook->tenant_id !== $request->user()->tenant_id, 404);
         $data = $request->validate(['name' => ['required', 'string', 'max:100'], 'discount_percent' => ['required', 'numeric', 'between:0,100'], 'effective_from' => ['nullable', 'date'], 'effective_to' => ['nullable', 'date', 'after_or_equal:effective_from'], 'is_default' => ['required', 'boolean'], 'is_active' => ['required', 'boolean']]);
-        if ($data['is_default']) SalesPriceBook::where('tenant_id', $priceBook->tenant_id)->whereKeyNot($priceBook->id)->update(['is_default' => false]);
-        $priceBook->update($data); return response()->json(['data' => $priceBook->refresh()]);
+        $this->validateDefaultStatus($data);
+        DB::transaction(function () use ($data, $priceBook) {
+            DB::table('tenants')->where('id', $priceBook->tenant_id)->lockForUpdate()->first();
+            if ($data['is_default']) SalesPriceBook::where('tenant_id', $priceBook->tenant_id)->whereKeyNot($priceBook->id)->update(['is_default' => false]);
+            $priceBook->update($data);
+        });
+        return response()->json(['data' => $priceBook->refresh()]);
     }
 
     public function storePaymentTerm(Request $request): JsonResponse
     {
         $tenantId = $request->user()->tenant_id;
         $data = $request->validate(['code' => ['required', 'alpha_dash', 'max:50', Rule::unique('sales_payment_terms')->where('tenant_id', $tenantId)], 'name' => ['required', 'string', 'max:100'], 'due_days' => ['required', 'integer', 'min:0', 'max:3650'], 'is_default' => ['nullable', 'boolean'], 'is_active' => ['nullable', 'boolean']]);
-        if ($data['is_default'] ?? false) SalesPaymentTerm::where('tenant_id', $tenantId)->update(['is_default' => false]);
-        return response()->json(['data' => SalesPaymentTerm::create($data + ['tenant_id' => $tenantId, 'is_default' => $data['is_default'] ?? false, 'is_active' => $data['is_active'] ?? true])], 201);
+        $this->validateDefaultStatus($data);
+        $record = DB::transaction(function () use ($data, $tenantId) {
+            DB::table('tenants')->where('id', $tenantId)->lockForUpdate()->first();
+            if ($data['is_default'] ?? false) SalesPaymentTerm::where('tenant_id', $tenantId)->update(['is_default' => false]);
+            return SalesPaymentTerm::create($data + ['tenant_id' => $tenantId, 'is_default' => false, 'is_active' => true]);
+        });
+        return response()->json(['data' => $record], 201);
     }
 
     public function updatePaymentTerm(Request $request, SalesPaymentTerm $paymentTerm): JsonResponse
     {
         abort_if($paymentTerm->tenant_id !== $request->user()->tenant_id, 404);
         $data = $request->validate(['name' => ['required', 'string', 'max:100'], 'due_days' => ['required', 'integer', 'min:0', 'max:3650'], 'is_default' => ['required', 'boolean'], 'is_active' => ['required', 'boolean']]);
-        if ($data['is_default']) SalesPaymentTerm::where('tenant_id', $paymentTerm->tenant_id)->whereKeyNot($paymentTerm->id)->update(['is_default' => false]);
-        $paymentTerm->update($data); return response()->json(['data' => $paymentTerm->refresh()]);
+        $this->validateDefaultStatus($data);
+        DB::transaction(function () use ($data, $paymentTerm) {
+            DB::table('tenants')->where('id', $paymentTerm->tenant_id)->lockForUpdate()->first();
+            if ($data['is_default']) SalesPaymentTerm::where('tenant_id', $paymentTerm->tenant_id)->whereKeyNot($paymentTerm->id)->update(['is_default' => false]);
+            $paymentTerm->update($data);
+        });
+        return response()->json(['data' => $paymentTerm->refresh()]);
+    }
+
+    private function validateDefaultStatus(array $data): void
+    {
+        if (($data['is_default'] ?? false) && ! ($data['is_active'] ?? true)) {
+            throw ValidationException::withMessages(['is_default' => 'Danh mục ngừng dùng không thể được đặt mặc định.']);
+        }
     }
 }
