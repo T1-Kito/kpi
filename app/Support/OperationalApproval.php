@@ -29,4 +29,11 @@ class OperationalApproval
         $flow[$index]['decided_at'] = now()->toIso8601String();
         return $flow;
     }
+
+    public function isCurrentApprover(?array $flow, User $actor): bool
+    {
+        if (! $flow) return true;
+        $next = collect($flow)->first(fn ($step) => empty($step['decided_at']));
+        return $next && (int) $next['user_id'] === (int) $actor->id;
+    }
 }

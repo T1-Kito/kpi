@@ -23,7 +23,8 @@ class ApprovalCenterController extends Controller
 
         if ($user->hasPermission('sales.margin.approve')) {
             $assigned = Approval::where('tenant_id', $user->tenant_id)->where('source_type', 'Quotation')->where('approver_id', $user->id)->pluck('source_id');
-            $pending = $pending->concat($this->quotations($user->tenant_id, ['pending_approval'], true, $assigned));
+            $current = Quotation::where('tenant_id', $user->tenant_id)->whereIn('id', $assigned)->where('status', 'pending_approval')->get()->filter(fn ($quote) => collect($quote->approval_steps ?? [])->contains(fn ($step) => $step['status'] === 'pending' && (int) $step['user_id'] === (int) $user->id))->pluck('id');
+            $pending = $pending->concat($this->quotations($user->tenant_id, ['pending_approval'], true, $current));
             $recent = $recent->concat($this->quotations($user->tenant_id, ['approved', 'rejected'], false, $assigned));
         }
         if ($user->hasPermission('procurement.pr.approve')) {
@@ -31,7 +32,7 @@ class ApprovalCenterController extends Controller
             $recent = $recent->concat($this->requests($user->tenant_id, ['approved', 'rejected'], false));
         }
         if ($user->hasPermission('procurement.po.approve')) {
-            $pending = $pending->concat($this->orders($user->tenant_id, ['draft'], true));
+            $pending = $pending->concat($this->orders($user->tenant_id, ['draft'], true, $user));
             $recent = $recent->concat($this->orders($user->tenant_id, ['approved', 'rejected'], false));
         }
         if ($user->hasPermission('kpi.lock')) {
@@ -74,9 +75,9 @@ class ApprovalCenterController extends Controller
         ));
     }
 
-    private function orders(int $tenantId, array $statuses, bool $pending): Collection
+    private function orders(int $tenantId, array $statuses, bool $pending, ?\App\Models\User $actor = null): Collection
     {
-        return PurchaseOrder::where('tenant_id', $tenantId)->whereIn('status', $statuses)->with(['supplier:id,name', 'purchaseRequest:id,code'])->withCount('items')->latest('id')->limit(50)->get()->map(fn ($row) => $this->row(
+        return PurchaseOrder::where('tenant_id', $tenantId)->whereIn('status', $statuses)->with(['supplier:id,name', 'purchaseRequest:id,code'])->withCount('items')->latest('id')->get()->filter(fn ($row) => ! $pending || app(\App\Support\OperationalApproval::class)->isCurrentApprover($row->approval_flow, $actor))->take(50)->map(fn ($row) => $this->row(
             'purchase_order', $row, 'Duyệt đơn mua', $row->supplier?->name ?? 'Chưa chọn nhà cung cấp', number_format((float) $row->total_amount, 0, ',', '.').' đ · '.($row->purchaseRequest?->code ?? 'Không có PR'),
             $row->items_count.' dòng · Dự kiến giao '.($row->expected_delivery_date?->format('d/m/Y') ?? 'Chưa xác định'), 'normal', '/purchase-orders?record='.$row->id, $pending
         ));

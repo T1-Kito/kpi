@@ -39,6 +39,9 @@ class PurchaseOrderController extends Controller
         }
 
         $rows = $query->latest('id')->paginate($pageSize);
+        foreach ($rows as $row) {
+            $row->setAttribute('can_approve', $row->status === 'draft' && $request->user()->hasPermission('procurement.po.approve') && app(\App\Support\OperationalApproval::class)->isCurrentApprover($row->approval_flow, $request->user()));
+        }
 
         return response()->json([
             'data' => $rows->items(),
@@ -106,6 +109,7 @@ class PurchaseOrderController extends Controller
 
         return response()->json(['data' => [
             ...$purchaseOrder->toArray(),
+            'can_approve' => $purchaseOrder->status === 'draft' && $request->user()->hasPermission('procurement.po.approve') && app(\App\Support\OperationalApproval::class)->isCurrentApprover($purchaseOrder->approval_flow, $request->user()),
             'can_configure_approval' => $request->user()->hasPermission('role.manage'),
             'receiving_status' => $purchaseOrder->status === 'received' || $purchaseOrder->goodsReceipt?->status === 'confirmed' ? 'received' : ($purchaseOrder->status === 'approved' ? 'waiting_receipt' : $purchaseOrder->status),
             'approval_candidates' => $request->user()->hasPermission('role.manage') ? \App\Models\User::where('tenant_id', $purchaseOrder->tenant_id)->where('is_active', true)->get()->filter(fn ($user) => $user->hasPermission('procurement.po.approve'))->map(fn ($user) => ['id' => $user->id, 'name' => $user->name])->values() : [],

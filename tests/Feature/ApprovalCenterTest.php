@@ -50,6 +50,29 @@ class ApprovalCenterTest extends TestCase
         $this->assertDatabaseHas('audit_logs', ['entity_type' => 'purchase_order', 'entity_id' => $po->id, 'action' => 'reject_purchase_order']);
     }
 
+    public function test_purchase_order_queue_and_actions_follow_current_approval_level(): void
+    {
+        $this->seed();
+        $admin = \App\Models\User::where('email', 'admin@vk-kpi.local')->firstOrFail();
+        $buyer = \App\Models\User::where('email', 'procurement@vk-kpi.local')->firstOrFail();
+        $token = $this->loginAs($admin->email);
+        $po = PurchaseOrder::where('code', 'PO-DEMO-APPROVAL')->firstOrFail();
+        $flow = [
+            ['user_id' => $buyer->id, 'name' => $buyer->name, 'final' => false, 'decided_at' => null],
+            ['user_id' => $admin->id, 'name' => $admin->name, 'final' => true, 'decided_at' => null],
+        ];
+        $po->update(['approval_flow' => $flow]);
+        $this->withToken($token)->getJson('/api/v1/approval-center?type=purchase_order')->assertOk()->assertJsonMissing(['code' => $po->code]);
+        $this->withToken($token)->getJson('/api/v1/purchase-orders/'.$po->id)->assertOk()->assertJsonPath('data.can_approve', false);
+        $this->withToken($token)->postJson('/api/v1/purchase-orders/'.$po->id.'/reject', ['reason' => 'Too early'])->assertForbidden();
+        $this->assertSame('draft', $po->fresh()->status);
+        $flow[0]['decided_at'] = now()->toIso8601String();
+        $po->update(['approval_flow' => $flow]);
+        $this->withToken($token)->getJson('/api/v1/approval-center?type=purchase_order')->assertOk()->assertJsonFragment(['code' => $po->code]);
+        $this->withToken($token)->getJson('/api/v1/purchase-orders/'.$po->id)->assertOk()->assertJsonPath('data.can_approve', true);
+        $this->withToken($token)->postJson('/api/v1/purchase-orders/'.$po->id.'/reject', ['reason' => 'Need changes'])->assertOk()->assertJsonPath('data.status', 'rejected');
+    }
+
     private function loginAs(string $email): string
     {
         return $this->postJson('/api/v1/auth/login', [

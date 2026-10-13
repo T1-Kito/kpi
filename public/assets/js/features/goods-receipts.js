@@ -73,7 +73,7 @@ function renderReceiptTable(rows) {
         { label: 'Tiến độ duyệt', render: row => (row.approval_flow || []).map((step, index) => `<span class="badge ${step.decided_at ? 'success' : 'info'}" title="${VKTable.escapeHtml(`Cấp ${index + 1}: ${step.name}`)}">${step.decided_at ? '✓' : '○'} ${index + 1}</span>`).join(' ') || 'Chưa cấu hình' },
         { label: '', render: row => VKTable.rowActions([
             VKTable.smallButton('Mở', `data-goods-receipt-detail="${row.id}"`),
-            row.status === 'draft' ? VKTable.smallButton('Xác nhận', `data-confirm-goods-receipt="${row.id}"`, 'primary') : '',
+            row.can_confirm ? VKTable.smallButton('Xác nhận', `data-confirm-goods-receipt="${row.id}"`, 'primary') : '',
         ]) },
     ], rows, 'Chưa có phiếu nhập', { rowAttr: row => `data-row-detail="${row.id}"` });
 }
@@ -140,7 +140,7 @@ function openGoodsReceiptDetail(id) {
             grState.currentId = null;
             renderGoodsReceipts();
         },
-        actions: row => row.status === 'draft'
+        actions: row => row.can_confirm
             ? `<button class="btn primary small" type="button" data-confirm-goods-receipt="${row.id}">Duyệt nhập kho</button>`
             : '',
     });

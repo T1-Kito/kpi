@@ -29,6 +29,9 @@ class GoodsReceiptController extends Controller
             ->with(['purchaseOrder:id,code', 'warehouse:id,code,name', 'items.sku:id,sku_code,name,unit']);
         DataScope::warehouseScope($query, $request->user());
         $rows = $query->latest('id')->paginate($pageSize);
+        foreach ($rows as $row) {
+            $row->setAttribute('can_confirm', $row->status === 'draft' && $request->user()->hasPermission('inventory.receipt.confirm') && app(\App\Support\OperationalApproval::class)->isCurrentApprover($row->approval_flow, $request->user()));
+        }
 
         return response()->json([
             'data' => $rows->items(),
@@ -72,6 +75,7 @@ class GoodsReceiptController extends Controller
 
         return response()->json(['data' => [
             ...$goodsReceipt->toArray(),
+            'can_confirm' => $goodsReceipt->status === 'draft' && $request->user()->hasPermission('inventory.receipt.confirm') && app(\App\Support\OperationalApproval::class)->isCurrentApprover($goodsReceipt->approval_flow, $request->user()),
             'related_documents' => array_merge(
                 $purchaseOrder ? [[
                     'type' => 'purchaseOrder',

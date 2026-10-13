@@ -84,7 +84,7 @@ function renderPurchaseOrderTable(rows) {
         { label: 'Trạng thái', render: row => renderReceivingStatus(row) },
         { label: '', render: row => VKTable.rowActions([
             VKTable.smallButton('Mở', `data-purchase-order-detail="${row.id}"`),
-            row.status === 'draft' ? VKTable.smallButton('Duyệt', `data-approve-purchase-order="${row.id}"`, 'primary') : '',
+            row.can_approve ? VKTable.smallButton('Duyệt', `data-approve-purchase-order="${row.id}"`, 'primary') : '',
             row.goods_receipt ? VKTable.smallButton(row.goods_receipt.status === 'confirmed' ? 'Xem nhập kho' : 'Nhập kho', `onclick="location.href='/goods-receipts?receipt=${row.goods_receipt.id}'"`, row.goods_receipt.status === 'draft' ? 'primary' : '') : '',
         ]) },
     ], rows, 'Chưa có đơn mua', { rowAttr: row => `data-row-detail="${row.id}"` });
@@ -139,7 +139,7 @@ function openPurchaseOrderDetail(id) {
             poState.currentId = null;
             renderPurchaseOrders();
         },
-        actions: row => row.status === 'draft'
+        actions: row => row.can_approve
             ? `<button class="btn primary small" type="button" data-approve-purchase-order="${row.id}">Duyệt đơn mua</button>`
             : row.goods_receipt ? `<a class="btn ${row.goods_receipt.status === 'draft' ? 'primary' : 'secondary'} small" href="/goods-receipts?receipt=${row.goods_receipt.id}">${row.goods_receipt.status === 'draft' ? 'Nhập kho' : 'Xem phiếu nhập'}</a>` : '',
     });
@@ -151,7 +151,7 @@ async function configurePurchaseApproval(id) {
     const candidates = row.approval_candidates || [];
     const options = [{value:'', label:'Chọn người duyệt'}, ...candidates.map(user => ({value:user.id, label:user.name}))];
     const selected = row.approval_flow || [];
-    VKModal.open('Thiết lập người duyệt đơn mua', `<p class="form-note">Chọn các người duyệt nội bộ. Họ có thể duyệt song song; người duyệt cuối chỉ được duyệt khi đủ tất cả người phía trước. Chỉ hiển thị nhân sự có quyền duyệt đơn mua.</p><div class="form-grid two">${[0,1,2,3].map(index => VKModal.select(`approver_${index}`, index === 3 ? 'Giám đốc / Người duyệt cuối *' : `Người duyệt nội bộ ${index + 1}${index ? ' (tùy chọn)' : ' *'}`, options, index === 3 ? selected.find(step => step.final)?.user_id || '' : selected.filter(step => !step.final)[index]?.user_id || '')).join('')}</div>`, async form => {
+    VKModal.open('Thiết lập người duyệt đơn mua', `<p class="form-note">Duyệt lần lượt theo thứ tự danh sách. Mỗi người chỉ duyệt khi cấp trước đã hoàn tất; người cuối hoàn tất đơn mua. Chỉ hiển thị nhân sự có quyền duyệt đơn mua.</p><div class="form-grid two">${[0,1,2,3].map(index => VKModal.select(`approver_${index}`, index === 3 ? 'Người duyệt cuối *' : `Người duyệt cấp ${index + 1}${index ? ' (tùy chọn)' : ' *'}`, options, index === 3 ? selected.find(step => step.final)?.user_id || '' : selected.filter(step => !step.final)[index]?.user_id || '')).join('')}</div>`, async form => {
         const values = Object.fromEntries(new FormData(form));
         if (!values.approver_0 || !values.approver_3) throw new Error('Chọn ít nhất một người nội bộ và người duyệt cuối.');
         await VKApi.request(`/purchase-orders/${id}/approval-flow`, {method:'POST',body:JSON.stringify({approvers:[0,1,2,3].map(index => values[`approver_${index}`]).filter(Boolean).map(Number)})});

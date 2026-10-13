@@ -10,5 +10,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/purchase-orders.js?v=20261012-auto-flow1"></script>
+<script src="/assets/js/features/purchase-orders.js?v=20261013-approval1"></script>
 @endpush

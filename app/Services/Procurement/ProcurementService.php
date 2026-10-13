@@ -285,6 +285,7 @@ class ProcurementService
             $po = PurchaseOrder::whereKey($po->id)->lockForUpdate()->firstOrFail();
             abort_if($po->tenant_id !== $actor->tenant_id, 404);
             if ($po->approval_flow) {
+                abort_unless(app(\App\Support\OperationalApproval::class)->isCurrentApprover($po->approval_flow, $actor), 403, 'Chưa đến lượt duyệt của bạn.');
                 $step = collect($po->approval_flow)->firstWhere('user_id', $actor->id);
                 abort_if(!$step || !empty($step['decided_at']), 403, 'Bạn không có bước duyệt đang chờ trên đơn này.');
                 if ($step['final']) abort_if(collect($po->approval_flow)->reject(fn ($item) => $item['final'])->contains(fn ($item) => empty($item['decided_at'])), 422, 'Chưa đủ người duyệt trước giám đốc.');
