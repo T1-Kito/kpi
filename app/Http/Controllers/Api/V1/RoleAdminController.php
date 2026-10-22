@@ -24,7 +24,8 @@ class RoleAdminController extends Controller
     {
         $roles = Role::query()
             ->where('tenant_id', $request->user()->tenant_id)
-            ->with('permissions:id,code,name')
+            ->where('code','!=',\App\Support\SystemAccount::ROLE)
+            ->with(['permissions'=>fn($q)=>$q->where('code','!=',\App\Support\SystemAccount::PERMISSION)->select('permissions.id','code','name')])
             ->orderBy('code')
             ->get();
 
@@ -32,7 +33,7 @@ class RoleAdminController extends Controller
             'data' => $roles,
             'meta' => [
                 'total' => $roles->count(),
-                'permissions' => Permission::select('id', 'code', 'name')->orderBy('code')->get(),
+                'permissions' => Permission::where('code','!=',\App\Support\SystemAccount::PERMISSION)->select('id', 'code', 'name')->orderBy('code')->get(),
             ],
         ]);
     }
@@ -47,6 +48,7 @@ class RoleAdminController extends Controller
             'permission_ids.*' => ['integer', Rule::exists('permissions', 'id')],
         ]);
 
+        abort_if(Permission::whereIn('id',$data['permission_ids'] ?? [])->where('code',\App\Support\SystemAccount::PERMISSION)->exists(),403,'Quyền Chủ tịch không được cấp qua vai trò.');
         $role = Role::create([
             'tenant_id' => $tenantId,
             'code' => $this->codes->next('roles', 'code', 'ROLE-', fn ($query) => $query->where('tenant_id', $tenantId)),
@@ -66,11 +68,13 @@ class RoleAdminController extends Controller
     public function syncPermissions(Request $request, Role $role): JsonResponse
     {
         abort_if($role->tenant_id !== $request->user()->tenant_id, 404);
+        abort_if($role->code===\App\Support\SystemAccount::ROLE,403,'Vai trò hệ thống được bảo vệ.');
         $data = $request->validate([
             'permission_ids' => ['required', 'array'],
             'permission_ids.*' => ['integer', Rule::exists('permissions', 'id')],
         ]);
 
+        abort_if(Permission::whereIn('id',$data['permission_ids'])->where('code',\App\Support\SystemAccount::PERMISSION)->exists(),403,'Quyền Chủ tịch không được cấp qua vai trò.');
         $old = $role->permissions()->pluck('permissions.id')->all();
         $role->permissions()->sync($data['permission_ids']);
         $this->audit->record('role', $role->id, 'sync_role_permissions', $request->user(), ['permission_ids' => $old], ['permission_ids' => $data['permission_ids']], $request);

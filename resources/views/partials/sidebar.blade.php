@@ -1,6 +1,6 @@
 <aside class="sidebar">
     <div class="side-brand">
-        <a class="brand" href="/dashboard" aria-label="Trang tổng quan"><span class="brand-logo hidden" aria-hidden="true"></span><img class="brand-image hidden" alt="Logo hệ thống" data-brand-logo></a>
+        <a class="brand" href="/dashboard" aria-label="Trang tổng quan"><span class="brand-logo hidden" aria-hidden="true"></span><img class="brand-image" src="/assets/branding/vk-software-logo.png" alt="VK Software" data-brand-logo data-default-logo="/assets/branding/vk-software-logo.png"></a>
         <script>
             // Restore branding before the first paint, without waiting for app scripts or /me.
             (function () {
@@ -12,15 +12,16 @@
                     const fallback = document.querySelector('.brand-logo');
                     const url = String(user.tenant?.logo_url || '').trim();
                     if (!url) {
-                        fallback.classList.remove('hidden');
                         return;
                     }
                     image.dataset.requestedLogo = url;
                     image.onerror = function () {
                         if (image.dataset.requestedLogo !== url) return;
                         delete image.dataset.requestedLogo;
-                        image.classList.add('hidden');
-                        fallback.classList.remove('hidden');
+                        image.onerror = null;
+                        image.src = image.dataset.defaultLogo;
+                        image.classList.remove('hidden');
+                        fallback.classList.add('hidden');
                     };
                     image.src = url;
                     image.classList.remove('hidden');
@@ -65,6 +66,7 @@
                     <a data-permission="master.view" href="/customers">Danh sách khách hàng</a>
                     <a data-permission="sales.lead.view" href="/leads">Khách hàng tiềm năng</a>
                     <a data-permission="master.view" href="/customer-contacts">Người liên hệ</a>
+                    <a data-permission="master.view" href="/import-center">Quản lý nhập</a>
                 </div>
             </div>
             <div class="nav-group" data-nav-group data-nav-key="dashboard-products">
@@ -117,7 +119,7 @@
                     <a href="/kpi-reports">Báo cáo theo kỳ</a>
                     <a href="/business-reports">Báo cáo nghiệp vụ</a>
                     <a href="/kpi-adjustments">Sổ điểm nhân viên</a>
-                    <a data-permission="kpi.lock" href="/kpi-settings">Thiết lập KPI</a>
+                    <a data-permission="kpi.configure" href="/kpi-settings">Thiết lập KPI</a>
                 </div>
             </div>
             <div class="nav-group" data-nav-group data-nav-key="dashboard-admin">
@@ -140,6 +142,7 @@
             <a class="nav-link" data-permission="master.view" href="/customers"><span class="nav-icon profile" aria-hidden="true"></span><span>Danh sách khách hàng</span></a>
             <a class="nav-link" data-permission="sales.lead.view" href="/leads"><span class="nav-icon profile" aria-hidden="true"></span><span>Khách hàng tiềm năng</span></a>
             <a class="nav-link" data-permission="master.view" href="/customer-contacts"><span class="nav-icon profile" aria-hidden="true"></span><span>Người liên hệ</span></a>
+            <a class="nav-link" data-permission="master.view" href="/import-center"><span class="nav-icon profile" aria-hidden="true"></span><span>Quản lý nhập</span></a>
         </div>
         <div data-module-section="product" hidden>
             <a class="nav-link" data-permission="master.view" href="/skus"><span class="nav-icon product" aria-hidden="true"></span><span>Sản phẩm và mã hàng</span></a>
@@ -177,7 +180,7 @@
         <div data-module-section="kpi" hidden>
             <a class="nav-link" href="/kpi"><span class="nav-icon kpi" aria-hidden="true"></span><span>Tổng quan KPI</span></a>
             <a class="nav-link" href="/kpi-adjustments"><span class="nav-icon adjustment" aria-hidden="true"></span><span>Sổ điểm nhân viên</span></a>
-            <a class="nav-link" data-permission="kpi.lock" href="/kpi-settings"><span class="nav-icon settings" aria-hidden="true"></span><span>Thiết lập KPI</span></a>
+            <a class="nav-link" data-permission="kpi.configure" href="/kpi-settings"><span class="nav-icon settings" aria-hidden="true"></span><span>Thiết lập KPI</span></a>
         </div>
 
         <div data-module-section="admin" hidden>

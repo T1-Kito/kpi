@@ -83,7 +83,8 @@ class TaskService
                 );
             }
 
-            return $task;
+            // Return the stored precision, including SQL Server datetime rounding.
+            return $task->refresh();
         });
     }
 
@@ -156,6 +157,6 @@ class TaskService
             return $this->calculateDueAt($tenantId, $module, 'lead_follow_up', $priority);
         }
 
-        return $policy ? now()->addMinutes($policy->duration_minutes) : null;
+        return $policy ? now()->addMinutes((int)$policy->duration_minutes) : null;
     }
 }

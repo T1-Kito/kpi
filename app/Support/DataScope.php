@@ -20,7 +20,7 @@ class DataScope
             'company' => $query,
             'department' => self::department($query, $user, $ownerColumn, $ownerRelation, $departmentColumn),
             'warehouse' => self::warehouse($query, $user, $ownerColumn, $warehouseRelation),
-            default => $ownerColumn ? $query->where($ownerColumn, $user->id) : $query,
+            default => $ownerColumn ? $query->where($ownerColumn, $user->id) : $query->whereRaw('1 = 0'),
         };
     }
 
@@ -79,8 +79,9 @@ class DataScope
         ?string $departmentColumn,
     ): Builder {
         return $query->where(function (Builder $scope) use ($user, $ownerColumn, $ownerRelation, $departmentColumn) {
+            $scope->whereRaw('1 = 0');
             if ($departmentColumn && $user->department_id) {
-                $scope->where($departmentColumn, $user->department_id);
+                $scope->orWhere($departmentColumn, $user->department_id);
             }
 
             if ($ownerRelation && $user->department_id) {
@@ -99,8 +100,9 @@ class DataScope
         ?string $warehouseRelation,
     ): Builder {
         return $query->where(function (Builder $scope) use ($user, $ownerColumn, $warehouseRelation) {
+            $scope->whereRaw('1 = 0');
             if ($ownerColumn) {
-                $scope->where($ownerColumn, $user->id);
+                $scope->orWhere($ownerColumn, $user->id);
             }
 
             if ($warehouseRelation) {

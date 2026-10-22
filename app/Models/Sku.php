@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Sku extends Model
 {
+    use \App\Models\Concerns\CastsDatabaseIdentifiers;
+
     protected $fillable = [
         'tenant_id',
         'product_id',

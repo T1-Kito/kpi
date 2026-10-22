@@ -52,6 +52,7 @@ class KpiAssignmentTest extends TestCase
         $this->travelTo(Carbon::parse('2026-10-11 12:00:00'));
         $admin = User::where('email', 'admin@vk-kpi.local')->firstOrFail();
         $sales = User::where('email', 'sales@vk-kpi.local')->firstOrFail();
+        TaskStatusHistory::query()->delete();
         Task::query()->delete();
         $task = Task::create(['tenant_id' => $sales->tenant_id, 'code' => 'EVIDENCE', 'title' => 'Task', 'assignee_id' => $sales->id, 'created_by' => $admin->id, 'module' => 'sales', 'task_type' => 'manual', 'status' => 'completed', 'priority' => 'normal']);
         $history = TaskStatusHistory::create(['task_id' => $task->id, 'to_status' => 'completed', 'from_status' => 'new', 'changed_by' => $sales->id]);

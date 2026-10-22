@@ -9,7 +9,7 @@ document.addEventListener('change', (event) => {
     const modal = event.target.closest('.role-permission-modal');
     if (!modal || !event.target.matches('[data-role-select-all], [data-role-group-all], input[name="permission_ids"]')) return;
     if (event.target.matches('[data-role-select-all]')) {
-        modal.querySelectorAll('input[name="permission_ids"]').forEach(input => { input.checked = event.target.checked; });
+        modal.querySelectorAll('.role-permission-group:not([hidden]) input[name="permission_ids"]').forEach(input => { input.checked = event.target.checked; });
     } else if (event.target.matches('[data-role-group-all]')) {
         event.target.closest('.role-permission-group').querySelectorAll('input[name="permission_ids"]').forEach(input => { input.checked = event.target.checked; });
     }
@@ -33,13 +33,28 @@ const rolePermissionGroups = [
     { title: 'Khách hàng tiềm năng', prefix: 'sales.lead.' },
     { title: 'Giao hàng', prefix: 'sales.delivery.' },
     { title: 'Khách hàng & dữ liệu nền', prefix: 'master.' },
+    { title: 'Chỉnh sửa khách hàng', prefix: 'customer.' },
+    { title: 'Chỉnh sửa nhà cung cấp', prefix: 'supplier.' },
+    { title: 'Chỉnh sửa sản phẩm', prefix: 'product.' },
+    { title: 'Chỉnh sửa danh mục kho', prefix: 'warehouse.' },
+    { title: 'Thiết lập bán hàng', prefix: 'sales.master.' },
     { title: 'Công việc', prefix: 'task.' },
     { title: 'Cảnh báo', prefix: 'alert.' },
     { title: 'Hóa đơn', prefix: 'finance.invoice.' },
     { title: 'Thu tiền', prefix: 'finance.payment.' },
-    { title: 'Kho vận', prefix: 'inventory.' },
+    { title: 'Nhập kho', prefix: 'inventory.receipt.' },
+    { title: 'Xuất kho', prefix: 'inventory.issue.' },
+    { title: 'Kiểm kê kho', prefix: 'inventory.stocktake.' },
+    { title: 'Báo cáo kho', prefix: 'inventory.report.' },
     { title: 'Yêu cầu mua', prefix: 'procurement.pr.' },
     { title: 'Đơn mua', prefix: 'procurement.po.' },
+    { title: 'Báo giá nhà cung cấp', prefix: 'procurement.sq.' },
+    { title: 'Báo cáo mua hàng', prefix: 'procurement.report.' },
+    { title: 'Báo cáo bán hàng', prefix: 'sales.report.' },
+    { title: 'Báo cáo tài chính', prefix: 'finance.report.' },
+    { title: 'Tổng quan điều hành', prefix: 'dashboard.' },
+    { title: 'Chiến dịch tiếp thị', prefix: 'marketing.' },
+    { title: 'Duyệt biên lợi nhuận', prefix: 'sales.margin.' },
     { title: 'Dịch vụ & bảo hành', prefix: 'service.ticket.' },
     { title: 'KPI', prefix: 'kpi.' },
     { title: 'Quản trị', codes: ['user.manage', 'role.manage', 'audit.view'] },
@@ -164,13 +179,14 @@ function renderPermissionTree(selectedIds) {
     }).filter(group => group.items.length);
     const others = roleState.permissions.filter(item => !used.has(item.code));
     if (others.length) groups.push({ title: 'Quyền khác', items: others });
-    return `<div class="role-permission-search"><input type="search" data-role-search aria-label="Tìm nhóm quyền" placeholder="Tìm chức năng hoặc quyền…"></div><div class="role-permission-toolbar"><label><input type="checkbox" data-role-select-all><span>Chọn tất cả quyền</span></label><small data-role-total-count></small></div><p class="role-permission-help">Phạm vi dữ liệu quyết định được xem hồ sơ nào; quyền quyết định được làm gì. Chọn tất cả áp dụng cả nhóm đang ẩn khi tìm kiếm, bao gồm quyền Xóa và Quản trị. Chỉ cấp quyền cần thiết.</p><div class="role-permission-tree">${groups.map(group => {
+    return `<div class="role-permission-search"><input type="search" data-role-search aria-label="Tìm nhóm quyền" placeholder="Tìm chức năng hoặc quyền…"></div><div class="role-permission-toolbar"><label><input type="checkbox" data-role-select-all><span>Chọn quyền trong nhóm đang hiển thị</span></label><small data-role-total-count></small></div><p class="role-permission-help">Phạm vi dữ liệu quyết định được xem hồ sơ nào; quyền quyết định được làm gì. Chọn hàng loạt chỉ áp dụng cho các nhóm đang hiển thị; nhóm bị ẩn giữ nguyên lựa chọn. Kiểm tra riêng quyền Xóa và Quản trị, chỉ cấp quyền cần thiết.</p><div class="role-permission-tree">${groups.map(group => {
         const count = group.items.filter(item => selectedIds.includes(item.id)).length;
         const items = group.actions ? [...group.actions.map(action => group.items.find(item => item.code === `${group.prefix}${action}`)).filter(Boolean), ...group.items.filter(item => !group.actions.some(action => item.code === `${group.prefix}${action}`))] : group.items;
         return `<details class="role-permission-group" ${count ? 'open' : ''}><summary><span class="role-permission-plus" aria-hidden="true">+</span><strong>${VKTable.escapeHtml(group.title)}</strong><small data-role-group-count>${count}/${group.items.length} quyền</small></summary><div class="role-permission-options"><div class="role-permission-group-select"><label><input type="checkbox" data-role-group-all><span>Chọn tất cả trong nhóm</span></label></div>${items.map(item => {
             const action = item.code.split('.').pop();
-            const label = ({ view: 'Xem', create: 'Tạo', edit: 'Sửa', delete: 'Xóa' })[action] || VKTable.translatePermission(item.code) || item.name;
-            return `<label class="${action === 'delete' || ['role.manage','user.manage'].includes(item.code) ? 'role-sensitive-permission' : ''}" title="${VKTable.escapeHtml(item.code)}"><input type="checkbox" name="permission_ids" value="${item.id}" ${selectedIds.includes(item.id) ? 'checked' : ''}><span>${VKTable.escapeHtml(label)}</span>${['view', 'create', 'edit', 'delete'].includes(action) ? '' : `<small>${VKTable.escapeHtml(item.name)}</small>`}</label>`;
+            const translated = VKTable.translatePermission(item.code);
+            const label = translated && translated !== item.code ? translated : (item.name && item.name !== item.code ? item.name : 'Quyền mở rộng chưa có tên');
+            return `<label class="${action === 'delete' || ['role.manage','user.manage'].includes(item.code) ? 'role-sensitive-permission' : ''}" title="${VKTable.escapeHtml(item.code)}"><input type="checkbox" name="permission_ids" value="${item.id}" ${selectedIds.includes(item.id) ? 'checked' : ''}><span>${VKTable.escapeHtml(label)}</span></label>`;
         }).join('')}</div></details>`;
     }).join('')}</div>`;
 }

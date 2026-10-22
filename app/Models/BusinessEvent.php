@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class BusinessEvent extends Model
 {
+    use \App\Models\Concerns\CastsDatabaseIdentifiers;
+
     protected $fillable = [
         'tenant_id',
         'event_type',

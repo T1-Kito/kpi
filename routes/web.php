@@ -39,7 +39,9 @@ use App\Http\Controllers\Web\WarehouseController;
 use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'pages.auth.login')->name('login');
+Route::view('/chat', 'pages.chat.index')->name('chat.index');
 Route::get('/dashboard', DashboardController::class)->name('dashboard');
+Route::view('/import-center','pages.import-center.index')->name('import-center');
 Route::get('/leads', LeadController::class)->name('leads.index');
 Route::get('/deals', DealController::class)->name('deals.index');
 Route::get('/quotations', QuotationController::class)->name('quotations.index');

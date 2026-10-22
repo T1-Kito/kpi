@@ -20,6 +20,7 @@ class JwtTokenService
             'iat' => time(),
             'exp' => time() + (60 * 60 * 8),
             'jti' => (string) Str::uuid(),
+            'token_version' => (int) $user->token_version,
         ];
 
         $segments = [
@@ -49,8 +50,15 @@ class JwtTokenService
         }
 
         $claims = json_decode($this->base64UrlDecode($payload), true, 512, JSON_THROW_ON_ERROR);
+        $metadata = json_decode($this->base64UrlDecode($header), true, 512, JSON_THROW_ON_ERROR);
+        if (($metadata['alg'] ?? null) !== 'HS256' || ($metadata['typ'] ?? null) !== 'JWT'
+            || ($claims['iss'] ?? null) !== config('app.url') || !is_string($claims['jti'] ?? null)
+            || !isset($claims['token_version'], $claims['tenant_id'], $claims['user_id'])
+            || \Illuminate\Support\Facades\DB::table('revoked_access_tokens')->where('token_hash',hash('sha256',$token))->exists()) {
+            throw new RuntimeException('Invalid or revoked token.');
+        }
 
-        if (($claims['exp'] ?? 0) < time()) {
+        if (($claims['exp'] ?? 0) <= time()) {
             throw new RuntimeException('Token expired.');
         }
 

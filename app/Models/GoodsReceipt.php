@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class GoodsReceipt extends Model
 {
+    use \App\Models\Concerns\CastsDatabaseIdentifiers;
+
     protected $fillable = ['tenant_id', 'code', 'purchase_order_id', 'warehouse_id', 'warehouse_location_id', 'confirmed_by', 'confirmed_at', 'status', 'approval_flow'];
 
     protected function casts(): array

@@ -236,7 +236,7 @@ function renderQuotationTable(rows) {
         { label: 'Khách hàng', render: row => VKTable.escapeHtml(row.customer?.name || '-') },
         { label: 'Nhân bản từ', render: row => renderDuplicatedFrom(row) },
         { label: 'Tổng tiền', render: row => VKTable.money(row.total_amount) },
-        { label: 'Biên lợi nhuận', render: row => renderMargin(row.margin_percent) },
+        ...(VKLayout.hasPermission('master.cost.view') ? [{ label: 'Biên lợi nhuận', render: row => renderMargin(row.margin_percent) }] : []),
         { label: 'Dòng hàng', render: row => renderItems(row.items) },
         { label: 'Trạng thái', render: row => VKTable.statusBadge(row.status) },
         { label: '', render: row => VKTable.rowActions([
@@ -264,6 +264,7 @@ function restoreFilters() {
 }
 
 function renderMargin(value) {
+    if (value == null) return '—';
     const margin = Number(value || 0);
     return `<span class="badge ${margin < 15 ? 'warning' : 'success'}">${margin.toFixed(2)}%</span>`;
 }
@@ -469,7 +470,7 @@ async function openQuotationModal(row = null, preset = {}) {
         const items = skuIds.map((skuId, index) => ({
             sku_id: Number(skuId),
             quantity: Number(quantities[index] || 0),
-            unit_price: Number(prices[index] || 0),
+            unit_price: VKMoney.parse(prices[index] || 0),
             vat_rate: Number(vatRates[index] || 0),
         })).filter(item => item.sku_id && item.quantity > 0);
 
@@ -566,7 +567,7 @@ async function createQuickCustomer(button) {
     const email = document.querySelector('[data-quick-customer-email]')?.value.trim() || '';
     const billingAddress = document.querySelector('[data-quick-customer-billing-address]')?.value.trim() || '';
     const address = document.querySelector('[data-quick-customer-address]')?.value.trim() || '';
-    const creditLimit = Number(document.querySelector('[data-quick-customer-credit-limit]')?.value || 0);
+    const creditLimit = VKMoney.parse(document.querySelector('[data-quick-customer-credit-limit]')?.value || 0);
     const message = document.querySelector('[data-quick-customer-message]');
 
     const name = companyName || contactName;
@@ -724,7 +725,7 @@ function quotationLineHtml(skus, index, item = null) {
             <div class="quotation-quantity-control">
                 <input name="quantity[]" type="number" min="1" step="1" value="${quantity}">
             </div>
-            <input class="quotation-price-input" name="unit_price[]" type="number" min="0" step="1000" value="${price}">
+            <input class="quotation-price-input" name="unit_price[]" type="text" inputmode="decimal" data-money-ready="1" value="${VKMoney.format(price)}">
             <select class="quotation-vat-select" name="vat_rate[]">
                 ${[0, 5, 8, 10].map(value => `<option value="${value}" ${value === vatRate ? 'selected' : ''}>${value}%</option>`).join('')}
             </select>
@@ -780,7 +781,7 @@ function selectQuotationSku(line, skuId) {
     const unit = line.querySelector('[data-quotation-unit]');
     if (hidden) hidden.value = String(sku.id);
     inputs.forEach(input => { input.value = input.dataset.quotationSkuSearch === 'code' ? (sku.sku_code || '') : (sku.name || ''); });
-    if (price) price.value = Number(sku.sale_price || 0);
+    if (price) { price.type='text';price.dataset.moneyReady='1';price.value = VKMoney.format(Number(sku.sale_price || 0)); }
     if (unit) unit.textContent = sku.unit || '-';
     results.forEach(result => { result.innerHTML = ''; result.classList.add('hidden'); });
     updateQuotationDraftTotals();
@@ -815,7 +816,7 @@ function updateQuotationDraftTotals() {
     const discount = Number(document.querySelector('[name="discount_percent"]')?.value || 0);
     document.querySelectorAll('[data-quotation-line]').forEach(line => {
         const quantity = Number(line.querySelector('[name="quantity[]"]')?.value || 0);
-        const listPrice = Number(line.querySelector('[name="unit_price[]"]')?.value || 0);
+        const listPrice = VKMoney.parse(line.querySelector('[name="unit_price[]"]')?.value || 0);
         const price = Math.round(listPrice * (100 - discount)) / 100;
         const vatRate = Number(line.querySelector('[name="vat_rate[]"]')?.value || 0);
         const lineSubtotal = quantity * price;
@@ -1149,7 +1150,7 @@ function renderQuotationApprovalPayment(row) {
         ['Hạn mức công nợ', VKTable.money(customer.credit_limit || 0)],
         ['Phương thức thanh toán', row.payment_terms || 'Chưa khai báo'],
         ['Người phụ trách', row.sales_owner?.name || row.salesOwner?.name || '-'],
-        ['Biên lợi nhuận', `${Number(row.margin_percent || 0).toFixed(2)}%`],
+        ['Biên lợi nhuận', row.margin_percent == null ? '—' : `${Number(row.margin_percent).toFixed(2)}%`],
         ['Duyệt báo giá', approvalText],
         ['Ghi chú', row.note || 'Chưa có ghi chú'],
     ];
@@ -1183,9 +1184,9 @@ function renderQuotationPageFinance(row) {
             ${metricBox('Tiền trước thuế', VKTable.money(subtotal), 'Giá trị hàng hóa')}
             ${metricBox('Thuế VAT', VKTable.money(tax), 'Tổng thuế các dòng')}
             ${metricBox('Tổng thanh toán', VKTable.money(amount), 'Đã gồm VAT', 'blue')}
-            ${metricBox('Giá vốn', VKTable.money(cost), 'Tổng chi phí hàng')}
-            ${metricBox('Lợi nhuận gộp', VKTable.money(profit), profit >= 0 ? 'Dương' : 'Âm', profit >= 0 ? 'green' : 'orange')}
-            ${metricBox('Biên lợi nhuận', `${margin.toFixed(2)}%`, margin < 15 ? 'Cần duyệt' : 'Đạt ngưỡng', margin < 15 ? 'orange' : 'green')}
+            ${row.total_cost == null ? '' : metricBox('Giá vốn', VKTable.money(cost), 'Tổng chi phí hàng')}
+            ${row.total_cost == null ? '' : metricBox('Lợi nhuận gộp', VKTable.money(profit), profit >= 0 ? 'Dương' : 'Âm', profit >= 0 ? 'green' : 'orange')}
+            ${row.margin_percent == null ? '' : metricBox('Biên lợi nhuận', `${margin.toFixed(2)}%`, margin < 15 ? 'Cần duyệt' : 'Đạt ngưỡng', margin < 15 ? 'orange' : 'green')}
         </div>
     `;
 }

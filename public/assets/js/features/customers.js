@@ -1,29 +1,41 @@
 (function () {
 let customerState = { rows: [], q: '', status: '', customerType: '', view: 'list', currentId: null, detailCache: {} };
+customerState.page = 1;
+let customerSearchTimer, customerLoadVersion = 0;
 
 document.addEventListener('vk:ready', () => loadCustomers());
 document.addEventListener('input', (event) => {
     if (!document.getElementById('customersRoot')) return;
     if (event.target.matches('[data-list-search]')) {
         customerState.q = event.target.value.toLowerCase();
-        renderCustomers();
+        customerState.page = 1;
+        clearTimeout(customerSearchTimer);
+        customerSearchTimer = setTimeout(() => loadCustomers(), 300);
     }
 });
 document.addEventListener('change', (event) => {
     if (!document.getElementById('customersRoot')) return;
     if (event.target.matches('[data-customer-type-filter]')) {
         customerState.customerType = event.target.value;
+        customerState.page = 1;
         loadCustomers();
         return;
     }
     if (event.target.matches('[data-list-status]')) {
         customerState.status = event.target.value;
-        renderCustomers();
+        customerState.page = 1;
+        loadCustomers();
     }
 });
 document.addEventListener('click', (event) => {
     if (!document.getElementById('customersRoot')) return;
+    const pageButton = event.target.closest('[data-customers-page]');
+    if (pageButton) { customerState.page = Number(pageButton.dataset.customersPage); loadCustomers(); return; }
+    const care = event.target.closest('[data-customer-care]');
+    if (care) { event.stopPropagation(); openCustomerCare(Number(care.dataset.customerCare)); return; }
     if (event.target.matches('[data-create-customer]')) openCustomerModal();
+    if (event.target.closest('[data-import-customers]')) { openCustomerImport(); return; }
+    if (event.target.closest('[data-customer-import-template]')) { downloadCustomerImportTemplate(); return; }
     if (event.target.matches('[data-customer-duplicates]')) {
         loadCustomerDuplicates();
         return;
@@ -70,13 +82,73 @@ document.addEventListener('click', (event) => {
     if (detail) openCustomerDetail(detail.dataset.customerDetail || detail.dataset.rowDetail);
 });
 
+async function downloadCustomerImportTemplate() {
+    try {
+        const response = await fetch('/api/v1/customer-import/template', {headers:{Authorization:`Bearer ${VKApi.token()}`}});
+        if (!response.ok) throw new Error('Không tải được mẫu hoặc bạn không có quyền nhập khách hàng.');
+        const url = URL.createObjectURL(await response.blob());
+        const link = document.createElement('a'); link.href=url; link.download='mau-khach-hang.xlsx'; link.click();
+        setTimeout(()=>URL.revokeObjectURL(url),1000);
+    } catch (error) { VKModal.toast(error.message,'danger'); }
+}
+
+function openCustomerImport() {
+    let checkedFile = null;
+    VKModal.open('Nhập khách hàng', `
+        <div class="customer-import-template"><span>Chuẩn bị danh sách theo mẫu.</span><button type="button" class="btn" data-customer-import-template>Tải mẫu</button></div>
+        <label class="field customer-import-file">Chọn danh sách<input name="customer_import_file" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" aria-describedby="customerImportLimit" required></label>
+        <p class="customer-import-hint" id="customerImportLimit">Excel hoặc CSV · Tối đa 300 khách · 1 MB</p>
+        <details class="customer-import-guide">
+            <summary>Hướng dẫn nhập file</summary>
+            <p>Tải mẫu Excel, điền từ dòng 5 và giữ nguyên hàng tiêu đề. Chọn loại khách: Doanh nghiệp hoặc Cá nhân.</p>
+            <p>Giữ điện thoại, MST và CCCD ở dạng văn bản để không mất số 0 đầu. Lưu .xlsx và nhập trực tiếp, không cần đổi sang CSV.</p>
+            <p>Khách mới được giao cho bạn phụ trách; không ghi đè khách có sẵn. File CSV cũ vẫn được hỗ trợ.</p>
+        </details>
+        <div data-customer-import-result role="status" aria-live="polite"></div>
+    `, async form => {
+        const file = form.querySelector('[name="customer_import_file"]').files[0];
+        if (!file) throw new Error('Vui lòng chọn file Excel hoặc CSV.');
+        const confirm = checkedFile === file;
+        const body = new FormData(); body.append('file',file); body.append('confirm',confirm ? '1' : '0');
+        const result = (await VKApi.request('/customer-import',{method:'POST',body,timeout:180000})).data;
+        const target = form.querySelector('[data-customer-import-result]');
+        if (result.imported > 0) {
+            VKModal.close(); customerState.page=1; await loadCustomers();
+            VKModal.toast(`Đã nhập ${result.imported} khách hàng.`); return;
+        }
+        checkedFile = result.can_import ? file : null;
+        const escape = VKTable.escapeHtml;
+        target.innerHTML = result.errors.length
+            ? `<p>Chưa nhập khách nào. Sửa các dòng sau rồi kiểm tra lại:</p><ul>${result.errors.map(error=>`<li>Dòng ${Number(error.row)}: ${escape(error.message)}</li>`).join('')}</ul>`
+            : `<p>${Number(result.total)} khách hợp lệ. Bấm “Xác nhận nhập” để lưu.</p><ul>${result.preview.map(row=>`<li>Dòng ${Number(row.row)}: ${escape(row.name)}</li>`).join('')}</ul>`;
+        document.getElementById('modalSubmit').textContent = checkedFile ? 'Xác nhận nhập' : 'Kiểm tra file';
+    }, {submitText:'Kiểm tra file',className:'customer-import-modal'});
+    const input = document.querySelector('#modalForm [name="customer_import_file"]');
+    input.addEventListener('change',()=>{
+        checkedFile=null;
+        document.getElementById('modalSubmit').textContent='Kiểm tra file';
+        document.querySelector('[data-customer-import-result]').textContent='File đã đổi. Hãy kiểm tra lại trước khi nhập.';
+    });
+}
+
 async function loadCustomers(options = {}) {
     if (!document.getElementById('customersRoot')) return;
     if (options.source === 'pjax') {
         customerState.view = 'list';
         customerState.currentId = null;
     }
-    const customers = await VKApi.request(`/customers?page_size=100&customer_type=${encodeURIComponent(customerState.customerType)}`);
+    const version = ++customerLoadVersion;
+    const focused = document.activeElement?.matches('[data-list-search]');
+    const params = new URLSearchParams({page_size:20,page:customerState.page,q:customerState.q,status:customerState.status,customer_type:customerState.customerType});
+    const customers = await VKApi.request(`/customers?${params}`, {cache:false});
+    if (version !== customerLoadVersion || !document.getElementById('customersRoot')) return;
+    const careBucket=new URLSearchParams(window.location.search).get('care');
+    const careRoot=document.getElementById('customersRoot');
+    if(['today','overdue','upcoming','unscheduled'].includes(careBucket) && !careRoot.dataset.careOpened) {
+        careRoot.dataset.careOpened='1';
+        openCustomerCareBoard(careBucket).catch(error=>VKModal.toast(error.message,'danger'));
+    }
+    customerState.meta = customers.meta;
     customerState.rows = customers.data || [];
     const requestedId = new URLSearchParams(window.location.search).get('open');
     if (requestedId && /^\d+$/.test(requestedId)) {
@@ -92,10 +164,11 @@ async function loadCustomers(options = {}) {
         return;
     }
     renderCustomers(customers.meta.total);
+    if (focused) { const input = document.querySelector('[data-list-search]'); input?.focus(); input?.setSelectionRange(input.value.length,input.value.length); }
 }
 
-function renderCustomers(total = customerState.rows.length) {
-    const rows = filterRows();
+function renderCustomers(total = customerState.meta?.total || 0) {
+    const rows = customerState.rows;
     document.getElementById('customersRoot').innerHTML = VKTable.fullList({
         title: 'Danh sách khách hàng',
         subtitle: 'Dữ liệu dùng cho khách hàng tiềm năng, báo giá, đơn bán và công nợ.',
@@ -111,6 +184,7 @@ function renderCustomers(total = customerState.rows.length) {
         table: renderCustomerTable(rows),
     });
     restoreFilters();
+    document.getElementById('customersRoot').insertAdjacentHTML('beforeend', `<nav class="panel" aria-label="Trang khách hàng" style="display:flex;gap:12px;align-items:center;padding:12px"><button type="button" class="btn small" data-customers-page="${customerState.page-1}" ${customerState.page<=1?'disabled':''}>Trang trước</button><span>Trang ${customerState.meta?.page || 1} / ${customerState.meta?.last_page || 1} · ${total} khách hàng</span><button type="button" class="btn small" data-customers-page="${customerState.page+1}" ${customerState.page>=(customerState.meta?.last_page || 1)?'disabled':''}>Trang sau</button></nav>`);
 }
 
 async function loadCustomerDuplicates() {
@@ -177,6 +251,7 @@ function renderCustomerTable(rows) {
         { label: 'Trạng thái', render: row => VKTable.statusBadge(row.status) },
         { label: '', render: row => VKTable.rowActions([
             VKTable.smallButton('Mở', `data-customer-detail="${row.id}"`),
+            VKTable.smallButton('Chăm sóc', `data-customer-care="${row.id}"`),
             VKTable.smallButton('Sửa', `data-edit-customer="${row.id}"`),
         ]) },
     ], rows, 'Chưa có khách hàng', { rowAttr: row => `data-row-detail="${row.id}"` });
@@ -282,7 +357,7 @@ async function openCustomerModal(id = null, readOnly = false, asPage = false) {
         }
         await VKApi.request(id ? `/customers/${id}` : '/customers', {
             method: id ? 'PUT' : 'POST',
-            body: JSON.stringify({ ...data, credit_limit: Number(data.credit_limit || 0) }),
+            body: JSON.stringify({ ...data, credit_limit: VKMoney.parse(data.credit_limit || 0) }),
         });
         VKModal.toast(id ? 'Đã cập nhật khách hàng.' : 'Đã tạo khách hàng.');
         VKModal.close();
@@ -509,6 +584,59 @@ async function openCustomerDetail(id) {
         renderCustomers();
         throw error;
     }
+}
+
+document.addEventListener('click',event=>{
+    if(event.target.closest('[data-customer-care-board]'))openCustomerCareBoard().catch(error=>VKModal.toast(error.message,'danger'));
+});
+async function openCustomerCareBoard(bucket='today',page=1) {
+    const response=await VKApi.request(`/customers/care-board?bucket=${encodeURIComponent(bucket)}&page=${page}`,{cache:false});
+    const labels={overdue:'Quá hạn',today:'Hôm nay',upcoming:'Sắp tới',unscheduled:'Chưa có lịch'};
+    const esc=VKTable.escapeHtml;
+    const cards=Object.entries(labels).map(([key,label])=>`<button type="button" class="btn ${key===bucket?'primary':''}" data-care-bucket="${key}">${label} (${Number(response.counts[key])})</button>`).join('');
+    const rows=response.data.map(row=>{
+        const customer=bucket==='unscheduled'?row:row.customer;
+        return `<tr><td>${esc(customer?.code || '')} · ${esc(customer?.name || '')}</td><td>${esc(bucket==='unscheduled'?'Chưa có lịch tiếp theo':row.title)}</td><td>${bucket==='unscheduled'?'—':esc(formatCustomer360Date(row.due_at))}</td><td>${esc((bucket==='unscheduled'?row.sales_owner:row.assignee)?.name || 'Chưa phân công')}</td><td><button type="button" class="btn small" data-care-board-customer="${Number(customer?.id)}">Mở chăm sóc</button></td></tr>`;
+    }).join('');
+    VKModal.open('Việc chăm sóc khách hàng',`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">${cards}</div><p class="form-note">Ngày tính theo giờ Việt Nam. Việc quá hạn trong hôm nay có thể xuất hiện ở cả hai nhóm.</p><div class="table-wrap"><table class="list-table"><thead><tr><th>Khách hàng</th><th>Công việc</th><th>Hẹn thực hiện</th><th>Phụ trách</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="5">Không có hồ sơ trong nhóm này.</td></tr>'}</tbody></table></div><nav style="display:flex;gap:12px;margin-top:16px"><button type="button" class="btn small" data-care-board-page="${page-1}" ${page<=1?'disabled':''}>Trang trước</button><span>Trang ${page} / ${response.meta.last_page}</span><button type="button" class="btn small" data-care-board-page="${page+1}" ${page>=response.meta.last_page?'disabled':''}>Trang sau</button></nav>`,null,{className:'modal-wide',hideSubmit:true});
+    const body=document.getElementById('modalBody');
+    const run=promise=>promise.catch(error=>VKModal.toast(error.message,'danger'));
+    body.querySelectorAll('[data-care-bucket]').forEach(button=>button.onclick=()=>run(openCustomerCareBoard(button.dataset.careBucket)));
+    body.querySelectorAll('[data-care-board-page]').forEach(button=>button.onclick=()=>run(openCustomerCareBoard(bucket,Number(button.dataset.careBoardPage))));
+    body.querySelectorAll('[data-care-board-customer]').forEach(button=>button.onclick=()=>run(openCustomerCare(Number(button.dataset.careBoardCustomer))));
+}
+
+async function openCustomerCare(id, page = 1) {
+    const response = await VKApi.request(`/customers/${id}/care?page=${page}`, {cache:false});
+    const data = response.data, esc = VKTable.escapeHtml;
+    const canWrite = VKLayout.hasPermission('task.create');
+    VKModal.open('Chăm sóc khách hàng', `
+        <div class="form-grid">
+            <div class="field"><label>Phụ trách</label><strong>${esc(data.owner?.name || 'Chưa phân công')}${data.owner && !data.owner.is_active ? ' · Đã khóa' : ''}</strong></div>
+            <div class="field"><label>Lần chăm sóc ghi nhận gần nhất</label><strong>${esc(data.last_contact_at ? formatCustomer360Date(data.last_contact_at) : 'Chưa ghi nhận')}</strong></div>
+            <div class="field"><label>Kết quả gần nhất</label><span>${esc(data.last_result || '—')}</span></div>
+            <div class="field"><label>Quá hạn</label><strong>${data.overdue_count} công việc</strong></div>
+        </div>
+        <p class="form-note">Việc tiếp theo: ${data.next_task ? `${esc(data.next_task.title)} · ${esc(formatCustomer360Date(data.next_task.due_at))}` : 'Chưa có lịch chăm sóc tiếp theo'}</p>
+        ${canWrite ? `<div class="form-grid"><div class="field"><label>Nội dung chăm sóc *</label><input name="title" required maxlength="255" placeholder="Gọi lại, hẹn gặp, gửi thông tin…"></div><div class="field"><label>Hẹn thực hiện *</label><input name="due_at" type="datetime-local" required></div></div>` : ''}
+        <h3>Lịch chăm sóc (${response.meta.total})</h3>
+        <nav style="display:flex;gap:12px;align-items:center"><button type="button" class="btn small" data-care-page="${page-1}" ${page<=1?'disabled':''}>Trang trước</button><span>Trang ${page} / ${response.meta.last_page}</span><button type="button" class="btn small" data-care-page="${page+1}" ${page>=response.meta.last_page?'disabled':''}>Trang sau</button></nav>
+        <div style="max-height:35vh;overflow:auto">${data.tasks.length ? data.tasks.map(task=>`<div class="panel" style="padding:12px;margin:8px 0"><strong>${esc(task.title)}</strong><span class="row-note">${esc(task.code)} · ${esc(task.assignee?.name || 'Chưa phân công')} · ${esc(formatCustomer360Date(task.due_at))}</span>${VKTable.statusBadge(task.status)} ${canWrite && ['new','in_progress','overdue'].includes(task.status) ? `<button type="button" class="btn small" data-complete-care="${task.id}">Ghi kết quả</button>` : ''}</div>`).join('') : '<p class="form-note">Chưa có lịch chăm sóc.</p>'}</div>
+    `, async form => {
+        await VKApi.request(`/customers/${id}/care`, {method:'POST',body:JSON.stringify({title:form.elements.title.value,due_at:new Date(form.elements.due_at.value).toISOString()})});
+        VKModal.toast('Đã tạo lịch và thông báo người phụ trách.');
+        await openCustomerCare(id);
+    }, {className:'modal-wide',submitText:'Thêm lịch chăm sóc',hideSubmit:!canWrite});
+    document.querySelectorAll('[data-care-page]').forEach(button=>button.onclick=()=>openCustomerCare(id, Number(button.dataset.carePage)));
+    document.querySelectorAll('[data-complete-care]').forEach(button=>button.onclick=()=> {
+        VKModal.open('Ghi kết quả và hẹn tiếp', `${VKModal.select('outcome','Kết quả',[{value:'contacted',label:'Đã liên hệ'},{value:'no_answer',label:'Không nghe máy'},{value:'meeting',label:'Đã gặp'},{value:'information_sent',label:'Đã gửi thông tin'}])}<div class="field"><label>Ghi chú *</label><textarea name="note" required maxlength="400" rows="4"></textarea></div><div class="form-grid"><div class="field"><label>Việc tiếp theo</label><input name="next_title" maxlength="255" placeholder="Gọi lại, gửi báo giá, hẹn gặp…"></div><div class="field"><label>Hẹn tiếp</label><input name="next_due_at" type="datetime-local"></div></div><p class="form-note">Không nghe máy: bắt buộc nhập việc và ngày hẹn lại. Các kết quả khác có thể để trống nếu chưa cần hẹn tiếp.</p>`, async form=> {
+            const payload=Object.fromEntries(new FormData(form));
+            if(payload.next_due_at)payload.next_due_at=new Date(payload.next_due_at).toISOString();
+            await VKApi.request(`/customers/${id}/care/${button.dataset.completeCare}/complete`,{method:'POST',body:JSON.stringify(payload)});
+            VKModal.toast(payload.next_due_at?'Đã lưu kết quả và tạo lịch tiếp theo.':'Đã lưu kết quả.');
+            await openCustomerCare(id);
+        },{submitText:'Lưu kết quả'});
+    });
 }
 
 function renderCustomer360(customer, data) {

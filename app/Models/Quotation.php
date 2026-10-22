@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Quotation extends Model
 {
+    use \App\Models\Concerns\CastsDatabaseIdentifiers;
+
     protected $fillable = [
         'tenant_id', 'code', 'customer_id', 'lead_id', 'deal_id', 'price_book_id', 'payment_term_id', 'duplicated_from_id', 'sales_owner_id',
         'subtotal_amount', 'tax_amount', 'total_amount', 'total_cost', 'margin_percent',
@@ -20,6 +22,8 @@ class Quotation extends Model
     protected function casts(): array
     {
         return [
+            'tenant_id'=>'integer','customer_id'=>'integer','sales_owner_id'=>'integer','created_by'=>'integer',
+            'revision_root_id'=>'integer','revision_number'=>'integer','lead_id'=>'integer','deal_id'=>'integer',
             'duplicated_from_id' => 'integer',
             'valid_until' => 'date',
             'document_snapshot' => 'array', 'approval_steps' => 'array', 'approval_policy_snapshot' => 'array',

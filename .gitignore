@@ -30,3 +30,7 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+/.tmp/
+/outputs/
+/dist/
+/scripts/setup-local-ordinary-admin.php

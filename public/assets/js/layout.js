@@ -10,7 +10,7 @@
     const moduleRoutes = {
         work: ['dashboard', 'tasks', 'approvals', 'alerts', 'business-reports'],
         sales: ['deals', 'quotations', 'sales-orders', 'contracts', 'deliveries'],
-        customer: ['customers', 'leads', 'customer-contacts'],
+        customer: ['customers', 'leads', 'customer-contacts','import-center'],
         product: ['skus', 'product-categories', 'product-brands'],
         procurement: ['purchase-requests', 'supplier-quotations', 'purchase-orders', 'suppliers'],
         inventory: ['inventory', 'inventory-transactions', 'warehouses', 'goods-receipts', 'goods-issues', 'stock-takes'],
@@ -34,21 +34,22 @@
     };
 
     const features = {
-        dashboard: ['dashboard.js?v=20261008-2', 'loadDashboard'],
-        leads: ['leads.js?v=20261013-modal1', 'loadLeads'],
-        deals: ['deals.js?v=20261011-permissions1', 'loadDeals'],
+        'import-center':['import-center.js?v=20261022-3','loadImportCenter'],
+        dashboard: ['dashboard.js?v=20261014-kpilink1', 'loadDashboard'],
+        leads: ['leads.js?v=20261016-replay1', 'loadLeads'],
+        deals: ['deals.js?v=20261016-policy1', 'loadDeals'],
         'sales-master-data': ['sales-master-data.js?v=20260923-1', 'loadSalesMasterData'],
         contracts: ['contracts.js?v=20260923-6', 'loadContracts'],
-        quotations: ['quotations.js?v=20261013-policy1', 'loadQuotations'],
+        quotations: ['quotations.js?v=20261016-cost1', 'loadQuotations'],
         'sales-orders': ['sales-orders.js?v=20261008-menu1', 'loadSalesOrders'],
-        deliveries: ['sales-fulfillment.js?v=20261009-codes1', 'loadDeliveries'],
-        'sales-invoices': ['sales-fulfillment.js?v=20261009-codes1', 'loadSalesInvoices'],
+        deliveries: ['sales-fulfillment.js?v=20261019-safety1', 'loadDeliveries'],
+        'sales-invoices': ['sales-fulfillment.js?v=20261019-safety1', 'loadSalesInvoices'],
         'customer-receivables': ['customer-receivables.js?v=20260617-1', 'loadCustomerReceivables'],
-        'customer-payments': ['sales-fulfillment.js?v=20261009-codes1', 'loadCustomerPayments'],
-        customers: ['customers.js?v=20261011-position1', 'loadCustomers'],
+        'customer-payments': ['sales-fulfillment.js?v=20261019-safety1', 'loadCustomerPayments'],
+        customers: ['customers.js?v=20261016-pages1', 'loadCustomers'],
         'customer-contacts': ['customer-contacts.js?v=20261009-1', 'loadCustomerContacts'],
         suppliers: ['suppliers.js?v=20261008-menu1', 'loadSuppliers'],
-        skus: ['skus.js?v=20261009-input-code2', 'loadSkus'],
+        skus: ['skus.js?v=20261016-cost1', 'loadSkus'],
         'product-categories': ['product-catalog.js?v=20260921-1', 'loadProductCatalog'],
         'product-brands': ['product-catalog.js?v=20260921-1', 'loadProductCatalog'],
         inventory: ['inventory.js?v=20260615-3', 'loadInventory'],
@@ -67,16 +68,16 @@
         'kpi-reports': ['kpi-reports.js?v=20261013-permissions1', 'loadKpiReports'],
         'business-reports': ['business-reports.js?v=20261013-permissions1', 'loadBusinessReports'],
         'my-kpi': ['my-kpi.js?v=20261011-assign2', 'loadMyKpi'],
-        'kpi-adjustments': ['kpi-adjustments.js?v=20261009-permissions1', 'loadKpiAdjustments'],
+        'kpi-adjustments': ['kpi-adjustments.js?v=20261019-safety1', 'loadKpiAdjustments'],
         'kpi-settings': ['kpi-settings.js?v=20261013-fields2', 'loadKpiSettings'],
         workflows: ['workflows.js?v=20260618-2', 'loadWorkflows'],
-        users: ['users.js?v=20261009-permissions1', 'loadUsers'],
+        users: ['users.js?v=20261016-handover1', 'loadUsers'],
         roles: ['roles.js?v=20261008-1', 'loadRoles'],
         organization: ['organization.js?v=20261011-master1', 'loadOrganization'],
         'print-templates': ['print-templates.js?v=20261010-workspace2', 'loadPrintTemplates'],
         'audit-logs': ['audit-logs.js', 'loadAuditLogs'],
-        'service-tickets': ['service-desk.js', 'loadServiceTickets'],
-        'warranty-claims': ['service-desk.js', 'loadWarrantyClaims'],
+        'service-tickets': ['service-desk.js?v=20261019-safety1', 'loadServiceTickets'],
+        'warranty-claims': ['service-desk.js?v=20261019-safety1', 'loadWarrantyClaims'],
         settings: ['settings.js?v=20261013-policy-ui2', 'loadSettings'],
     };
     const routePrefetch = {
@@ -200,9 +201,23 @@
             window.setTimeout(() => loadSidebarBadges(), 600);
             warmFeatureScripts();
         } catch (error) {
-            clearUserCache();
+            handleSessionFailure(error);
+        }
+    }
+
+    function handleSessionFailure(error) {
+        clearUserCache();
+        window.VKUser = null;
+        if (error.status === 401) {
             VKApi.clearToken();
             window.location.href = '/';
+            return;
+        }
+        // A network/server outage is not evidence that credentials are invalid.
+        const content = document.querySelector('[data-pjax-content]');
+        if (content) {
+            content.innerHTML = '<section class="panel" role="alert"><h2>Chưa kết nối được hệ thống</h2><p>Máy chủ đang gặp sự cố hoặc kết nối bị gián đoạn. Phiên đăng nhập được giữ lại. Vui lòng thử lại.</p><button type="button" class="btn primary" data-session-retry>Thử lại</button></section>';
+            content.querySelector('[data-session-retry]').addEventListener('click', () => window.location.reload());
         }
     }
 
@@ -230,17 +245,11 @@
         const fallback = document.querySelector('.brand-logo');
         if (!image || !fallback) return;
 
-        const url = String(logoUrl || '').trim();
+        const defaultLogo = image.dataset.defaultLogo || '/assets/branding/vk-software-logo.png';
+        const url = String(logoUrl || '').trim() || defaultLogo;
         if (image.dataset.requestedLogo === url) return;
         image.dataset.requestedLogo = url;
         image.onerror = null;
-
-        if (!url) {
-            image.removeAttribute('src');
-            image.classList.add('hidden');
-            fallback.classList.remove('hidden');
-            return;
-        }
 
         // Keep the reserved brand area quiet until the saved image is ready.
         fallback.classList.add('hidden');
@@ -254,9 +263,9 @@
         pending.onerror = () => {
             if (image.dataset.requestedLogo !== url) return;
             delete image.dataset.requestedLogo;
-            image.removeAttribute('src');
-            image.classList.add('hidden');
-            fallback.classList.remove('hidden');
+            image.src = defaultLogo;
+            image.classList.remove('hidden');
+            fallback.classList.add('hidden');
         };
         pending.src = url;
     }
@@ -749,8 +758,17 @@
         }
     }
 
-    document.addEventListener('click', (event) => {
+    document.addEventListener('click', async (event) => {
         if (!event.target.closest('[data-logout]')) return;
+        event.preventDefault();
+        try {
+            await VKApi.request('/auth/logout', { method: 'POST' });
+        } catch (error) {
+            if (error.status !== 401) {
+                window.alert('Chưa thu hồi được phiên đăng nhập. Vui lòng kiểm tra kết nối và thử lại.');
+                return;
+            }
+        }
         clearUserCache();
         VKApi.clearToken();
         window.location.href = '/';

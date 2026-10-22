@@ -208,7 +208,7 @@ async function saveProcurementApproval() {
             if (new Set(values).size !== values.length) throw new Error('Không chọn trùng người trong một luồng.');
             const minimum = node.querySelector('[data-approval-minimum]').value;
             if (minimum === '') throw new Error('Nhập ngưỡng tiền cho từng luồng.');
-            return {minimum_amount:Number(minimum),approvers:values.filter(Boolean).map(Number)};
+            return {minimum_amount:VKMoney.parse(minimum),approvers:values.filter(Boolean).map(Number)};
         });
         await VKApi.request('/tenant/procurement-approval',{method:'POST',body:JSON.stringify({enabled:true,rules})});
         VKModal.toast('Đã lưu và cập nhật luồng cho báo giá chưa có lượt duyệt.');
@@ -255,7 +255,7 @@ async function saveSalesQuotationApproval() {
         const value = name => document.getElementById(name)?.value || '';
         const approvers = Array.from(document.querySelectorAll('[data-sales-approver] select')).map(select=>select.value).filter(Boolean).map(Number);
         const exception = value('sales_exception_approver');
-        const payload = {approvers,exception_approvers:exception ? [Number(exception)] : [],minimum_margin:Number(value('sales_minimum_margin')),maximum_discount:Number(value('sales_maximum_discount')),amount_threshold:value('sales_amount_threshold') ? Number(value('sales_amount_threshold')) : null};
+        const payload = {approvers,exception_approvers:exception ? [Number(exception)] : [],minimum_margin:Number(value('sales_minimum_margin')),maximum_discount:Number(value('sales_maximum_discount')),amount_threshold:value('sales_amount_threshold') ? VKMoney.parse(value('sales_amount_threshold')) : null};
         payload.separation_of_duties = value('sales_self_approval') === 'block';
         if(salesQuotationApproval.can_manage_delegation) payload.delegations = Array.from(document.querySelectorAll('[data-sales-delegation]')).map(row=>{
             const field = prefix=>row.querySelector(`[id^="${prefix}"]`)?.value || '';
@@ -728,9 +728,11 @@ function renderSlaPolicies(rows) {
     ], rows, 'Chưa có cấu hình SLA.');
 }
 
-function openSlaPolicyModal(id = null) {
+async function openSlaPolicyModal(id = null) {
     const row = id ? (window.__slaPolicies || []).find(item => Number(item.id) === id) : null;
-    const moduleOptions = ['general', 'sales', 'inventory', 'procurement', 'finance', 'kpi']
+    const users=await safeRequest('/lookups/users');
+    const rules=row?.escalation_rules || {};
+    const moduleOptions = ['general', 'sales', 'inventory', 'procurement', 'finance', 'kpi','service']
         .map(value => ({ value, label: translateModule(value) }));
     const priorityOptions = ['low', 'normal', 'high', 'urgent']
         .map(value => ({ value, label: translatePriority(value) }));
@@ -745,6 +747,17 @@ function openSlaPolicyModal(id = null) {
             <input type="checkbox" name="manager_escalation" value="1" ${row?.escalation_rules?.manager ? 'checked' : ''}>
             <span>Leo thang cho quản lý khi sắp quá hạn hoặc quá hạn</span>
         </label>
+        <details ${row?.module==='service'?'open':''}><summary>Chính sách chăm sóc khách hàng</summary>
+        <p>Áp dụng khi chọn module Chăm sóc khách hàng và loại công việc <strong>ticket</strong>. Chỉ áp dụng cho yêu cầu tạo mới.</p>
+        ${VKModal.select('service_clock','Cách tính SLA',[{value:'continuous',label:'Giờ liên tục'},{value:'business',label:'Theo lịch làm việc'}],rules.clock || 'continuous')}
+        ${VKModal.field('response_minutes','Thời hạn phản hồi (phút)','number',rules.response_minutes || '')}
+        ${VKModal.field('service_timezone','Múi giờ','text',rules.timezone || 'Asia/Ho_Chi_Minh')}
+        ${VKModal.field('service_weekdays','Ngày làm việc (1 = thứ Hai, 7 = Chủ nhật)','text',(rules.weekdays || []).join(','))}
+        ${VKModal.field('service_periods','Khung giờ, ví dụ 08:00-12:00,13:00-17:00','text',(rules.periods || []).map(p=>`${p.start}-${p.end}`).join(','))}
+        ${VKModal.field('service_holidays','Ngày nghỉ (dd/mm/yyyy), cách nhau bằng dấu phẩy','text',(rules.holidays || []).map(d=>d.split('-').reverse().join('/')).join(','))}
+        <label class="checkbox-line"><input type="checkbox" name="service_pause" value="1" ${rules.allow_pause?'checked':''}><span>Cho phép tạm dừng khi chờ thông tin khách, bắt buộc lý do</span></label>
+        <div class="field"><label>Người nhận chuyển cấp (giữ Ctrl để chọn nhiều)</label><select name="service_recipients" multiple style="height:110px">${(users?.data || []).map(user=>`<option value="${Number(user.id)}" ${(rules.recipient_ids || []).map(Number).includes(Number(user.id))?'selected':''}>${VKTable.escapeHtml(user.name)}</option>`).join('')}</select><small>Người nhận phải có quyền xem ticket toàn doanh nghiệp. Người xử lý luôn được nhắc hạn. Tiến trình nhắc việc phải đang chạy.</small></div>
+        </details>
     `, async (form) => {
         const formData = Object.fromEntries(new FormData(form));
         const payload = {
@@ -757,6 +770,20 @@ function openSlaPolicyModal(id = null) {
                 manager: Boolean(formData.manager_escalation),
             },
         };
+        if(formData.module==='service' && formData.task_type==='ticket') {
+            payload.escalation_rules={
+                clock:formData.service_clock,
+                allow_pause:Boolean(formData.service_pause),
+                recipient_ids:Array.from(form.querySelector('[name="service_recipients"]').selectedOptions,o=>Number(o.value)),
+            };
+            if(formData.response_minutes)payload.escalation_rules.response_minutes=Number(formData.response_minutes);
+            if(formData.service_clock==='business')Object.assign(payload.escalation_rules,{
+                timezone:formData.service_timezone,
+                weekdays:formData.service_weekdays.split(',').filter(s=>s.trim()).map(Number),
+                periods:formData.service_periods.split(',').filter(s=>s.trim()).map(s=>{const [start,end]=s.trim().split('-');return {start,end};}),
+                holidays:formData.service_holidays.split(',').filter(s=>s.trim()).map(s=>s.trim().split('/').reverse().join('-')),
+            });
+        }
 
         await VKApi.request(id ? `/sla-policies/${id}` : '/sla-policies', {
             method: id ? 'PUT' : 'POST',
@@ -767,6 +794,11 @@ function openSlaPolicyModal(id = null) {
         VKModal.toast(id ? 'Đã cập nhật SLA.' : 'Đã thêm SLA.');
         await loadSettings({ source: 'pjax' });
     });
+    const slaBody=document.getElementById('modalBody');
+    const slaModule=slaBody?.querySelector('[name="module"]'),slaType=slaBody?.querySelector('[name="task_type"]');
+    const syncServiceType=()=>{if(!slaType)return;slaType.readOnly=slaModule.value==='service';if(slaType.readOnly)slaType.value='ticket';};
+    slaModule?.addEventListener('change',syncServiceType);
+    if(slaModule)syncServiceType();
 }
 
 function ruleRow(label, note) {
@@ -793,6 +825,7 @@ function renderPriority(priority) {
 }
 
 function renderEscalation(rules) {
+    if (rules?.recipient_ids?.length) return `<span class="badge warning">${Number(rules.recipient_ids.length)} người nhận</span>`;
     if (rules?.manager) return '<span class="badge warning">Quản lý</span>';
     return '<span class="row-note">Không leo thang</span>';
 }
@@ -805,6 +838,7 @@ function translateModule(value) {
         procurement: 'Mua hàng',
         finance: 'Tài chính',
         kpi: 'KPI',
+        service: 'Chăm sóc khách hàng',
     }[value] || value || '-';
 }
 

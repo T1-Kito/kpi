@@ -12,13 +12,16 @@ class BusinessReport
     public static function exportPermission(string $type): string
     {
         return match ($type) {
-            'sales' => 'sales.report.export',
+            'sales','care','service','care_gaps' => 'sales.report.export',
             'invoices', 'receivables' => 'finance.report.export',
             'purchase' => 'procurement.report.export',
             'inventory', 'transactions' => 'inventory.report.export',
         };
     }
     public const TYPES = [
+        'care'=>['Lịch chăm sóc khách hàng','master.view'],
+        'care_gaps'=>['Khách chưa có lịch chăm sóc','master.view'],
+        'service'=>['Phản hồi khách hàng và SLA','service.ticket.view'],
         'sales' => ['Đơn bán hàng', 'sales.order.view'],
         'invoices' => ['Hóa đơn bán hàng', 'finance.invoice.view'],
         'purchase' => ['Đơn mua hàng', 'procurement.po.view'],
@@ -31,6 +34,7 @@ class BusinessReport
     {
         $type = $filters['type'];
         abort_unless($actor->hasPermission(self::TYPES[$type][1]), 403, 'Bạn chưa có quyền xem báo cáo này.');
+        if(in_array($type,['care','service','care_gaps'],true))return app(CustomerCareReport::class)->build($actor,$filters);
         $query = match ($type) {
             'sales' => SalesOrder::with(['customer', 'salesOwner']),
             'invoices', 'receivables' => SalesInvoice::with(['salesOrder.customer', 'salesOrder.salesOwner']),

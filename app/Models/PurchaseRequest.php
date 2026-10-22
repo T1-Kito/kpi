@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PurchaseRequest extends Model
 {
+    use \App\Models\Concerns\CastsDatabaseIdentifiers;
+
     protected $fillable = ['tenant_id', 'code', 'source_type', 'source_id', 'requested_by', 'reason', 'status'];
 
     public function items(): HasMany

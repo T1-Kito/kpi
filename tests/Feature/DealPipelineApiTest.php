@@ -25,6 +25,7 @@ class DealPipelineApiTest extends TestCase
 
         $sku = $this->withToken($token)->getJson('/api/v1/skus?page_size=1')->json('data.0');
         $this->withToken($token)->putJson("/api/v1/deals/{$deal['id']}/items", [
+            'version' => $deal['version'],
             'items' => [['sku_id' => $sku['id'], 'quantity' => 2, 'unit_price' => 125000]],
         ])->assertOk()->assertJsonPath('data.amount', '250000.00');
         $this->withToken($token)->postJson("/api/v1/deals/{$deal['id']}/activities", [
@@ -34,7 +35,7 @@ class DealPipelineApiTest extends TestCase
             ->assertOk()->assertJsonCount(1, 'data.items')->assertJsonCount(1, 'data.tasks');
 
         $this->withToken($token)->postJson("/api/v1/deals/{$deal['id']}/transition", [
-            'stage' => 'proposal', 'version' => $deal['version'],
+            'stage' => 'proposal', 'version' => $deal['version'] + 1,
         ])->assertOk()->assertJsonPath('data.stage', 'proposal')->assertJsonPath('data.probability', '50.00');
 
         $this->withToken($token)->postJson("/api/v1/deals/{$deal['id']}/transition", [

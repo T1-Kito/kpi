@@ -21,7 +21,7 @@
                 {label:'Chức vụ',render:row => esc(row.position) || '—'},
                 {label:'Điện thoại',render:row => esc(row.phone) || '—'},
                 {label:'Email',render:row => esc(row.email) || '—'},
-                {label:'',render:row => VKLayout.hasPermission('master.manage') ? `<button class="btn secondary small" data-edit-contact="${row.id}">Chỉnh sửa</button>` : ''}
+                {label:'',render:row => VKLayout.hasPermission('customer.manage') ? `<button class="btn secondary small" data-edit-contact="${row.id}">Chỉnh sửa</button>` : ''}
             ],rows,'Chưa có người liên hệ phù hợp.');
             root.querySelector('[data-contact-pagination]').innerHTML = `<div class="button-row" style="margin-top:16px"><button class="btn secondary small" data-contact-page="${page-1}" ${page <= 1 ? 'disabled' : ''}>Trước</button><span>Trang ${page} / ${response.meta.last_page}</span><button class="btn secondary small" data-contact-page="${page+1}" ${page >= response.meta.last_page ? 'disabled' : ''}>Sau</button></div>`;
         } catch(error) {

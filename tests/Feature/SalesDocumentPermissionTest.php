@@ -21,10 +21,12 @@ class SalesDocumentPermissionTest extends TestCase
         $role->permissions()->sync(Permission::where('code', 'sales.quotation.view')->pluck('id'));
         $token = $this->loginAs('sales@vk-kpi.local');
 
+        $quotationId = \App\Models\Quotation::where('tenant_id', $user->tenant_id)->firstOrFail()->id;
+
         $this->withToken($token)->getJson('/api/v1/quotations')->assertOk();
         $this->withToken($token)->postJson('/api/v1/quotations', [])->assertForbidden();
-        $this->withToken($token)->putJson('/api/v1/quotations/1', [])->assertForbidden();
-        $this->withToken($token)->deleteJson('/api/v1/quotations/1')->assertForbidden();
+        $this->withToken($token)->putJson('/api/v1/quotations/'.$quotationId, [])->assertForbidden();
+        $this->withToken($token)->deleteJson('/api/v1/quotations/'.$quotationId)->assertForbidden();
     }
 
     public function test_destructive_document_permissions_are_not_granted_to_sales_by_default(): void
@@ -44,8 +46,9 @@ class SalesDocumentPermissionTest extends TestCase
         $token = $this->loginAs('sales@vk-kpi.local');
 
         $this->withToken($token)->getJson('/api/v1/sales-orders')->assertOk();
-        $this->withToken($token)->putJson('/api/v1/sales-orders/1', ['payment_terms' => '30 ngày'])->assertForbidden();
-        $this->withToken($token)->deleteJson('/api/v1/sales-orders/1')->assertForbidden();
+        $orderId = SalesOrder::where('tenant_id', $user->tenant_id)->firstOrFail()->id;
+        $this->withToken($token)->putJson('/api/v1/sales-orders/'.$orderId, ['payment_terms' => '30 ngày'])->assertForbidden();
+        $this->withToken($token)->deleteJson('/api/v1/sales-orders/'.$orderId)->assertForbidden();
         $this->withToken($token)->postJson('/api/v1/sales-orders', [])->assertForbidden();
     }
 

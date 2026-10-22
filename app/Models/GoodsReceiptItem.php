@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class GoodsReceiptItem extends Model
 {
+    use \App\Models\Concerns\CastsDatabaseIdentifiers;
+
     protected $fillable = ['goods_receipt_id', 'sku_id', 'quantity', 'lot_no'];
 
     public function sku(): BelongsTo

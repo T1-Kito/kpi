@@ -89,6 +89,7 @@ class TaskController extends Controller
             'status' => ['required', Rule::in(['new', 'in_progress', 'completed', 'overdue', 'cancelled'])],
             'reason' => ['nullable', 'string', 'max:500'],
         ]);
+        abort_if($task->task_type === 'customer_follow_up' && $data['status'] === 'completed' && !trim($data['reason'] ?? ''),422,'Cần ghi kết quả chăm sóc trước khi hoàn thành.');
 
         $task = $this->tasks->changeStatus($task, $request->user(), $data['status'], $data['reason'] ?? null);
 

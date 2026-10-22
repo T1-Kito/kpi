@@ -395,6 +395,8 @@
     }
 
     async function openPaymentModal(invoiceId) {
+        // One key per opened form, retained across network retries and double clicks.
+        const paymentRequestKey = window.crypto.randomUUID();
         const invoice = states.invoices.rows.find(item => String(item.id) === String(invoiceId))
             || (await VKApi.request(`/sales-invoices/${invoiceId}`)).data;
         VKModal.open('Ghi nhận thanh toán khách hàng', `
@@ -412,9 +414,10 @@
             </div>
         `, async (form) => {
             const data = Object.fromEntries(new FormData(form));
-            data.amount = Number(data.amount);
+            data.amount = VKMoney.parse(data.amount);
             await VKApi.request(`/sales-invoices/${invoiceId}/payments`, {
                 method: 'POST',
+                headers: { 'Idempotency-Key': paymentRequestKey },
                 body: JSON.stringify(data),
             });
             VKModal.close();

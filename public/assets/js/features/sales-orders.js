@@ -383,7 +383,7 @@ function openPaymentModal(invoiceId) {
         </div>
     `, async (form) => {
         const data = Object.fromEntries(new FormData(form));
-        data.amount = Number(data.amount);
+        data.amount = VKMoney.parse(data.amount);
         await VKApi.request(`/sales-invoices/${invoiceId}/payments`, {
             method: 'POST',
             body: JSON.stringify(data),

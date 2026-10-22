@@ -1,5 +1,8 @@
 (function () {
     const types = {
+        care: ['Lịch chăm sóc khách hàng', 'master.view', 'customer_id', ['new','in_progress','overdue','completed','cancelled']],
+        care_gaps: ['Khách chưa có lịch chăm sóc', 'master.view', 'customer_id', []],
+        service: ['Phản hồi khách hàng và SLA', 'service.ticket.view', 'customer_id', ['open','in_progress','pending_customer','resolved','closed','cancelled']],
         sales: ['Đơn bán hàng', 'sales.order.view', 'customer_id', ['draft','confirmed','awaiting_delivery','delivered','invoiced','completed','cancelled']],
         invoices: ['Hóa đơn bán hàng', 'finance.invoice.view', 'customer_id', ['draft','issued','paid','partially_paid','cancelled']],
         purchase: ['Đơn mua hàng', 'procurement.po.view', 'supplier_id', ['draft','approved','received','rejected','cancelled']],
@@ -26,9 +29,9 @@
         const f = form(), type = f.elements.type.value;
         if (!types[type]) return;
         const stock = ['inventory','transactions'].includes(type);
-        f.querySelectorAll('[data-date-filter]').forEach(label => { label.hidden = ['inventory','receivables'].includes(type); const input=label.querySelector('input');if(input) input.required = !label.hidden; });
+        f.querySelectorAll('[data-date-filter]').forEach(label => { label.hidden = ['inventory','receivables','care_gaps'].includes(type); const input=label.querySelector('input');if(input) input.required = !label.hidden; });
         f.querySelector('[data-party-filter]').firstChild.textContent = type === 'purchase' ? 'Nhà cung cấp' : stock ? 'Kho' : 'Khách hàng';
-        f.querySelector('[data-user-filter]').hidden = !['sales','invoices','receivables'].includes(type);
+        f.querySelector('[data-user-filter]').hidden = !['sales','invoices','receivables','care','service','care_gaps'].includes(type);
         f.querySelector('[data-sku-filter]').hidden = !stock;
         f.querySelector('[data-debt-filter]').hidden = type !== 'receivables';
         f.querySelector('[data-status-filter]').hidden = !types[type][3].length;
@@ -93,6 +96,10 @@
         const f = form(); if (!f || f.dataset.bound) return; f.dataset.bound = '1';
         f.elements.type.innerHTML = Object.entries(types).filter(([,config])=>VKLayout.hasPermission(config[1])).map(([key,config])=>`<option value="${key}">${config[0]}</option>`).join('');
         const today = new Date(); f.elements.from.value=date(new Date(today.getFullYear(),today.getMonth(),1));f.elements.to.value=date(today);
+        const initial=new URLSearchParams(window.location.search);
+        if([...f.elements.type.options].some(option=>option.value===initial.get('type')))f.elements.type.value=initial.get('type');
+        for(const key of ['from','to'])if(/^\d{4}-\d{2}-\d{2}$/.test(initial.get(key)||''))f.elements[key].value=initial.get(key);
+        if(initial.has('from') || initial.has('to'))f.elements.range.value='custom';
         configure();
         f.addEventListener('change',event=>{
             loadedQuery=null;exportButton().disabled=true;page=1;

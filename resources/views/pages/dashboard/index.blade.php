@@ -10,7 +10,7 @@
 @endsection
 
 @section('content')
-<section class="module-panel assigned-kpi-panel">
+<section class="module-panel assigned-kpi-panel" data-dashboard-personal-kpi>
     <div class="panel-head"><div><h2>KPI của tôi</h2></div><div class="assigned-kpi-tools"><label for="myKpiDate">Kỳ xem <input type="date" id="myKpiDate"></label><a class="btn secondary small" href="/my-kpi">Xem chi tiết →</a></div></div>
     <div id="myKpiRoot" aria-live="polite"><p class="form-note">Đang tải chỉ tiêu được phân…</p></div>
 </section>
@@ -18,6 +18,6 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/dashboard.js?v=20261013-ui1"></script>
+<script src="/assets/js/features/dashboard.js?v=20261020-chair-care1"></script>
 <script src="/assets/js/features/my-kpi.js?v=20261013-ui2"></script>
 @endpush

@@ -20,6 +20,38 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
+Artisan::command('crm:backup', function (\App\Support\LocalDatabaseBackup $backup) {
+    try {$this->info('Đã sao lưu database: '.$backup->create()); $this->warn('Chưa bao gồm file tải lên, cấu hình và khóa ứng dụng.');}
+    catch (\Throwable $e) {$this->error($e->getMessage()); return 1;}
+})->purpose('Create and verify a private SQLite database snapshot');
+
+Artisan::command('crm:backup-bundle {--writers-stopped}', function (\App\Support\BackupBundle $backup) {
+    if (!$this->option('writers-stopped')) {$this->error('Dừng worker và xác nhận bằng --writers-stopped trước.'); return 1;}
+    $password=$this->secret('Mật khẩu mã hóa gói (ít nhất 16 ký tự)');
+    if ($password!==$this->secret('Nhập lại mật khẩu')) {$this->error('Mật khẩu không khớp.'); return 1;}
+    try {$this->info('Gói đã mã hóa và kiểm chứng: '.$backup->create($password));}
+    catch (\Throwable $e) {$this->error($e->getMessage()); return 1;}
+})->purpose('Create encrypted database, uploads and environment backup during maintenance');
+
+Artisan::command('crm:bundle-check {name} {--restore-test}', function (\App\Support\BackupBundle $backup) {
+    $password=$this->secret('Mật khẩu gói sao lưu');
+    try {
+        $result=$backup->verify($this->argument('name'),$password,(bool)$this->option('restore-test'));
+        $this->info('Đạt: '.$result['files'].' file.');
+        if ($result['restore_directory']) $this->info('Khôi phục thử vào thư mục riêng: '.$result['restore_directory']);
+    } catch (\Throwable $e) {$this->error($e->getMessage()); return 1;}
+})->purpose('Verify encrypted bundle or restore into a separate staging directory');
+
+Artisan::command('crm:backup-verify {name}', function (\App\Support\LocalDatabaseBackup $backup) {
+    try {$backup->verify($this->argument('name')); $this->info('Checksum và toàn vẹn database: đạt.');}
+    catch (\Throwable $e) {$this->error($e->getMessage()); return 1;}
+})->purpose('Verify a database backup without changing live data');
+
+Artisan::command('crm:restore-test {name}', function (\App\Support\LocalDatabaseBackup $backup) {
+    try {$this->info('Đã khôi phục thử vào file riêng: '.$backup->restoreCopy($this->argument('name'))); $this->info('Không thay đổi database đang sử dụng.');}
+    catch (\Throwable $e) {$this->error($e->getMessage()); return 1;}
+})->purpose('Restore a backup into a separate file, never overwrite live data');
+
 Artisan::command('tasks:check-overdue', function (BusinessEventPublisher $events) {
     $count = 0;
 
@@ -165,6 +197,19 @@ Artisan::command('kpi:calculate-snapshots', function (KpiService $kpis) {
 })->purpose('Calculate daily KPI snapshots for active tenants');
 
 Schedule::command('tasks:check-overdue')->everyFiveMinutes();
+Artisan::command('service:check-sla', function (\App\Support\ServiceTicketEscalation $service) {
+    $this->info('Đã gửi '.$service->run().' nhắc hạn CSKH mới.');
+})->purpose('Check ticket SLA and notify authorized recipients without duplicate alerts');
+Schedule::command('service:check-sla')->everyMinute()->withoutOverlapping();
+Artisan::command('imports:prune',function(){
+    if(!\Illuminate\Support\Facades\Schema::hasTable('import_batches')){$this->info('Chưa có dữ liệu lô nhập để dọn.');return;}
+    $expired=DB::table('import_batches')->where('status','ready')->where('expires_at','<=',now())->update(['encrypted_payload'=>null,'status'=>'expired','updated_at'=>now()]);
+    DB::table('import_batches')->where('created_at','<',now()->subDays(30))->whereNotNull('result_json')->orderBy('id')->chunkById(100,function($rows){
+        foreach($rows as $row){$result=json_decode($row->result_json,true) ?: [];DB::table('import_batches')->where('id',$row->id)->update(['encrypted_payload'=>null,'result_json'=>json_encode(['total'=>$result['total'] ?? 0,'imported'=>$result['imported'] ?? 0,'details_pruned'=>true])]);}
+    });
+    $this->info('Đã hủy file kiểm tra của '.$expired.' lô hết hạn. Giữ lịch sử và kết quả tổng hợp.');
+})->purpose('Remove expired encrypted import payloads and old personal row details');
+Schedule::command('imports:prune')->hourly()->withoutOverlapping();
 Schedule::command('procurement:check-late-po')->hourly();
 Schedule::command('events:retry-failed --limit=200 --max-attempts=5')->everyMinute()->withoutOverlapping();
 Schedule::command('kpi:calculate-snapshots')->dailyAt('23:55');

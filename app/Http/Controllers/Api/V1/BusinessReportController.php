@@ -48,7 +48,7 @@ class BusinessReportController extends Controller
             @unlink($path);
             throw $error;
         }
-        $suffix = in_array($filters['type'], ['inventory', 'receivables']) ? now()->format('Y-m-d') : $filters['from'].'_'.$filters['to'];
+        $suffix = in_array($filters['type'], ['inventory', 'receivables','care_gaps']) ? now()->format('Y-m-d') : $filters['from'].'_'.$filters['to'];
         return response()->download($path, 'Bao-cao-'.$filters['type'].'-'.$suffix.'.xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Cache-Control' => 'private, no-store'])->deleteFileAfterSend(true);
     }
 
@@ -56,15 +56,16 @@ class BusinessReportController extends Controller
     {
         $data = $request->validate([
             'type' => ['required', Rule::in(array_keys(BusinessReport::TYPES))],
-            'from' => ['required_unless:type,inventory,receivables', 'nullable', 'date_format:Y-m-d'],
-            'to' => ['required_unless:type,inventory,receivables', 'nullable', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'from' => ['required_unless:type,inventory,receivables,care_gaps', 'nullable', 'date_format:Y-m-d'],
+            'to' => ['required_unless:type,inventory,receivables,care_gaps', 'nullable', 'date_format:Y-m-d', 'after_or_equal:from'],
             'q' => ['nullable', 'string', 'max:150'], 'status' => ['nullable', 'string', 'max:40'],
             'customer_id' => ['nullable', 'integer', 'min:1'], 'supplier_id' => ['nullable', 'integer', 'min:1'],
             'warehouse_id' => ['nullable', 'integer', 'min:1'], 'sku_id' => ['nullable', 'integer', 'min:1'],
             'user_id' => ['nullable', 'integer', 'min:1'], 'debt_status' => ['nullable', Rule::in(['overdue', 'not_due'])],
         ]);
         $allowed = match ($data['type']) {
-            'sales', 'invoices' => ['from', 'to', 'q', 'status', 'customer_id', 'user_id'],
+            'sales', 'invoices','care','service' => ['from', 'to', 'q', 'status', 'customer_id', 'user_id'],
+            'care_gaps'=>['q','customer_id','user_id'],
             'purchase' => ['from', 'to', 'q', 'status', 'supplier_id'],
             'inventory' => ['q', 'warehouse_id', 'sku_id'],
             'transactions' => ['from', 'to', 'q', 'status', 'warehouse_id', 'sku_id'],

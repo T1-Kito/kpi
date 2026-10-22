@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class TicketWorklog extends Model
 {
+    use \App\Models\Concerns\CastsDatabaseIdentifiers;
+
     protected $fillable = ['service_ticket_id', 'user_id', 'action', 'visibility', 'content', 'minutes_spent', 'worked_at'];
     protected function casts(): array { return ['worked_at' => 'datetime']; }
     public function ticket(): BelongsTo { return $this->belongsTo(ServiceTicket::class, 'service_ticket_id'); }

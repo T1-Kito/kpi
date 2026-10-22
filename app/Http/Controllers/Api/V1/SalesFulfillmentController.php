@@ -349,6 +349,7 @@ class SalesFulfillmentController extends Controller
             'note' => ['nullable', 'string', 'max:1000'],
         ]);
 
+        $data['idempotency_key'] = $request->header('Idempotency-Key');
         return response()->json(['data' => $this->fulfillment->recordPayment($salesInvoice, $request->user(), $data)], 201);
     }
 

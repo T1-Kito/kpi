@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CustomerContact extends Model
 {
+    use \App\Models\Concerns\CastsDatabaseIdentifiers;
+
     protected $fillable = ['customer_id', 'name', 'phone', 'email', 'position', 'is_primary'];
 
     protected $casts = ['is_primary' => 'boolean'];

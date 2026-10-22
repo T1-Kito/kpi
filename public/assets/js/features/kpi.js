@@ -486,7 +486,7 @@ function rankTone(value) {
 }
 
 function canManageKpi() {
-    return Array.isArray(window.VKUser?.permissions) && window.VKUser.permissions.includes('kpi.lock');
+    return Array.isArray(window.VKUser?.permissions) && window.VKUser.permissions.includes('kpi.configure');
 }
 
 function openRequestedKpiException(exceptions) {

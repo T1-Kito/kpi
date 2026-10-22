@@ -48,7 +48,22 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function () {
     Route::post('/auth/login', [AuthController::class, 'login']);
 
-    Route::middleware('jwt')->group(function () {
+    Route::middleware(['jwt', \App\Http\Middleware\HideCostFields::class])->group(function () {
+        Route::prefix('import-center')->group(function(){
+            Route::get('/sources',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'sources']);
+            Route::post('/sources',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'saveSource']);
+            Route::put('/sources/{source}',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'saveSource'])->whereNumber('source');
+            Route::get('/batches',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'index']);
+            Route::post('/batches',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'preview'])->middleware('throttle:10,1');
+            Route::get('/batches/{batch}',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'show'])->whereNumber('batch');
+            Route::post('/batches/{batch}/commit',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'commit'])->whereNumber('batch')->middleware('throttle:10,1');
+        });
+        Route::get('/chat/users', [\App\Http\Controllers\Api\V1\ChatController::class, 'users']);
+        Route::get('/chat', [\App\Http\Controllers\Api\V1\ChatController::class, 'index']);
+        Route::post('/chat', [\App\Http\Controllers\Api\V1\ChatController::class, 'store'])->middleware('throttle:30,1');
+        Route::get('/chat/{id}/messages', [\App\Http\Controllers\Api\V1\ChatController::class, 'messages'])->whereNumber('id');
+        Route::post('/chat/{id}/messages', [\App\Http\Controllers\Api\V1\ChatController::class, 'send'])->whereNumber('id')->middleware('throttle:120,1');
+        Route::post('/chat/{id}/read', [\App\Http\Controllers\Api\V1\ChatController::class, 'read'])->whereNumber('id');
         Route::get('/me', [MeController::class, 'show']);
         Route::get('/dashboard/summary', DashboardSummaryController::class);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
@@ -60,7 +75,11 @@ Route::prefix('v1')->group(function () {
             Route::get('/customers', [CustomerController::class, 'index']);
             Route::get('/customer-contacts', [CustomerController::class, 'contacts']);
             Route::get('/customers/duplicates', [CustomerController::class, 'duplicates']);
+            Route::get('/customers/care-board', [\App\Http\Controllers\Api\V1\CustomerCareController::class, 'board']);
             Route::get('/customers/{customer}', [CustomerController::class, 'show']);
+            Route::get('/customers/{customer}/care', [\App\Http\Controllers\Api\V1\CustomerCareController::class, 'index']);
+            Route::post('/customers/{customer}/care', [\App\Http\Controllers\Api\V1\CustomerCareController::class, 'store'])->middleware('permission:task.create');
+            Route::post('/customers/{customer}/care/{task}/complete', [\App\Http\Controllers\Api\V1\CustomerCareController::class, 'complete'])->middleware('permission:task.create');
             Route::get('/suppliers', [SupplierController::class, 'index']);
             Route::get('/suppliers/{supplier}', [SupplierController::class, 'show']);
             Route::get('/skus', [SkuController::class, 'index']);
@@ -74,29 +93,33 @@ Route::prefix('v1')->group(function () {
             Route::get('/sales-master-data', [SalesMasterDataController::class, 'index']);
         });
 
-        Route::middleware('permission:master.manage')->group(function () {
-            Route::post('/customers', [CustomerController::class, 'store']);
-            Route::post('/customer-contacts', [CustomerController::class, 'storeDirectoryContact']);
-            Route::put('/customers/{customer}', [CustomerController::class, 'update']);
-            Route::post('/customers/{customer}/contacts', [CustomerController::class, 'storeContact']);
-            Route::put('/customers/{customer}/contacts/{contact}', [CustomerController::class, 'updateContact']);
-            Route::delete('/customers/{customer}/contacts/{contact}', [CustomerController::class, 'deleteContact']);
-            Route::post('/suppliers', [SupplierController::class, 'store']);
-            Route::put('/suppliers/{supplier}', [SupplierController::class, 'update']);
-            Route::post('/skus', [SkuController::class, 'store']);
-            Route::put('/skus/{sku}', [SkuController::class, 'update']);
-            Route::post('/product-categories', [ProductCatalogController::class, 'storeCategory']);
-            Route::post('/product-brands', [ProductCatalogController::class, 'storeBrand']);
-            Route::post('/warehouses', [WarehouseController::class, 'store']);
-            Route::put('/warehouses/{warehouse}', [WarehouseController::class, 'update']);
-            Route::post('/sales-master-data/stages', [SalesMasterDataController::class, 'storeStage']);
-            Route::put('/sales-master-data/stages/{stage}', [SalesMasterDataController::class, 'updateStage']);
-            Route::post('/sales-master-data/sources', [SalesMasterDataController::class, 'storeSource']);
-            Route::put('/sales-master-data/sources/{source}', [SalesMasterDataController::class, 'updateSource']);
-            Route::post('/sales-master-data/price-books', [SalesMasterDataController::class, 'storePriceBook']);
-            Route::put('/sales-master-data/price-books/{priceBook}', [SalesMasterDataController::class, 'updatePriceBook']);
-            Route::post('/sales-master-data/payment-terms', [SalesMasterDataController::class, 'storePaymentTerm']);
-            Route::put('/sales-master-data/payment-terms/{paymentTerm}', [SalesMasterDataController::class, 'updatePaymentTerm']);
+        Route::group([], function () {
+            Route::post('/customers', [CustomerController::class, 'store'])->middleware('permission:customer.manage');
+            Route::get('/customer-import/template', [\App\Http\Controllers\Api\V1\CustomerImportController::class, 'template'])->middleware('permission:customer.manage');
+            Route::post('/customer-import', [\App\Http\Controllers\Api\V1\CustomerImportController::class, 'store'])->middleware('permission:customer.manage');
+            Route::post('/customer-contacts', [CustomerController::class, 'storeDirectoryContact'])->middleware('permission:customer.manage');
+            Route::get('/directory-import/contacts/template',[\App\Http\Controllers\Api\V1\DirectoryImportController::class,'template'])->defaults('kind','contacts')->middleware('permission:customer.manage');
+            Route::post('/directory-import/contacts',[\App\Http\Controllers\Api\V1\DirectoryImportController::class,'store'])->defaults('kind','contacts')->middleware('permission:customer.manage');
+            Route::put('/customers/{customer}', [CustomerController::class, 'update'])->middleware('permission:customer.manage');
+            Route::post('/customers/{customer}/contacts', [CustomerController::class, 'storeContact'])->middleware('permission:customer.manage');
+            Route::put('/customers/{customer}/contacts/{contact}', [CustomerController::class, 'updateContact'])->middleware('permission:customer.manage');
+            Route::delete('/customers/{customer}/contacts/{contact}', [CustomerController::class, 'deleteContact'])->middleware('permission:customer.manage');
+            Route::post('/suppliers', [SupplierController::class, 'store'])->middleware('permission:supplier.manage');
+            Route::put('/suppliers/{supplier}', [SupplierController::class, 'update'])->middleware('permission:supplier.manage');
+            Route::post('/skus', [SkuController::class, 'store'])->middleware('permission:product.manage');
+            Route::put('/skus/{sku}', [SkuController::class, 'update'])->middleware('permission:product.manage');
+            Route::post('/product-categories', [ProductCatalogController::class, 'storeCategory'])->middleware('permission:product.manage');
+            Route::post('/product-brands', [ProductCatalogController::class, 'storeBrand'])->middleware('permission:product.manage');
+            Route::post('/warehouses', [WarehouseController::class, 'store'])->middleware('permission:warehouse.manage');
+            Route::put('/warehouses/{warehouse}', [WarehouseController::class, 'update'])->middleware('permission:warehouse.manage');
+            Route::post('/sales-master-data/stages', [SalesMasterDataController::class, 'storeStage'])->middleware('permission:sales.master.manage');
+            Route::put('/sales-master-data/stages/{stage}', [SalesMasterDataController::class, 'updateStage'])->middleware('permission:sales.master.manage');
+            Route::post('/sales-master-data/sources', [SalesMasterDataController::class, 'storeSource'])->middleware('permission:sales.master.manage');
+            Route::put('/sales-master-data/sources/{source}', [SalesMasterDataController::class, 'updateSource'])->middleware('permission:sales.master.manage');
+            Route::post('/sales-master-data/price-books', [SalesMasterDataController::class, 'storePriceBook'])->middleware('permission:sales.master.manage');
+            Route::put('/sales-master-data/price-books/{priceBook}', [SalesMasterDataController::class, 'updatePriceBook'])->middleware('permission:sales.master.manage');
+            Route::post('/sales-master-data/payment-terms', [SalesMasterDataController::class, 'storePaymentTerm'])->middleware('permission:sales.master.manage');
+            Route::put('/sales-master-data/payment-terms/{paymentTerm}', [SalesMasterDataController::class, 'updatePaymentTerm'])->middleware('permission:sales.master.manage');
         });
 
         Route::middleware('permission:master.merge')->group(function () {
@@ -113,13 +136,14 @@ Route::prefix('v1')->group(function () {
 
         Route::middleware('permission:task.create')->group(function () {
             Route::post('/tasks', [TaskController::class, 'store']);
-            Route::post('/tasks/{task}/status', [TaskController::class, 'updateStatus']);
         });
 
         Route::middleware('permission:alert.view')->group(function () {
             Route::get('/alerts', [AlertController::class, 'index']);
-            Route::post('/alerts/{alert}/status', [AlertController::class, 'updateStatus']);
         });
+
+        Route::post('/tasks/{task}/status', [TaskController::class, 'updateStatus'])->middleware('permission:task.update');
+        Route::post('/alerts/{alert}/status', [AlertController::class, 'updateStatus'])->middleware('permission:alert.update');
 
         Route::get('/notifications', [NotificationController::class, 'index']);
         Route::get('/approval-center', ApprovalCenterController::class);
@@ -146,35 +170,35 @@ Route::prefix('v1')->group(function () {
         Route::get('/kpi/adjustments/summary', [KpiController::class, 'adjustmentSummary']);
         Route::post('/kpi/exceptions', [KpiController::class, 'storeException']);
 
-        Route::middleware('permission:kpi.lock')->group(function () {
-            Route::get('/kpi/period-closures', [KpiPeriodClosureController::class, 'index']);
-            Route::post('/kpi/period-closures/close', [KpiPeriodClosureController::class, 'close']);
-            Route::post('/kpi/period-closures/{kpiPeriodClosure}/finalize', [KpiPeriodClosureController::class, 'finalize']);
-            Route::post('/kpi/period-closures/{kpiPeriodClosure}/reopen', [KpiPeriodClosureController::class, 'reopen']);
-            Route::post('/kpi/period-acknowledgements/{kpiPeriodAcknowledgement}/resolve', [KpiPeriodClosureController::class, 'resolve']);
-            Route::get('/kpi/bundles', [KpiBundleController::class, 'index']);
-            Route::post('/kpi/standard-setup', [KpiBundleController::class, 'standardSetup']);
-            Route::post('/kpi/bundles', [KpiBundleController::class, 'store']);
-            Route::put('/kpi/bundles/{kpiBundle}', [KpiBundleController::class, 'update']);
-            Route::post('/kpi/bundles/{kpiBundle}/publish', [KpiBundleController::class, 'publish']);
-            Route::post('/kpi/bundles/{kpiBundle}/duplicate', [KpiBundleController::class, 'duplicate']);
-            Route::post('/kpi/bundles/{kpiBundle}/apply', [KpiBundleController::class, 'apply']);
-            Route::get('/kpi/assignments', [KpiAssignmentController::class, 'index']);
-            Route::post('/kpi/assignments/preview', [KpiAssignmentController::class, 'preview']);
-            Route::post('/kpi/assignments', [KpiAssignmentController::class, 'store']);
-            Route::put('/kpi/assignments/{kpiAssignment}', [KpiAssignmentController::class, 'update']);
-            Route::post('/kpi/assignments/{kpiAssignment}/lock', [KpiAssignmentController::class, 'lock']);
-            Route::get('/kpi/definitions', [KpiController::class, 'definitions']);
-            Route::get('/kpi/targets', [KpiController::class, 'targets']);
-            Route::post('/kpi/snapshots/calculate', [KpiController::class, 'calculate']);
-            Route::post('/kpi/definitions', [KpiController::class, 'storeDefinition']);
-            Route::put('/kpi/definitions/{kpiDefinition}', [KpiController::class, 'updateDefinition']);
-            Route::post('/kpi/targets', [KpiController::class, 'storeTarget']);
-            Route::put('/kpi/targets/{kpiTarget}', [KpiController::class, 'updateTarget']);
-            Route::post('/kpi/targets/{kpiTarget}/lock', [KpiController::class, 'lockTarget']);
-            Route::post('/kpi/exceptions/{kpiException}/review', [KpiController::class, 'reviewException']);
-            Route::post('/kpi/adjustments', [KpiController::class, 'storeAdjustment']);
-            Route::post('/kpi/adjustments/{kpiAdjustment}/review', [KpiController::class, 'reviewAdjustment']);
+        Route::post('/kpi/adjustments', [KpiController::class, 'storeAdjustment'])->middleware('permission:kpi.adjustment.create');
+        Route::post('/kpi/adjustments/{kpiAdjustment}/review', [KpiController::class, 'reviewAdjustment'])->middleware('permission:kpi.adjustment.review');
+        Route::post('/kpi/exceptions/{kpiException}/review', [KpiController::class, 'reviewException'])->middleware('permission:kpi.exception.review');
+        Route::group([], function () {
+            Route::get('/kpi/period-closures', [KpiPeriodClosureController::class, 'index'])->middleware('permission:kpi.lock');
+            Route::post('/kpi/period-closures/close', [KpiPeriodClosureController::class, 'close'])->middleware('permission:kpi.lock');
+            Route::post('/kpi/period-closures/{kpiPeriodClosure}/finalize', [KpiPeriodClosureController::class, 'finalize'])->middleware('permission:kpi.lock');
+            Route::post('/kpi/period-closures/{kpiPeriodClosure}/reopen', [KpiPeriodClosureController::class, 'reopen'])->middleware('permission:kpi.lock');
+            Route::post('/kpi/period-acknowledgements/{kpiPeriodAcknowledgement}/resolve', [KpiPeriodClosureController::class, 'resolve'])->middleware('permission:kpi.lock');
+            Route::get('/kpi/bundles', [KpiBundleController::class, 'index'])->middleware('permission:kpi.configure');
+            Route::post('/kpi/standard-setup', [KpiBundleController::class, 'standardSetup'])->middleware('permission:kpi.configure');
+            Route::post('/kpi/bundles', [KpiBundleController::class, 'store'])->middleware('permission:kpi.configure');
+            Route::put('/kpi/bundles/{kpiBundle}', [KpiBundleController::class, 'update'])->middleware('permission:kpi.configure');
+            Route::post('/kpi/bundles/{kpiBundle}/publish', [KpiBundleController::class, 'publish'])->middleware('permission:kpi.configure');
+            Route::post('/kpi/bundles/{kpiBundle}/duplicate', [KpiBundleController::class, 'duplicate'])->middleware('permission:kpi.configure');
+            Route::post('/kpi/bundles/{kpiBundle}/apply', [KpiBundleController::class, 'apply'])->middleware('permission:kpi.configure');
+            Route::get('/kpi/assignments', [KpiAssignmentController::class, 'index'])->middleware('permission:kpi.configure');
+            Route::post('/kpi/assignments/preview', [KpiAssignmentController::class, 'preview'])->middleware('permission:kpi.configure');
+            Route::post('/kpi/assignments', [KpiAssignmentController::class, 'store'])->middleware('permission:kpi.configure');
+            Route::put('/kpi/assignments/{kpiAssignment}', [KpiAssignmentController::class, 'update'])->middleware('permission:kpi.configure');
+            Route::post('/kpi/assignments/{kpiAssignment}/lock', [KpiAssignmentController::class, 'lock'])->middleware('permission:kpi.lock');
+            Route::get('/kpi/definitions', [KpiController::class, 'definitions'])->middleware('permission:kpi.configure');
+            Route::get('/kpi/targets', [KpiController::class, 'targets'])->middleware('permission:kpi.configure');
+            Route::post('/kpi/snapshots/calculate', [KpiController::class, 'calculate'])->middleware('permission:kpi.configure');
+            Route::post('/kpi/definitions', [KpiController::class, 'storeDefinition'])->middleware('permission:kpi.configure');
+            Route::put('/kpi/definitions/{kpiDefinition}', [KpiController::class, 'updateDefinition'])->middleware('permission:kpi.configure');
+            Route::post('/kpi/targets', [KpiController::class, 'storeTarget'])->middleware('permission:kpi.configure');
+            Route::put('/kpi/targets/{kpiTarget}', [KpiController::class, 'updateTarget'])->middleware('permission:kpi.configure');
+            Route::post('/kpi/targets/{kpiTarget}/lock', [KpiController::class, 'lockTarget'])->middleware('permission:kpi.lock');
         });
 
         Route::middleware('permission:user.manage')->group(function () {
@@ -197,6 +221,8 @@ Route::prefix('v1')->group(function () {
             Route::post('/users/{user}/roles', [UserAdminController::class, 'syncRoles']);
             Route::post('/users/{user}/organization', [UserAdminController::class, 'updateOrganization']);
             Route::post('/users/{user}/status', [UserAdminController::class, 'updateStatus']);
+            Route::get('/users/{user}/handover', [\App\Http\Controllers\Api\V1\PersonnelHandoverController::class, 'preview']);
+            Route::post('/users/{user}/handover', [\App\Http\Controllers\Api\V1\PersonnelHandoverController::class, 'transfer']);
             Route::get('/departments', [DepartmentController::class, 'index']);
             Route::post('/departments', [DepartmentController::class, 'store']);
             Route::put('/departments/{department}', [DepartmentController::class, 'update']);
@@ -225,6 +251,8 @@ Route::prefix('v1')->group(function () {
             Route::get('/leads/{lead}', [LeadController::class, 'show']);
         });
         Route::middleware('permission:sales.lead.manage')->group(function () {
+            Route::get('/directory-import/leads/template',[\App\Http\Controllers\Api\V1\DirectoryImportController::class,'template'])->defaults('kind','leads');
+            Route::post('/directory-import/leads',[\App\Http\Controllers\Api\V1\DirectoryImportController::class,'store'])->defaults('kind','leads');
             Route::post('/leads', [LeadController::class, 'store']);
             Route::post('/leads/{lead}/assign', [LeadController::class, 'assign']);
             Route::post('/leads/{lead}/follow-ups', [LeadController::class, 'createFollowUp']);
@@ -407,15 +435,21 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:service.ticket.view')->group(function () {
             Route::get('/service-tickets', [ServiceDeskController::class, 'tickets']);
             Route::get('/service-tickets/{ticket}', [ServiceDeskController::class, 'showTicket']);
+            Route::get('/service-tickets/{ticket}/attachments/{attachment}', [\App\Http\Controllers\Api\V1\TicketAttachmentController::class, 'download']);
             Route::get('/warranty-claims', [ServiceDeskController::class, 'warranties']);
             Route::get('/service-desk/lookups', [ServiceDeskController::class, 'lookups']);
+            Route::get('/service-desk/documents', [ServiceDeskController::class, 'documents']);
             Route::get('/warranty-customers/lookup/{taxCode}', [ServiceDeskController::class, 'lookupWarrantyCustomer']);
         });
 
         Route::middleware('permission:service.ticket.manage')->group(function () {
+            Route::get('/warranty-import/template', [\App\Http\Controllers\Api\V1\WarrantyImportController::class, 'template']);
+            Route::post('/warranty-import', [\App\Http\Controllers\Api\V1\WarrantyImportController::class, 'store']);
             Route::post('/service-tickets', [ServiceDeskController::class, 'storeTicket']);
+            Route::post('/service-tickets/{ticket}/attachments', [\App\Http\Controllers\Api\V1\TicketAttachmentController::class, 'store']);
             Route::post('/service-tickets/{ticket}/worklogs', [ServiceDeskController::class, 'addWorklog']);
             Route::put('/service-tickets/{ticket}', [ServiceDeskController::class, 'updateTicket']);
+            Route::post('/service-tickets/{ticket}/sla-clock', [ServiceDeskController::class, 'clock']);
             Route::post('/warranty-claims', [ServiceDeskController::class, 'storeWarranty']);
         });
     });

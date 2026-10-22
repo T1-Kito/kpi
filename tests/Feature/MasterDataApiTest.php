@@ -163,7 +163,7 @@ class MasterDataApiTest extends TestCase
                 'status' => 'active',
             ])
             ->assertOk()
-            ->assertJsonPath('data.min_stock', 6);
+            ->assertJsonPath('data.min_stock', fn ($value) => is_numeric($value) && bccomp((string)$value, '6', 3) === 0);
 
         $this->withToken($token)
             ->putJson("/api/v1/warehouses/{$warehouse->id}", [

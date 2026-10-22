@@ -68,6 +68,30 @@ class LeadController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        $key = $request->header('Idempotency-Key');
+        if ($key !== null) {
+            abort_if(strlen($key) > 120 || trim($key) === '', 422, 'Mã chống gửi lặp không hợp lệ.');
+            $payload = $request->all(); ksort($payload);
+            $hash = hash('sha256', json_encode($payload));
+            return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $key, $hash) {
+                \Illuminate\Support\Facades\DB::table('tenants')->where('id', $request->user()->tenant_id)->lockForUpdate()->first();
+                $previous = \Illuminate\Support\Facades\DB::table('request_replays')->where('user_id',$request->user()->id)->where('operation','create_lead')->where('request_key',$key)->first();
+                if ($previous) {
+                    abort_if($previous->payload_hash !== $hash, 409, 'Mã gửi đã dùng với nội dung khác.');
+                    $saved=json_decode($previous->response_body,true);
+                    abort_unless(DataScope::owned(Lead::whereKey($saved['data']['id']),$request->user(),'assigned_to','assignee')->exists(),404);
+                    return response()->json($saved,$previous->response_status);
+                }
+                $response=$this->createLead($request);
+                \Illuminate\Support\Facades\DB::table('request_replays')->insert(['user_id'=>$request->user()->id,'operation'=>'create_lead','request_key'=>$key,'payload_hash'=>$hash,'response_body'=>$response->getContent(),'response_status'=>$response->getStatusCode(),'created_at'=>now(),'updated_at'=>now()]);
+                return $response;
+            });
+        }
+        return $this->createLead($request);
+    }
+
+    private function createLead(Request $request): JsonResponse
+    {
         $tenantId = $request->user()->tenant_id;
         $duplicate = Lead::where('tenant_id', $tenantId)->where('phone', $request->input('phone'))->exists();
         $data = $request->validate([

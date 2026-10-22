@@ -61,7 +61,7 @@ class DashboardSummaryController extends Controller
                 $request->validate(['month' => ['nullable', 'date_format:Y-m']]);
                 $data['executive'] = $this->executive->summary(
                     $request->user()->tenant_id,
-                    Carbon::createFromFormat('Y-m-d', ($request->query('month') ?: now()->format('Y-m')).'-01'),
+                    Carbon::createFromFormat('Y-m-d', ($request->query('month') ?: now()->setTimezone('Asia/Ho_Chi_Minh')->format('Y-m')).'-01'),
                 );
             }
         } elseif ($type === 'warehouse') {

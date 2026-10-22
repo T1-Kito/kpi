@@ -208,9 +208,9 @@
                     ${financeBox('Tiền trước thuế', VKTable.money(subtotal), 'Giá trị hàng hóa')}
                     ${financeBox('Thuế VAT', VKTable.money(tax), 'Tổng thuế các dòng')}
                     ${financeBox('Tổng thanh toán', VKTable.money(amount), 'Đã gồm VAT')}
-                    ${financeBox('Giá vốn', VKTable.money(cost), 'Tổng chi phí hàng')}
-                    ${financeBox('Lợi nhuận gộp', VKTable.money(grossProfit), grossProfit >= 0 ? 'Dương' : 'Âm', grossProfit < 0 ? 'risk' : 'good')}
-                    ${financeBox('Biên lợi nhuận', `${margin.toFixed(2)}%`, margin < 15 ? 'Cần duyệt' : 'Đạt ngưỡng', margin < 15 ? 'risk' : 'good')}
+                    ${row.total_cost == null ? '' : financeBox('Giá vốn', VKTable.money(cost), 'Tổng chi phí hàng')}
+                    ${row.total_cost == null ? '' : financeBox('Lợi nhuận gộp', VKTable.money(grossProfit), grossProfit >= 0 ? 'Dương' : 'Âm', grossProfit < 0 ? 'risk' : 'good')}
+                    ${row.margin_percent == null ? '' : financeBox('Biên lợi nhuận', `${margin.toFixed(2)}%`, margin < 15 ? 'Cần duyệt' : 'Đạt ngưỡng', margin < 15 ? 'risk' : 'good')}
                 </div>
             </section>
         `;
@@ -274,7 +274,7 @@
                 <div><span>Thuế VAT</span><strong>${VKTable.money(tax)}</strong></div>
                 <div><span>Giá vốn</span><strong>${VKTable.money(cost)}</strong></div>
                 <div><span>Lợi nhuận gộp</span><strong>${VKTable.money(profit)}</strong></div>
-                <div><span>Biên lợi nhuận</span><strong>${Number(row.margin_percent || 0).toFixed(2)}%</strong></div>
+                ${row.margin_percent == null ? '' : `<div><span>Biên lợi nhuận</span><strong>${Number(row.margin_percent).toFixed(2)}%</strong></div>`}
                 <div class="grand-total"><span>Tổng cộng</span><strong>${VKTable.money(amount)}</strong><small>VND</small></div>
             </section>
         `;

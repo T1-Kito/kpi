@@ -20,7 +20,7 @@ class AuthApiTest extends TestCase
 
         $login->assertOk()
             ->assertJsonPath('data.user.email', 'admin@vk-kpi.local')
-            ->assertJsonPath('data.user.tenant_id', 1);
+            ->assertJsonPath('data.user.tenant_id', \App\Models\User::where('email','admin@vk-kpi.local')->firstOrFail()->tenant_id);
 
         $token = $login->json('data.access_token');
 

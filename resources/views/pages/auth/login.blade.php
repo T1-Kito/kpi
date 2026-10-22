@@ -8,20 +8,14 @@
         ->where('status', 'active')
         ->orderBy('id')
         ->first();
-    $loginLogoUrl = $loginTenant?->logo_path ? \Illuminate\Support\Facades\Storage::url($loginTenant->logo_path) : null;
+    $loginLogoUrl = $loginTenant?->logo_path
+        ? \Illuminate\Support\Facades\Storage::disk('public')->url($loginTenant->logo_path)
+        : asset('assets/branding/vk-software-logo.png');
 @endphp
 <main class="login-page">
     <section class="login-panel">
         <div class="brand login-brand">
-            @if ($loginLogoUrl)
-                <img class="login-brand-image" src="{{ $loginLogoUrl }}" alt="{{ $loginTenant?->name ?? 'Logo hệ thống' }}">
-            @else
-                <span class="brand-mark">VK</span>
-                <span>
-                    <strong>{{ $loginTenant?->name ?? 'VK-KPI' }}</strong>
-                    <small>Hệ thống quản trị vận hành</small>
-                </span>
-            @endif
+            <img class="login-brand-image" src="{{ $loginLogoUrl }}" alt="{{ $loginTenant?->logo_path ? $loginTenant->name : 'VK Software' }}">
         </div>
 
         <div class="login-title">
@@ -31,12 +25,12 @@
 
         <form id="loginForm">
             <div class="field">
-                <label for="email">Thư điện tử</label>
-                <input id="email" type="email" value="admin@vk-kpi.local" autocomplete="username">
+                <label for="email">Tài khoản</label>
+                <input id="email" type="text" autocomplete="username" placeholder="Tên đăng nhập hoặc email">
             </div>
             <div class="field">
                 <label for="password">Mật khẩu</label>
-                <input id="password" type="password" value="Admin@123" autocomplete="current-password">
+                <input id="password" type="password" autocomplete="current-password">
             </div>
             <div class="login-actions">
                 <button id="loginBtn" class="btn primary" type="submit">Đăng nhập</button>

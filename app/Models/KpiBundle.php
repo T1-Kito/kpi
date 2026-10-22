@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class KpiBundle extends Model
 {
+    use \App\Models\Concerns\CastsDatabaseIdentifiers;
+
     protected $guarded = ['id'];
 
     protected function casts(): array

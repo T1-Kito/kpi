@@ -101,7 +101,7 @@
     }
 
     function canConfigure() {
-        return Array.isArray(window.VKUser?.permissions) && window.VKUser.permissions.includes('kpi.lock');
+        return Array.isArray(window.VKUser?.permissions) && window.VKUser.permissions.includes('kpi.configure');
     }
 
     function renderSettingsPage() {

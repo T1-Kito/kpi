@@ -73,7 +73,9 @@
         const body = await response.json().catch(() => ({}));
         if (!response.ok) {
             const fields = body.fields ? Object.values(body.fields).flat().join(' ') : '';
-            throw new Error([body.message, fields].filter(Boolean).join(' ') || 'Có lỗi xảy ra.');
+            const error = new Error([body.message, fields].filter(Boolean).join(' ') || 'Có lỗi xảy ra.');
+            error.status = response.status;
+            throw error;
         }
 
         if (String(options.method || 'GET').toUpperCase() !== 'GET') {

@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class DealStageHistory extends Model
 {
+    use \App\Models\Concerns\CastsDatabaseIdentifiers;
+
     protected $fillable = ['deal_id', 'from_stage', 'to_stage', 'changed_by', 'reason', 'changed_at'];
     protected function casts(): array { return ['changed_at' => 'datetime']; }
     public function deal(): BelongsTo { return $this->belongsTo(Deal::class); }

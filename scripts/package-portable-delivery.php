@@ -1,0 +1,20 @@
+<?php
+$root=dirname(__DIR__);
+$setup=$root.'/storage/app/private/installer-portable-v05/Setup.exe';
+$guide=$root.'/deployment/installer/HUONG_DAN_THU.md';
+if(!is_file($setup)||!is_file($guide))throw new RuntimeException('Missing tested Setup or guide');
+$folder=$root.'/dist';if(!is_dir($folder))mkdir($folder,0700,true);
+$output=$folder.'/VK-CRM-UAT-0.5-Windows-x64-'.gmdate('Ymd-His').'.zip';
+$hash=hash_file('sha256',$setup);
+$zip=new ZipArchive();if($zip->open($output,ZipArchive::CREATE|ZipArchive::EXCL)!==true)throw new RuntimeException('Cannot create delivery ZIP');
+$zip->addFile($setup,'Setup.exe');
+$zip->addFile($guide,'HUONG-DAN.md');
+$zip->addFromString('SHA256SUMS.txt',$hash."  Setup.exe\r\n");
+$zip->addFromString('DOC-TRUOC.txt',"VK CRM UAT 0.5 - Windows x64\r\nGiai nen ZIP, chay Setup.exe. Chi thu SQLite localhost voi du lieu gia.\r\nKhong phai ban SQL Server/production. Chua ky so; khong tat antivirus de chay.\r\nXem HUONG-DAN.md. Khong can chep source, PDB, database hay .env cu.\r\n");
+if(!$zip->close())throw new RuntimeException('ZIP close failed');
+$check=new ZipArchive();if($check->open($output)!==true)throw new RuntimeException('ZIP unreadable');
+$entry=$check->getStream('Setup.exe');$ctx=hash_init('sha256');hash_update_stream($ctx,$entry);fclose($entry);
+if(!hash_equals($hash,hash_final($ctx)))throw new RuntimeException('Checksum mismatch');
+if($check->numFiles!==4)throw new RuntimeException('Unexpected package entries');
+$check->close();
+echo 'Package: '.$output.PHP_EOL.'Bytes: '.filesize($output).PHP_EOL.'Setup SHA256: '.$hash.PHP_EOL.'Verified: 4 allowlisted files, Setup checksum matches.'.PHP_EOL;

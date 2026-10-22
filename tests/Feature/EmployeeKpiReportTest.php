@@ -25,6 +25,7 @@ class EmployeeKpiReportTest extends TestCase
         $this->seed();
         $sales = User::where('email', 'sales@vk-kpi.local')->firstOrFail();
         $admin = User::where('email', 'admin@vk-kpi.local')->firstOrFail();
+        \App\Models\TaskStatusHistory::query()->delete();
         Task::query()->delete();
         KpiAdjustment::query()->delete();
         foreach ([$sales, $admin] as $employee) {

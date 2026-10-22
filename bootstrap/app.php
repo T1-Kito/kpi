@@ -19,6 +19,10 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->render(function (\Illuminate\Database\UniqueConstraintViolationException $exception) {
+            // Never expose SQL or bindings in a concurrent duplicate response.
+            return response()->json(['error_code'=>'DUPLICATE_RECORD','message'=>'Dữ liệu đã được ghi nhận. Vui lòng tải lại và kiểm tra hồ sơ hiện có.'],409);
+        });
         $exceptions->render(function (ValidationException $exception) {
             return response()->json([
                 'error_code' => 'VALIDATION_ERROR',

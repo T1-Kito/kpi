@@ -331,6 +331,7 @@ function renderDue(row) {
 
 function renderTaskActions(row) {
     const actions = [];
+    if (!window.VKUser?.permissions?.includes('task.update')) return VKTable.rowActions([VKTable.smallButton('Mở', `data-task-detail="${row.id}"`)]);
     if (row.status === 'new') actions.push(VKTable.smallButton('Bắt đầu', `data-task-change-status="${row.id}" data-status="in_progress"`));
     if (['new', 'in_progress', 'overdue'].includes(row.status)) {
         actions.push(VKTable.smallButton('Hoàn thành', `data-task-change-status="${row.id}" data-status="completed"`, 'primary'));
@@ -444,6 +445,7 @@ function renderTaskDetailPage() {
 
 function renderTaskPageActions(row) {
     const actions = [];
+    if (!window.VKUser?.permissions?.includes('task.update')) return '';
     if (row.status === 'new') {
         actions.push(`<button class="btn small" type="button" data-task-change-status="${row.id}" data-status="in_progress">Bắt đầu</button>`);
     }

@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PurchaseOrder extends Model
 {
+    use \App\Models\Concerns\CastsDatabaseIdentifiers;
+
     protected $fillable = [
         'tenant_id', 'code', 'purchase_request_id', 'supplier_quotation_id', 'supplier_id', 'receiving_warehouse_id', 'created_by',
         'expected_delivery_date', 'payment_terms', 'delivery_terms', 'warranty_terms', 'shipping_fee',

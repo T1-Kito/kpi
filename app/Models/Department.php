@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Department extends Model
 {
+    use \App\Models\Concerns\CastsDatabaseIdentifiers;
+
     protected $fillable = ['tenant_id', 'parent_id', 'code', 'name', 'manager_id'];
 
     public function tenant(): BelongsTo

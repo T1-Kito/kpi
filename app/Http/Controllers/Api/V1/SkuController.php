@@ -48,6 +48,7 @@ class SkuController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        abort_if($request->has('cost_price') && ! $request->user()->hasPermission('master.cost.view'), 403, 'Bạn chưa được cấp quyền giá vốn.');
         $tenantId = $request->user()->tenant_id;
         $data = $request->validate([
             'product_code' => ['nullable', 'string', 'max:100', Rule::unique('products', 'code')->where('tenant_id', $tenantId)],
@@ -111,6 +112,7 @@ class SkuController extends Controller
 
     public function update(Request $request, Sku $sku): JsonResponse
     {
+        abort_if($request->has('cost_price') && ! $request->user()->hasPermission('master.cost.view'), 403, 'Bạn chưa được cấp quyền giá vốn.');
         abort_if($sku->tenant_id !== $request->user()->tenant_id, 404);
         $tenantId = $request->user()->tenant_id;
         $data = $request->validate([
@@ -157,7 +159,7 @@ class SkuController extends Controller
             'min_stock' => $data['min_stock'] ?? 0,
             'max_stock' => $data['max_stock'] ?? 0,
             'sale_price' => $data['sale_price'] ?? 0,
-            'cost_price' => $data['cost_price'] ?? 0,
+            'cost_price' => $data['cost_price'] ?? $sku->cost_price,
             'status' => $data['status'] ?? 'active',
         ]);
         $this->audit->record('sku', $sku->id, 'update_sku', $request->user(), $old, $sku->fresh()->toArray(), $request);

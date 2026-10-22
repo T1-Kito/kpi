@@ -21,7 +21,7 @@ test('settings deny UI without permission and do not request configuration',asyn
     assert.doesNotMatch(root.innerHTML,/data-create-kpi/);
 });
 test('authorized settings render escaped records and no editing of locked targets',async()=>{
-    const {context,root}=setup(['kpi.lock'],async url=>url.includes('definitions') ? {data:[{id:1,code:'KPI-1',name:'<unsafe>',status:'active'}]} : {data:[{id:2,definition:{code:'KPI-1'},status:'locked',locked_at:'2026-10-09'}]});
+    const {context,root}=setup(['kpi.configure'],async url=>url.includes('definitions') ? {data:[{id:1,code:'KPI-1',name:'<unsafe>',status:'active'}]} : {data:[{id:2,definition:{code:'KPI-1'},status:'locked',locked_at:'2026-10-09'}]});
     context.VKTable.escapeHtml=value=>String(value??'').replaceAll('<','&lt;');
     await context.loadKpiSettings();
     assert.match(root.innerHTML,/&lt;unsafe>/);
@@ -30,7 +30,7 @@ test('authorized settings render escaped records and no editing of locked target
     assert.match(root.innerHTML,/data-create-kpi-definition/);
 });
 test('settings request failure is not represented as an empty successful list',async()=>{
-    const {context,root}=setup(['kpi.lock'],async()=>{throw new Error('Đã thu hồi quyền');});
+    const {context,root}=setup(['kpi.configure'],async()=>{throw new Error('Đã thu hồi quyền');});
     await context.loadKpiSettings();
     assert.match(root.innerHTML,/Đã thu hồi quyền/);
     assert.doesNotMatch(root.innerHTML,/data-create-kpi/);

@@ -11,7 +11,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        \Illuminate\Database\Connection::resolverFor('sqlsrv',
+            fn($pdo,$database,$prefix,$config)=>new \App\Support\SqlServerInstallConnection($pdo,$database,$prefix,$config));
     }
 
     /**

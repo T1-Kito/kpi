@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class GoodsIssue extends Model
 {
+    use \App\Models\Concerns\CastsDatabaseIdentifiers;
+
     protected $fillable = [
         'tenant_id', 'code', 'sales_order_id', 'warehouse_id', 'warehouse_location_id',
         'recipient_name', 'recipient_phone', 'recipient_address', 'delivery_location',

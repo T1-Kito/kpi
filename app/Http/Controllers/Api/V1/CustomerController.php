@@ -60,7 +60,11 @@ class CustomerController extends Controller
                 ->where('code', 'like', "%{$search}%")
                 ->orWhere('name', 'like', "%{$search}%")
                 ->orWhere('tax_code', 'like', "%{$search}%")
-                ->orWhere('phone', 'like', "%{$search}%"));
+                ->orWhere('phone', 'like', "%{$search}%")
+                ->orWhere('email', 'like', "%{$search}%")
+                ->orWhere('identity_number', 'like', "%{$search}%")
+                ->orWhere('address', 'like', "%{$search}%")
+                ->orWhere('billing_address', 'like', "%{$search}%"));
         }
 
         if ($status = $request->query('status')) {
@@ -74,6 +78,7 @@ class CustomerController extends Controller
             'meta' => [
                 'page' => $customers->currentPage(),
                 'page_size' => $customers->perPage(),
+                'last_page' => $customers->lastPage(),
                 'total' => $customers->total(),
             ],
         ]);
@@ -103,6 +108,7 @@ class CustomerController extends Controller
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
         ]);
         $data = $this->normalizeTypeSpecificFields($data);
+        $data = $this->validateOwner($request, $data, true);
         $data['tax_code'] = $this->normalizeTaxCode($data['tax_code'] ?? null);
         if ($data['tax_code'] && Customer::where('tenant_id', $tenantId)->where('tax_code', $data['tax_code'])->exists()) {
             return response()->json(['message' => 'Mã số thuế đã thuộc một khách hàng trong hệ thống.'], 409);
@@ -152,6 +158,7 @@ class CustomerController extends Controller
                 ->first();
 
             if ($existingByTax) {
+                $this->assertDuplicateVisible($request, $existingByTax);
                 return response()->json([
                     'message' => 'Mã số thuế đã thuộc một khách hàng trong hệ thống.',
                     'data' => $existingByTax->load('salesOwner:id,name,email'),
@@ -167,6 +174,7 @@ class CustomerController extends Controller
             ->first();
 
         if ($existing) {
+            $this->assertDuplicateVisible($request, $existing);
             return response()->json([
                 'message' => 'Số điện thoại đã thuộc một khách hàng trong hệ thống.',
                 'data' => $existing->load('salesOwner:id,name,email'),
@@ -208,6 +216,7 @@ class CustomerController extends Controller
             ->first();
 
         if ($customer) {
+            $this->assertDuplicateVisible($request, $customer);
             return response()->json([
                 'data' => [
                     'tax_code' => $customer->tax_code,
@@ -361,6 +370,7 @@ class CustomerController extends Controller
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
         ]);
         $data = $this->normalizeTypeSpecificFields($data);
+        $data = $this->validateOwner($request, $data);
         $data['tax_code'] = $this->normalizeTaxCode($data['tax_code'] ?? null);
         if ($data['tax_code'] && Customer::where('tenant_id', $tenantId)->whereKeyNot($customer->id)->where('tax_code', $data['tax_code'])->exists()) {
             return response()->json(['message' => 'Mã số thuế đã thuộc một khách hàng trong hệ thống.'], 409);
@@ -376,6 +386,29 @@ class CustomerController extends Controller
         $this->audit->record('customer', $customer->id, 'update_customer', $request->user(), $old, $customer->fresh()->toArray(), $request);
 
         return response()->json(['data' => $customer->refresh()->load('salesOwner:id,name,email')]);
+    }
+
+    private function assertDuplicateVisible(Request $request, Customer $customer): void
+    {
+        abort_unless(DataScope::owned(Customer::whereKey($customer->id), $request->user(), 'sales_owner_id', 'salesOwner')->exists(), 409,
+            'Khách hàng đã tồn tại và do nhân sự khác phụ trách. Vui lòng liên hệ quản lý để được phân công.');
+    }
+
+    private function validateOwner(Request $request, array $data, bool $creating = false): array
+    {
+        $actor = $request->user();
+        if ($creating && $actor->dataScope() !== 'company' && empty($data['sales_owner_id'])) $data['sales_owner_id'] = $actor->id;
+        if (!array_key_exists('sales_owner_id', $data)) return $data;
+        if ($data['sales_owner_id'] === null) {
+            abort_unless($actor->dataScope() === 'company', 403, 'Chỉ quản lý toàn công ty được bỏ phân công khách hàng.');
+            return $data;
+        }
+        $owner = \App\Models\User::where('tenant_id', $actor->tenant_id)->where('is_active', true)->find($data['sales_owner_id']);
+        abort_unless($owner, 422, 'Nhân viên phụ trách phải là tài khoản đang hoạt động.');
+        $allowed = $actor->dataScope() === 'company' || $owner->id === $actor->id
+            || ($actor->dataScope() === 'department' && $actor->department_id && $owner->department_id === $actor->department_id);
+        abort_unless($allowed, 403, 'Bạn không được phân công khách hàng ngoài phạm vi quản lý.');
+        return $data;
     }
 
     private function normalizeTaxCode(?string $taxCode): ?string

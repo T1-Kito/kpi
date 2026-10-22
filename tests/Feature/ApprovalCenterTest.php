@@ -73,6 +73,30 @@ class ApprovalCenterTest extends TestCase
         $this->withToken($token)->postJson('/api/v1/purchase-orders/'.$po->id.'/reject', ['reason' => 'Need changes'])->assertOk()->assertJsonPath('data.status', 'rejected');
     }
 
+    public function test_kpi_queue_respects_review_scope_even_with_unrelated_company_role(): void
+    {
+        $this->seed();
+        \App\Models\KpiAdjustment::query()->delete();
+        $reviewer = \App\Models\User::where('email', 'sales@vk-kpi.local')->firstOrFail();
+        $admin = \App\Models\User::where('email', 'admin@vk-kpi.local')->firstOrFail();
+        $own = \App\Models\Role::create(['tenant_id'=>$reviewer->tenant_id,'code'=>'REVIEW-OWN','name'=>'Own review','data_scope'=>'own']);
+        $own->permissions()->attach(\App\Models\Permission::where('code','kpi.adjustment.review')->value('id'));
+        $company = \App\Models\Role::create(['tenant_id'=>$reviewer->tenant_id,'code'=>'UNRELATED-COMPANY','name'=>'Unrelated company role','data_scope'=>'company']);
+        $company->permissions()->attach(\App\Models\Permission::where('code','master.cost.view')->value('id'));
+        $reviewer->roles()->sync([$own->id,$company->id]);
+        foreach (['pending','approved'] as $status) {
+            foreach ([$reviewer,$admin] as $employee) {
+                \App\Models\KpiAdjustment::create(['tenant_id'=>$admin->tenant_id,'user_id'=>$employee->id,'created_by'=>$admin->id,'adjustment_type'=>'bonus','points'=>2,'period_type'=>'month','period_start'=>'2026-10-01','period_end'=>'2026-10-31','reason'=>'Scope fixture','status'=>$status]);
+            }
+        }
+        $response = $this->withToken($this->loginAs($reviewer->email))->getJson('/api/v1/approval-center')->assertOk()
+            ->assertJsonCount(1,'data.pending')->assertJsonCount(1,'data.recent');
+        $this->assertSame($reviewer->name,$response->json('data.pending.0.owner'));
+        $this->assertSame($reviewer->name,$response->json('data.recent.0.owner'));
+        $foreign = \App\Models\KpiAdjustment::where('user_id',$admin->id)->where('status','pending')->firstOrFail();
+        $this->postJson('/api/v1/kpi/adjustments/'.$foreign->id.'/review',['status'=>'approved'])->assertNotFound();
+    }
+
     private function loginAs(string $email): string
     {
         return $this->postJson('/api/v1/auth/login', [

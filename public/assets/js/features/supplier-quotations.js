@@ -2,6 +2,24 @@
     let data = { supplierQuotations: [], purchaseRequests: [], suppliers: [], skus: [], warehouses: [] };
     let documentUrl = null;
     let documentSequence = 0;
+    function formatPurchaseMoney(input) {
+        const caret=input.selectionStart ?? input.value.length;
+        const digitsBefore=input.value.slice(0,caret).replace(/\D/g,'').length;
+        let digits=input.value.replace(/\D/g,'').replace(/^0+(?=\d)/,'');
+        input.value=digits.replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+        let position=0,count=0;
+        while(position<input.value.length && count<digitsBefore) { if(/\d/.test(input.value[position])) count++; position++; }
+        input.setSelectionRange(position,position);
+    }
+    function parsePurchaseMoney(value) {
+        if(!/^(?:\d+|\d{1,3}(?:\.\d{3})*)$/.test(value)) throw new Error('Đơn giá phải là số tiền nguyên không âm.');
+        const amount=Number(value.replace(/\./g,''));
+        if(!Number.isSafeInteger(amount)) throw new Error('Đơn giá vượt giới hạn cho phép.');
+        return amount;
+    }
+    document.addEventListener('input',event=>{
+        if(event.target.matches('[data-sq-money]')) formatPurchaseMoney(event.target);
+    });
 
     window.loadSupplierQuotations = loadSupplierQuotations;
     document.addEventListener('vk:ready', () => loadSupplierQuotations());
@@ -277,7 +295,7 @@
                 </label>
                 <label>
                     <span>Đơn giá mua</span>
-                    <input name="lines[${index}][unit_price]" type="number" min="0" step="1000" value="0">
+                    <input name="lines[${index}][unit_price]" type="text" inputmode="numeric" autocomplete="off" data-sq-money value="0" aria-label="Đơn giá mua">
                 </label>
                 <label>
                     <span>Ghi chú</span>
@@ -292,7 +310,7 @@
         return Array.from(document.querySelectorAll('.supplier-quotation-line')).map(row => ({
             sku_id: Number(row.querySelector('[name$="[sku_id]"]')?.value || 0),
             quantity: Number(row.querySelector('[name$="[quantity]"]')?.value || 0),
-            unit_price: Number(row.querySelector('[name$="[unit_price]"]')?.value || 0),
+            unit_price: parsePurchaseMoney(row.querySelector('[name$="[unit_price]"]')?.value || '0'),
             note: row.querySelector('[name$="[note]"]')?.value || '',
         }));
     }

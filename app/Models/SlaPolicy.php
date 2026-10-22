@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class SlaPolicy extends Model
 {
+    use \App\Models\Concerns\CastsDatabaseIdentifiers;
+
     protected $fillable = [
         'tenant_id',
         'module',
@@ -18,6 +20,6 @@ class SlaPolicy extends Model
 
     protected function casts(): array
     {
-        return ['escalation_rules' => 'array'];
+        return ['escalation_rules' => 'array','duration_minutes'=>'integer','warning_before_minutes'=>'integer'];
     }
 }

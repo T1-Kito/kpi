@@ -18,20 +18,18 @@ class MeController extends Controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
+                'is_spadmin'=>$user->isSpAdmin(),
                 'tenant' => $user->tenant ? [
                     'id' => $user->tenant->id,
                     'code' => $user->tenant->code,
                     'name' => $user->tenant->name,
-                    'logo_url' => $user->tenant->logo_path ? Storage::url($user->tenant->logo_path) : null,
+                    'logo_url' => $user->tenant->logo_path ? Storage::disk('public')->url($user->tenant->logo_path) : null,
                     'ui_settings' => $user->tenant->ui_settings ?? [],
                 ] : null,
                 'department' => $user->department?->only(['id', 'code', 'name']),
                 'roles' => $user->roles->pluck('code')->values(),
                 'data_scope' => $user->dataScope(),
-                'permissions' => $user->roles
-                    ->flatMap(fn ($role) => $role->permissions->pluck('code'))
-                    ->unique()
-                    ->values(),
+                'permissions' => $user->effectivePermissionCodes(),
             ],
         ]);
     }

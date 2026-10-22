@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Setup</AssemblyName>
+    <ApplicationIcon>VK-CRM.ico</ApplicationIcon>
+    <Version>0.8.8</Version>
+    <DebugType>None</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="update-readonly-check.php" LogicalName="update-readonly-check.php" />
+    <EmbeddedResource Include="VK-CRM.ico" LogicalName="VK-CRM.ico" />
+    <EmbeddedResource Include="initialize-sqlserver.php" LogicalName="initialize-sqlserver.php" />
+    <EmbeddedResource Include="sql-install-settings.php" LogicalName="sql-install-settings.php" />
+    <EmbeddedResource Include="sql-install-diagnostics.php" LogicalName="sql-install-diagnostics.php" />
+    <EmbeddedResource Include="sql-install-preflight.php" LogicalName="sql-install-preflight.php" />
+    <EmbeddedResource Include="sqlserver-connect.php" LogicalName="sqlserver-connect.php" />
+    <EmbeddedResource Include="../../.tmp/sqlserver-runtime/drivers/Windows/php_pdo_sqlsrv_82_ts_x64.dll" LogicalName="php_pdo_sqlsrv_82_ts_x64.dll" />
+    <EmbeddedResource Include="../../VK-Logo.png" LogicalName="VK-Logo.png" />
+    <EmbeddedResource Include="initialize-uat.php" LogicalName="initialize-uat.php" />
+    <EmbeddedResource Include="portable.sha256" LogicalName="portable.sha256" />
+    <EmbeddedResource Include="../../storage/app/private/portable-payload.zip" LogicalName="portable.zip" />
+    <EmbeddedResource Include="../../storage/app/private/release-packages/vk-crm-uat-source-20261022-014732-f780b3.zip" LogicalName="crm.zip" />
+  </ItemGroup>
+</Project>

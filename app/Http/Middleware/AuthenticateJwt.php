@@ -34,7 +34,9 @@ class AuthenticateJwt
             ->with(['tenant', 'roles.permissions', 'department'])
             ->find($claims['user_id'] ?? null);
 
-        if (! $user || ! $user->is_active || $user->tenant?->status !== 'active') {
+        if (! $user || ! $user->is_active || $user->tenant?->status !== 'active'
+            || (int) $claims['tenant_id'] !== (int) $user->tenant_id
+            || (int) $claims['token_version'] !== (int) $user->token_version) {
             return response()->json(['error_code' => 'UNAUTHENTICATED', 'message' => 'User is inactive.'], 401);
         }
 

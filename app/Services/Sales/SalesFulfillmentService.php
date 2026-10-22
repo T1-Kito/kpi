@@ -196,10 +196,25 @@ class SalesFulfillmentService
             $amount = bcadd((string) $data['amount'], '0', 2);
             $balance = (string) $invoice->balance_amount;
             $reference = trim((string) ($data['reference_no'] ?? ''));
+            $key = trim((string)($data['idempotency_key'] ?? ''));
+            if (($reference === '' && $key === '') || strlen($key)>120) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['reference_no'=>'Cần mã tham chiếu hoặc mã chống gửi lặp để ghi nhận khoản thu.']);
+            }
+            $operation = 'payment:'.$invoice->id;
+            $payloadHash = hash('sha256',json_encode([$amount,$reference,$data['payment_method'] ?? 'bank_transfer',$data['paid_at'] ?? null,$data['note'] ?? null]));
+            if ($key !== '') {
+                $previous = DB::table('request_replays')->where('user_id',$actor->id)->where('operation',$operation)->where('request_key',$key)->first();
+                if ($previous) {
+                    abort_if($previous->payload_hash !== $payloadHash,409,'Mã gửi đã dùng cho khoản thu khác.');
+                    $id=json_decode($previous->response_body,true)['id'];
+                    return CustomerPayment::where('tenant_id',$actor->tenant_id)->where('sales_invoice_id',$invoice->id)->findOrFail($id);
+                }
+            }
             if ($reference !== '') {
                 $existing = CustomerPayment::where('tenant_id', $actor->tenant_id)->where('sales_invoice_id', $invoice->id)->where('reference_no', $reference)->first();
                 if ($existing) {
                     abort_if(bccomp((string) $existing->amount, $amount, 2) !== 0 || $existing->payment_method !== ($data['payment_method'] ?? 'bank_transfer'), 409, 'Mã tham chiếu đã dùng cho khoản thu khác.');
+                    if ($key !== '') $this->savePaymentReplay($actor->id,$operation,$key,$payloadHash,$existing->id);
                     return $existing;
                 }
             }
@@ -250,8 +265,14 @@ class SalesFulfillmentService
                 $this->completeWork($actor, 'SalesOrder', $order->id, 'payment_follow_up', 'invoice_paid');
             }
 
+            if ($key !== '') $this->savePaymentReplay($actor->id,$operation,$key,$payloadHash,$payment->id);
             return $payment;
         });
+    }
+
+    private function savePaymentReplay(int $userId,string $operation,string $key,string $hash,int $paymentId): void
+    {
+        DB::table('request_replays')->insert(['user_id'=>$userId,'operation'=>$operation,'request_key'=>$key,'payload_hash'=>$hash,'response_body'=>json_encode(['id'=>$paymentId]),'response_status'=>201,'created_at'=>now(),'updated_at'=>now()]);
     }
 
     private function completeWork(User $actor, string $source, int $id, string $type, string $reason): void

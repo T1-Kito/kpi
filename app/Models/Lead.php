@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Lead extends Model
 {
+    use \App\Models\Concerns\CastsDatabaseIdentifiers;
+
     protected $fillable = ['tenant_id', 'code', 'name', 'phone', 'email', 'source', 'campaign_code', 'assigned_to', 'customer_id', 'status'];
 
     public function assignee(): BelongsTo

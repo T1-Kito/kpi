@@ -32,6 +32,7 @@ class DealService
             $stages = self::stages((int) $actor->tenant_id);
             abort_unless(array_key_exists($stage, $stages), 422, 'Giai đoạn đã ngừng sử dụng hoặc không hợp lệ.');
             $type = self::stageType((int) $actor->tenant_id, $stage);
+            abort_if($type === 'won', 422, 'Hãy tạo cơ hội trước và có báo giá được khách chấp nhận trước khi chuyển Thắng.');
             $deal = Deal::create([
                 'tenant_id' => $actor->tenant_id,
                 'code' => $this->codes->next('deals', 'code', 'DEAL-', fn ($query) => $query->where('tenant_id', $actor->tenant_id)),
@@ -66,6 +67,12 @@ class DealService
             abort_if($deal->version !== $version, 409, 'Cơ hội đã được người khác cập nhật. Hãy tải lại trước khi chuyển giai đoạn.');
             abort_if(in_array($deal->status, ['won', 'lost'], true), 422, 'Cơ hội đã kết thúc, không thể chuyển giai đoạn.');
             abort_if($type === 'lost' && ! $reason, 422, 'Cần nhập lý do mất cơ hội.');
+            if ($type === 'won') {
+                $accepted = \App\Models\Quotation::where('tenant_id', $deal->tenant_id)
+                    ->where('deal_id', $deal->id)->where('customer_id', $deal->customer_id)
+                    ->where('status', 'accepted')->whereNotNull('accepted_at')->lockForUpdate()->first();
+                abort_unless($deal->customer_id && $accepted, 422, 'Cần có báo giá của cơ hội này được khách hàng chấp nhận trước khi chuyển Thắng.');
+            }
             abort_if(in_array($stage, ['proposal', 'negotiation', 'won'], true) && (! $deal->amount || ! $deal->expected_close_date), 422, 'Cần có giá trị dự kiến và ngày dự kiến chốt trước khi chuyển giai đoạn này.');
 
             $old = $deal->only(['stage', 'status', 'probability', 'version', 'lost_reason']);
@@ -95,9 +102,12 @@ class DealService
     }
 
     /** @param array<int, array{sku_id:int,quantity:numeric,unit_price:numeric}> $items */
-    public function syncItems(Deal $deal, User $actor, array $items): Deal
+    public function syncItems(Deal $deal, User $actor, array $items, ?int $version = null): Deal
     {
-        return DB::transaction(function () use ($deal, $actor, $items) {
+        return DB::transaction(function () use ($deal, $actor, $items, $version) {
+            $deal = Deal::whereKey($deal->id)->lockForUpdate()->firstOrFail();
+            abort_if($version !== null && $deal->version !== $version, 409, 'Cơ hội đã thay đổi. Hãy tải lại trước khi lưu.');
+            abort_if(in_array($deal->status, ['won', 'lost'], true), 409, 'Cơ hội đã kết thúc, không thể sửa dòng hàng.');
             $deal->items()->delete();
             foreach ($items as $item) {
                 $deal->items()->create([
@@ -106,7 +116,7 @@ class DealService
                 ]);
             }
             $amount = $deal->items()->sum('line_total');
-            $deal->update(['amount' => $amount]);
+            $deal->update(['amount' => $amount, 'version' => $deal->version + 1]);
             $this->audit->record('deal', $deal->id, 'update_deal_items', $actor, null, ['item_count' => count($items), 'amount' => $amount]);
             return $deal->refresh();
         });

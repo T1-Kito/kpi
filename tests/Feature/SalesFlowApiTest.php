@@ -101,7 +101,7 @@ class SalesFlowApiTest extends TestCase
 
         $response = $this->withToken($token)
             ->postJson('/api/v1/quotations', [
-                'customer_id' => 1,
+                'customer_id' => \App\Models\Customer::where('code','CUS-001')->value('id'),
                 'items' => [
                     ['sku_id' => $sku->id, 'quantity' => 1, 'unit_price' => 2700000],
                 ],
@@ -111,7 +111,7 @@ class SalesFlowApiTest extends TestCase
             ->assertJsonPath('data.status', 'draft');
 
         $quotationId = $response->json('data.id');
-        $this->withToken($token)->putJson("/api/v1/quotations/{$quotationId}", ['customer_id' => 1, 'valid_until' => now()->addDays(15)->toDateString(), 'items' => [['sku_id' => $sku->id, 'quantity' => 1, 'unit_price' => 2700000]]])->assertOk();
+        $this->withToken($token)->putJson("/api/v1/quotations/{$quotationId}", ['customer_id' => \App\Models\Customer::where('code','CUS-001')->value('id'), 'valid_until' => now()->addDays(15)->toDateString(), 'items' => [['sku_id' => $sku->id, 'quantity' => 1, 'unit_price' => 2700000]]])->assertOk();
         $this->withToken($token)->postJson("/api/v1/quotations/{$quotationId}/workflow/submit")->assertOk()->assertJsonPath('data.status', 'pending_approval');
         $this->assertDatabaseHas('approvals', [
             'source_type' => 'Quotation',
@@ -128,7 +128,7 @@ class SalesFlowApiTest extends TestCase
 
         $response = $this->withToken($token)
             ->postJson('/api/v1/quotations', [
-                'customer_id' => 1,
+                'customer_id' => \App\Models\Customer::where('code','CUS-001')->value('id'),
                 'items' => [
                     [
                         'sku_id' => $sku->id,
@@ -163,7 +163,7 @@ class SalesFlowApiTest extends TestCase
 
         $response = $this->withToken($token)
             ->postJson('/api/v1/quotations', [
-                'customer_id' => 1,
+                'customer_id' => \App\Models\Customer::where('code','CUS-001')->value('id'),
                 'items' => [
                     [
                         'sku_id' => $sku->id,
@@ -194,7 +194,7 @@ class SalesFlowApiTest extends TestCase
 
         $created = $this->withToken($token)
             ->postJson('/api/v1/quotations', [
-                'customer_id' => 1,
+                'customer_id' => \App\Models\Customer::where('code','CUS-001')->value('id'),
                 'items' => [
                     ['sku_id' => $sku->id, 'quantity' => 1, 'unit_price' => 2700000, 'vat_rate' => 0],
                 ],
@@ -206,7 +206,7 @@ class SalesFlowApiTest extends TestCase
 
         $this->withToken($token)
             ->putJson("/api/v1/quotations/{$quotationId}", [
-                'customer_id' => 1,
+                'customer_id' => \App\Models\Customer::where('code','CUS-001')->value('id'),
                 'items' => [
                     ['sku_id' => $sku->id, 'quantity' => 2, 'unit_price' => 3500000, 'vat_rate' => 8],
                 ],
@@ -232,7 +232,7 @@ class SalesFlowApiTest extends TestCase
 
         $quotationId = $this->withToken($token)
             ->postJson('/api/v1/quotations', [
-                'customer_id' => 1,
+                'customer_id' => \App\Models\Customer::where('code','CUS-001')->value('id'),
                 'items' => [
                     ['sku_id' => $sku->id, 'quantity' => 1, 'unit_price' => 3500000, 'vat_rate' => 8],
                 ],
@@ -247,7 +247,7 @@ class SalesFlowApiTest extends TestCase
 
         $this->withToken($token)
             ->putJson("/api/v1/quotations/{$quotationId}", [
-                'customer_id' => 1,
+                'customer_id' => \App\Models\Customer::where('code','CUS-001')->value('id'),
                 'items' => [
                     ['sku_id' => $sku->id, 'quantity' => 2, 'unit_price' => 3500000, 'vat_rate' => 8],
                 ],
@@ -262,7 +262,7 @@ class SalesFlowApiTest extends TestCase
         $sku = Sku::where('sku_code', 'SKU-PRN-001')->firstOrFail();
 
         $payload = [
-            'customer_id' => 1,
+            'customer_id' => \App\Models\Customer::where('code','CUS-001')->value('id'),
             'items' => [
                 [
                     'sku_id' => $sku->id,
@@ -354,7 +354,7 @@ class SalesFlowApiTest extends TestCase
         $sku = Sku::where('sku_code', 'SKU-PRN-001')->firstOrFail();
         $quotationId = $this->withToken($token)
             ->postJson('/api/v1/quotations', [
-                'customer_id' => 1,
+                'customer_id' => \App\Models\Customer::where('code','CUS-001')->value('id'),
                 'items' => [
                     ['sku_id' => $sku->id, 'quantity' => 1, 'unit_price' => 3500000],
                 ],
@@ -480,7 +480,7 @@ class SalesFlowApiTest extends TestCase
         $quotation = $this->withToken($token)
             ->postJson('/api/v1/quotations', [
                 'code' => 'QUO-HACK-001',
-                'customer_id' => 1,
+                'customer_id' => \App\Models\Customer::where('code','CUS-001')->value('id'),
                 'items' => [
                     ['sku_id' => $sku->id, 'quantity' => 1, 'unit_price' => 3500000, 'vat_rate' => 8],
                 ],

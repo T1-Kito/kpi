@@ -72,7 +72,7 @@ class SlaPolicyController extends Controller
     {
         $tenantId = $request->user()->tenant_id;
 
-        return $request->validate([
+        $data=$request->validate([
             'module' => ['required', 'string', 'max:80'],
             'task_type' => [
                 'required',
@@ -88,6 +88,31 @@ class SlaPolicyController extends Controller
             'duration_minutes' => ['required', 'integer', 'min:1', 'max:525600'],
             'warning_before_minutes' => ['required', 'integer', 'min:0', 'max:525600', 'lte:duration_minutes'],
             'escalation_rules' => ['nullable', 'array'],
+            'escalation_rules.manager'=>['sometimes','boolean'],
+            'escalation_rules.clock'=>['sometimes',Rule::in(['continuous','business'])],
+            'escalation_rules.timezone'=>['required_if:escalation_rules.clock,business','timezone'],
+            'escalation_rules.weekdays'=>['required_if:escalation_rules.clock,business','array','max:7'],
+            'escalation_rules.weekdays.*'=>['integer','between:1,7','distinct'],
+            'escalation_rules.periods'=>['required_if:escalation_rules.clock,business','array','max:4'],
+            'escalation_rules.periods.*.start'=>['required','date_format:H:i'],
+            'escalation_rules.periods.*.end'=>['required','date_format:H:i'],
+            'escalation_rules.holidays'=>['sometimes','array','max:100'],
+            'escalation_rules.holidays.*'=>['date_format:Y-m-d','distinct'],
+            'escalation_rules.allow_pause'=>['sometimes','boolean'],
+            'escalation_rules.response_minutes'=>['sometimes','integer','min:1','lte:duration_minutes'],
+            'escalation_rules.recipient_ids'=>['sometimes','array','max:20'],
+            'escalation_rules.recipient_ids.*'=>['integer','distinct',Rule::exists('users','id')->where('tenant_id',$tenantId)->where('is_active',true)],
         ]);
+        if ($data['module']==='service' && $data['task_type']==='ticket') {
+            $rules=$data['escalation_rules'] ?? [];
+            $rules['weekdays']=array_map('intval',$rules['weekdays'] ?? []);
+            \App\Support\ServiceCalendar::validate($rules);
+            foreach ($rules['recipient_ids'] ?? [] as $id) {
+                $user=\App\Models\User::findOrFail($id);
+                abort_unless($user->hasPermission('service.ticket.view') && $user->dataScope()==='company',422,'Người nhận chuyển cấp cần quyền xem ticket toàn doanh nghiệp.');
+            }
+            $data['escalation_rules']=$rules;
+        }
+        return $data;
     }
 }

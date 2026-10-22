@@ -14,5 +14,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/users.js?v=20261009-permissions1"></script>
+<script src="/assets/js/features/users.js?v=20261016-handover1"></script>
 @endpush

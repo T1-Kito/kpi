@@ -13,5 +13,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/roles.js?v=20261008-1"></script>
+<script src="/assets/js/features/roles.js?v=20261020-permission-labels1"></script>
 @endpush

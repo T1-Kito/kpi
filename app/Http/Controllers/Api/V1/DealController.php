@@ -91,9 +91,10 @@ class DealController extends Controller
     public function syncItems(Request $request, Deal $deal): JsonResponse
     {
         abort_if($deal->tenant_id !== $request->user()->tenant_id, 404);
-        $data = $request->validate(['items' => ['array'], 'items.*.sku_id' => [Rule::exists('skus', 'id')->where('tenant_id', $deal->tenant_id)], 'items.*.quantity' => ['numeric', 'gt:0'], 'items.*.unit_price' => ['numeric', 'min:0']]);
+        abort_unless(DataScope::owned(Deal::whereKey($deal->id), $request->user(), 'owner_id', 'owner')->exists(), 404);
+        $data = $request->validate(['version'=>['required','integer','min:1'],'items' => ['array'], 'items.*.sku_id' => [Rule::exists('skus', 'id')->where('tenant_id', $deal->tenant_id)], 'items.*.quantity' => ['numeric', 'gt:0'], 'items.*.unit_price' => ['numeric', 'min:0']]);
 
-        return response()->json(['data' => $this->deals->syncItems($deal, $request->user(), $data['items'] ?? [])->load('items.sku:id,sku_code,name,unit')]);
+        return response()->json(['data' => $this->deals->syncItems($deal, $request->user(), $data['items'] ?? [], $data['version'])->load('items.sku:id,sku_code,name,unit')]);
     }
 
     public function addActivity(Request $request, Deal $deal): JsonResponse

@@ -12,5 +12,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/kpi-adjustments.js?v=20261009-permissions1"></script>
+<script src="/assets/js/features/kpi-adjustments.js?v=20261019-safety1"></script>
 @endpush

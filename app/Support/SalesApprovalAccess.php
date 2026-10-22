@@ -10,7 +10,7 @@ class SalesApprovalAccess
     public function principals(User $actor): array
     {
         if (! $actor->is_active || ! $actor->hasPermission('sales.margin.approve')) return [];
-        $ids = [$actor->id];
+        $ids = [(int)$actor->id];
         foreach ($this->delegations($actor->tenant_id) as $rule) {
             if ((int) $rule['to_user_id'] === (int) $actor->id) $ids[] = (int) $rule['from_user_id'];
         }
@@ -19,7 +19,7 @@ class SalesApprovalAccess
 
     public function canApprove(Quotation $quote, User $actor): bool
     {
-        if ($quote->tenant_id !== $actor->tenant_id || $quote->status !== 'pending_approval') return false;
+        if ((int)$quote->tenant_id !== (int)$actor->tenant_id || $quote->status !== 'pending_approval') return false;
         if ($quote->approval_policy_snapshot['separation_of_duties'] ?? false) {
             if ((int) $quote->created_by === (int) $actor->id) return false;
             if (collect($quote->approval_steps ?? [])->contains(fn ($step) => $step['status'] === 'approved' && (int) ($step['decided_by'] ?? $step['user_id']) === (int) $actor->id)) return false;

@@ -1,5 +1,15 @@
 (function () {
+let dashboardLoadVersion = 0;
+let dashboardRefreshing = false;
+setInterval(async () => {
+    if (dashboardRefreshing || document.hidden || !document.getElementById('dashboardRoot')
+        || document.querySelector('#modalBackdrop.open') || document.activeElement?.matches('[data-executive-month]')) return;
+    dashboardRefreshing = true;
+    try { await loadDashboard({ source: 'pjax', silent: true }); }
+    finally { dashboardRefreshing = false; }
+}, 30000);
 document.addEventListener('vk:ready', () => loadDashboard());
+document.addEventListener('click',event=>{if(event.target.closest('[data-dashboard-retry]'))loadDashboard();});
 document.addEventListener('change', event => {
     if (event.target.matches('[data-executive-month]')) loadDashboard({ source: 'pjax' });
 });
@@ -7,42 +17,41 @@ document.addEventListener('change', event => {
 async function loadDashboard(options = {}) {
     const root = document.getElementById('dashboardRoot');
     if (!root) return;
+    const version = ++dashboardLoadVersion;
     if (options.source !== 'pjax') root.innerHTML = renderDashboardLoading();
 
     const fallback = { data: [], meta: { total: 0 } };
     const profile = getDashboardProfile();
+    if(window.VKUser?.is_spadmin) {
+        const heading=document.querySelector('[data-pjax-title]'),subtitle=document.querySelector('[data-pjax-subtitle]');
+        if(heading)heading.textContent='Điều hành Chủ tịch';
+        if(subtitle)subtitle.textContent='Tình hình kinh doanh, chăm sóc khách hàng và việc cần quyết định.';
+    }
+    const personalKpi=document.querySelector('[data-dashboard-personal-kpi]');
+    if(personalKpi)personalKpi.hidden=Boolean(window.VKUser?.is_spadmin);
     document.querySelector('[data-dashboard-create-lead]')?.toggleAttribute('hidden', ['admin','director'].includes(profile.type) || !(window.VKUser?.permissions || []).includes('sales.lead.manage'));
     const reviewAction = document.querySelector('[data-dashboard-work-action]');
     if (reviewAction && ['admin','director'].includes(profile.type)) { reviewAction.textContent = 'Hồ sơ chờ duyệt'; reviewAction.href = '/approvals'; }
-    const month = document.querySelector('[data-executive-month]')?.value || new Date().toISOString().slice(0, 7);
+    const month = document.querySelector('[data-executive-month]')?.value || new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Ho_Chi_Minh'}).slice(0,7);
     const summary = await safeRequest(`/dashboard/summary?type=${encodeURIComponent(profile.type)}&month=${encodeURIComponent(month)}`);
+    if (version !== dashboardLoadVersion || document.getElementById('dashboardRoot') !== root) return;
     if (summary?.data) {
+        if (summary.data.executive && (window.VKUser?.permissions || []).includes('dashboard.chairman.view')) {
+            const kpiReport = await safeRequest(`/kpi/employee-report?period_type=month&date=${encodeURIComponent(month + '-01')}`);
+            if (version !== dashboardLoadVersion || document.getElementById('dashboardRoot') !== root) return;
+            summary.data.executive.employee_kpi = kpiReport?.data || null;
+        }
         root.innerHTML = summary.data.executive && ['admin', 'director'].includes(profile.type)
             ? renderExecutiveDashboard(summary.data.executive, withDashboardDefaults(summary.data))
             : renderDashboard(withDashboardDefaults(summary.data));
         return;
     }
+    if (options.silent) {
+        if (!root.querySelector('[data-dashboard-stale]')) root.insertAdjacentHTML('afterbegin', '<p class="form-note" data-dashboard-stale>Chưa cập nhật được số liệu mới. Đang giữ kết quả gần nhất.</p>');
+        return;
+    }
 
-    const paths = dashboardPaths(profile.type);
-    const entries = await Promise.all(Object.entries(paths).map(async ([key, path]) => [key, await safeRequest(path)]));
-    const responses = Object.fromEntries(entries);
-
-    root.innerHTML = renderDashboard(withDashboardDefaults({
-        tasks: responses.tasks || fallback,
-        alerts: responses.alerts || fallback,
-        leads: responses.leads || fallback,
-        quotations: responses.quotations || fallback,
-        pendingQuotes: responses.pendingQuotes || fallback,
-        salesOrders: responses.salesOrders || fallback,
-        balances: responses.balances || fallback,
-        purchaseRequests: responses.purchaseRequests || fallback,
-        purchaseOrders: responses.purchaseOrders || fallback,
-        receipts: responses.receipts || fallback,
-        issues: responses.issues || fallback,
-        invoices: responses.invoices || fallback,
-        receivables: responses.receivables || fallback,
-        notifications: responses.notifications || fallback,
-    }));
+    root.innerHTML = '<section class="module-panel"><div class="empty-state"><strong>Chưa tải được tổng quan</strong><p>Không có số liệu xác nhận. Vui lòng kiểm tra kết nối và thử lại; đây không phải số liệu bằng 0.</p><button class="btn primary" type="button" data-dashboard-retry>Thử lại</button></div></section>';
 }
 
 function withDashboardDefaults(data) {
@@ -207,6 +216,7 @@ function renderDashboard(data) {
 }
 
 function renderExecutiveDashboard(executive, data) {
+    if ((window.VKUser?.permissions || []).includes('dashboard.chairman.view')) return renderChairmanDashboard(executive);
     const month = executive.period || new Date().toISOString().slice(0, 7);
     const change = executive.previous_revenue > 0
         ? `${((executive.revenue / executive.previous_revenue - 1) * 100).toFixed(1)}% so với tháng trước`
@@ -238,8 +248,9 @@ function renderExecutiveDashboard(executive, data) {
         ['Việc quá hạn', executive.overdue_tasks, 'việc cần xử lý', '/tasks'],
     ].filter(([, value]) => Number(value) > 0);
     return `
-        <div class="executive-dashboard">
+        <div class="executive-dashboard ${(window.VKUser?.permissions || []).includes('dashboard.chairman.view') ? 'chairman-dashboard' : ''}">
             <div class="executive-heading">
+                ${(window.VKUser?.permissions || []).includes('dashboard.chairman.view') ? '<div><h2>Điều hành toàn công ty</h2><p>Bán hàng · Kho vận · Mua hàng · Công việc & KPI</p></div>' : ''}
                 <div class="executive-filters"><label>Tháng xem <input type="month" data-executive-month value="${month}"></label><button type="button" class="btn secondary" onclick="window.print()">In báo cáo</button></div>
             </div>
             <div class="executive-metrics" data-executive-panel="overview">${metrics.map(([label, value, note, href, money]) => `<a href="${href}" class="executive-metric"><span>${label}</span><strong>${money ? VKTable.money(value) + ' đ' : VKTable.money(value)}</strong><small>${VKTable.escapeHtml(note)}</small></a>`).join('')}</div>
@@ -273,6 +284,54 @@ function renderExecutiveDashboard(executive, data) {
         </div>`;
 }
 
+function renderChairmanDashboard(e) {
+    const esc = VKTable.escapeHtml;
+    const money = value => `${VKTable.money(value)} đ`;
+    const card = (label,value,note,href) => `<a class="chairman-card" href="${href}"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(note)}</small></a>`;
+    const row = (label,value,href) => `<a class="chairman-row" href="${href}"><span>${esc(label)}</span><strong>${esc(value)}</strong></a>`;
+    const panel = (title,href,rows) => `<section class="chairman-panel"><header><h3>${title}</h3><a href="${href}">Chi tiết →</a></header>${rows}</section>`;
+    const care=e.customer_care;
+    const careValue=key=>care?VKTable.money(care[key]):'Chưa có số liệu';
+    const reportLink=type=>`/business-reports?type=${type}&from=${e.period}-01&to=${e.period}-${new Date(Number(e.period.slice(0,4)),Number(e.period.slice(5,7)),0).getDate()}`;
+    const maxRevenue=Math.max(...e.monthly_revenue.map(item=>Number(item.revenue)),1);
+    const decisions = [
+        ['Báo giá chờ duyệt',e.governance?.sales_quotes_pending,'/approvals'],
+        ['Đơn mua chờ duyệt',e.purchase.orders_pending,'/purchase-orders'],
+        ['Đơn mua giao trễ',e.purchase.orders_late,'/purchase-orders'],
+        ['Việc quá hạn',e.overdue_tasks,'/tasks'],
+        ['Lead chưa phân công',e.governance?.unassigned_leads,'/leads'],
+        ['Hàng dưới mức tối thiểu',e.low_stock_count,'/inventory'],
+    ].filter(([,value])=>Number(value)>0);
+    const employeeKpi = e.employee_kpi ? VKTable.renderTable([
+        {label:'Nhân viên',render:r=>esc(r.name)},
+        {label:'Phòng ban',render:r=>esc(r.department||'Chưa gắn')},
+        {label:'Chỉ tiêu',render:r=>VKTable.money(r.kpi_indicators)},
+        {label:'Điểm KPI',render:r=>r.kpi_score == null?'—':`${Number(r.kpi_score).toFixed(1)}/100`},
+        {label:'Kết quả',render:r=>esc(({unassigned:'Chưa giao KPI',achieved:'Đạt mục tiêu',not_achieved:'Chưa đạt'})[r.kpi_status]||'Chưa xác định')},
+        {label:'Chốt kỳ',render:r=>r.kpi_indicators?(r.kpi_locked?'Đã chốt':'Đang theo dõi'):'—'},
+    ],e.employee_kpi,'Chưa có nhân viên trong phạm vi báo cáo') : '<p class="chairman-empty">Chưa tải được KPI nhân viên. Không thay thế bằng điểm 0; mở báo cáo để kiểm tra.</p>';
+    return `<div class="chairman-console">
+        <header class="chairman-toolbar"><div><h2>Điều hành toàn công ty</h2><small>Cập nhật ${esc(new Date(e.generated_at).toLocaleString('vi-VN'))}</small></div><div class="executive-filters"><label>Tháng xem <input type="month" data-executive-month value="${esc(e.period)}"></label><a class="btn secondary" href="/business-reports">Báo cáo / Excel</a><button class="btn secondary" onclick="window.print()">In / PDF</button></div></header>
+        <p class="form-note">Kỳ báo cáo theo giờ Việt Nam. Doanh thu hóa đơn và đơn mới theo tháng đã chọn; công nợ, tồn kho, việc cần xử lý và CSKH là tình trạng hiện tại. Doanh thu không đồng nghĩa tiền đã thu.</p>
+        <div class="chairman-kpis">${card('Doanh thu hóa đơn',money(e.revenue),'Hóa đơn phát hành trong tháng','/sales-invoices')}${card('Đơn bán mới',VKTable.money(e.orders),'Phát sinh trong tháng','/sales-orders')}${card('Công nợ phải thu',money(e.receivables),'Số dư hiện tại','/customer-receivables')}${card('Việc quá hạn',VKTable.money(e.overdue_tasks),'Toàn công ty · hiện tại','/tasks')}</div>
+        <section class="chairman-panel chairman-decisions"><header><h3>Việc cần quyết định</h3><a href="/approvals">Mở phê duyệt →</a></header>${decisions.length?`<div class="chairman-decisions-grid">${decisions.map(([label,value,href])=>row(label,VKTable.money(value),href)).join('')}</div>`:'<p class="chairman-empty">Chưa có vấn đề phát sinh ở các mục đang theo dõi.</p>'}</section>
+        <div class="chairman-departments">
+        ${panel('Bán hàng','/sales-orders',row('Lead mới trong tháng',VKTable.money(e.funnel.leads),'/leads')+row('Báo giá mới trong tháng',VKTable.money(e.funnel.quotations),'/quotations')+row('Đơn chờ giao · hiện tại',VKTable.money(e.pending_delivery_count),'/deliveries'))}
+        ${panel('Kho vận','/inventory',row('Giá trị tồn ước tính · hiện tại',money(e.inventory_value),'/inventory')+row('Dòng tồn cần bổ sung',VKTable.money(e.low_stock_count),'/inventory')+row('Phiếu nhập xác nhận trong tháng',VKTable.money(e.purchase.receipts),'/goods-receipts'))}
+        ${panel('Mua hàng','/purchase-orders',row('Giá trị đơn mua trong tháng',money(e.purchase.order_value),'/purchase-orders')+row('Yêu cầu mua chờ xử lý',VKTable.money(e.purchase.requests_pending),'/purchase-requests')+row('Đơn mua giao trễ',VKTable.money(e.purchase.orders_late),'/purchase-orders'))}
+        ${panel('Chăm sóc khách hàng · hiện tại','/customers?care=today',row('Lịch chăm sóc hôm nay',careValue('today_followups'),'/customers?care=today')+row('Lịch chăm sóc quá hạn',careValue('overdue_followups'),'/customers?care=overdue')+row('Khách chưa có lịch tiếp theo',careValue('without_next_action'),'/business-reports?type=care_gaps')+row('Quá hạn phản hồi đầu tiên',careValue('response_overdue'),'/service-tickets')+row('Quá hạn xử lý',careValue('resolution_overdue'),'/service-tickets')+row('Chờ khách xác nhận kết quả',careValue('waiting_confirmation'),'/service-tickets')+`<div class="row-actions"><a class="btn secondary small" href="${esc(reportLink('care'))}">Báo cáo chăm sóc</a><a class="btn secondary small" href="${esc(reportLink('service'))}">Báo cáo phản hồi / SLA</a></div>`)}
+        </div>
+        <div class="chairman-bottom">
+        ${panel('Doanh thu hóa đơn · 10 tháng','/business-reports',`<p class="form-note">Kết thúc ở tháng đang chọn. Không phải tiền đã thu.</p><div class="executive-bars">${e.monthly_revenue.map(item=>`<div class="executive-bar-item" title="${esc(item.label)}: ${esc(money(item.revenue))}"><span>${esc(money(item.revenue))}</span><i style="height:${Math.max(2,Number(item.revenue)/maxRevenue*100)}%"></i><small>${esc(item.label)}</small></div>`).join('')}</div>`)}
+        ${panel('Thu tiền & công nợ','/customer-receivables',row('Tiền đã thu trong tháng',e.collections==null?'Chưa có số liệu':money(e.collections),'/customer-payments')+row('Nợ quá hạn · hiện tại',money(e.overdue_receivables),'/customer-receivables')+row('Nợ quá hạn 1–30 ngày',money(e.receivable_aging.days_1_30),'/customer-receivables')+row('Nợ quá hạn 31–60 ngày',money(e.receivable_aging.days_31_60),'/customer-receivables')+row('Nợ quá hạn trên 60 ngày',money(e.receivable_aging.over_60),'/customer-receivables')+row('Cảnh báo đang mở',VKTable.money(e.operations.open_alerts),'/alerts')+row('Hợp đồng hiệu lực',VKTable.money(e.operations.active_contracts),'/contracts'))}
+        </div>
+        <div class="chairman-bottom">${panel('Tiến độ nhân viên','/kpi-reports',`<p class="chairman-empty">Trạng thái công việc hiện tại · hoàn thành lũy kế, không phải điểm KPI tháng chọn.</p><div class="chairman-staff-table">${VKTable.renderTable([{label:'Nhân viên',render:r=>esc(r.name)},{label:'Phòng ban',render:r=>esc(r.department_name||'Chưa gắn')},{label:'Đang mở',render:r=>VKTable.money(r.open_count)},{label:'Hoàn thành',render:r=>VKTable.money(r.completed_count)},{label:'Quá hạn',render:r=>`<span class="${Number(r.overdue_count)>0?'chairman-late':''}">${VKTable.money(r.overdue_count)}</span>`}],e.employee_work||[],'Chưa có nhân viên hoạt động')}</div><a class="btn secondary" href="/kpi-reports">KPI theo nhân viên và kỳ</a>`)}
+        ${panel('Chất lượng dữ liệu','/customers',row('Khách chưa có phụ trách',VKTable.money(e.governance?.customers_without_owner||0),'/customers')+row('Doanh nghiệp thiếu liên hệ chính',VKTable.money(e.governance?.organizations_without_contact||0),'/customer-contacts')+row('Hồ sơ trùng chờ xét sau quét',VKTable.money(e.governance?.duplicate_reviews||0),'/customers'))}</div>
+        <section class="chairman-panel"><header><h3>KPI nhân viên · ${esc(e.period)}</h3><a href="/kpi-reports">Báo cáo / Excel →</a></header><div class="chairman-staff-table">${employeeKpi}</div></section>
+        <section class="chairman-panel"><header><h3>Đơn bán gần đây</h3><a href="/sales-orders">Tất cả đơn →</a></header>${e.recent_orders.length?VKTable.renderTable([{label:'Mã đơn',render:r=>`<span class="chairman-code">${esc(r.code)}</span>`},{label:'Khách hàng',render:r=>esc(r.customer_name)},{label:'Giá trị',render:r=>money(r.total_amount)},{label:'Trạng thái',render:r=>VKTable.statusBadge(r.status)}],e.recent_orders):'<p class="chairman-empty">Chưa có đơn bán. Số liệu sẽ xuất hiện khi phát sinh giao dịch.</p>'}</section>
+    </div>`;
+}
+
 function welcomeTitle(profile) {
     const name = (window.VKUser || {}).name || 'bạn';
     const hour = new Date().getHours();
@@ -300,6 +359,9 @@ function getDashboardProfile() {
     const permissions = new Set(user.permissions || []);
     const name = user.name || 'Người dùng';
 
+    if (permissions.has('dashboard.chairman.view') && permissions.has('dashboard.executive.view')) {
+        return profile('Chủ tịch / Super Admin', `Xin chào, ${name}`, 'Điều hành toàn công ty', 'Điều hành', 'Việc cần quyết định', 'Theo dõi phê duyệt và rủi ro.', '/approvals', 'Hiệu quả vận hành', 'Tổng hợp các bộ phận.', '/kpi', 'director');
+    }
     if (roles.has('ROLE-ADMIN')) {
         return profile('Admin', `Xin chào, ${name}`, 'Toàn cảnh cấu hình, dữ liệu và luồng vận hành', 'Quản trị hệ thống', 'Việc cần xử lý toàn hệ thống', 'Task, cảnh báo và phê duyệt đang chờ.', '/tasks', 'Tổng quan vận hành', 'Sales, mua hàng, kho và công nợ.', '/dashboard', 'admin');
     }

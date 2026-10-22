@@ -100,7 +100,7 @@ class ProcurementInventoryFlowTest extends TestCase
         $id = $this->withToken($token)->postJson('/api/v1/purchase-requests', [
             'reason' => 'Kiểm tra luồng báo giá', 'items' => [['sku_id' => $sku->id, 'quantity' => 2]],
         ])->assertCreated()->json('data.id');
-        $payload = ['purchase_request_id' => $id, 'supplier_id' => 1, 'quoted_at' => now()->toDateString(),
+        $payload = ['purchase_request_id' => $id, 'supplier_id' => \App\Models\Supplier::firstOrFail()->id, 'quoted_at' => now()->toDateString(),
             'lines' => [['sku_id' => $sku->id, 'quantity' => 2, 'unit_price' => 10000]]];
         $this->withToken($token)->postJson('/api/v1/supplier-quotations', $payload)->assertStatus(422);
         $this->withToken($token)->postJson("/api/v1/purchase-requests/{$id}/approve")->assertOk();
@@ -132,7 +132,7 @@ class ProcurementInventoryFlowTest extends TestCase
         \Illuminate\Support\Facades\Storage::fake('local');
         $token = $this->loginAs('procurement@vk-kpi.local');
         $response = $this->withToken($token)->post('/api/v1/supplier-quotations', [
-            'supplier_id' => 1,
+            'supplier_id' => \App\Models\Supplier::firstOrFail()->id,
             'quoted_at' => now()->toDateString(),
             'lines' => [['sku_id' => Sku::firstOrFail()->id, 'quantity' => 1, 'unit_price' => 10000]],
             'document' => \Illuminate\Http\UploadedFile::fake()->create('bao-gia-goc.pdf', 20, 'application/pdf'),
@@ -154,7 +154,7 @@ class ProcurementInventoryFlowTest extends TestCase
         $pr = $this->withToken($buyerToken)->postJson('/api/v1/purchase-requests', ['reason' => 'Duyệt một người', 'items' => [['sku_id' => Sku::firstOrFail()->id, 'quantity' => 1]]])->assertCreated()->json('data.id');
         $this->withToken($buyerToken)->postJson("/api/v1/purchase-requests/{$pr}/approve")->assertOk();
         $quote = $this->withToken($token)->post('/api/v1/supplier-quotations', [
-            'purchase_request_id' => $pr, 'supplier_id' => 1, 'quoted_at' => now()->toDateString(),
+            'purchase_request_id' => $pr, 'supplier_id' => \App\Models\Supplier::firstOrFail()->id, 'quoted_at' => now()->toDateString(),
             'lines' => [['sku_id' => Sku::firstOrFail()->id, 'quantity' => 1, 'unit_price' => 10000]],
             'document' => \Illuminate\Http\UploadedFile::fake()->create('quote.pdf', 20, 'application/pdf'),
         ], ['Accept' => 'application/json'])->assertCreated()->assertJsonPath('data.approval_flow.0.final', true)->json('data.id');
@@ -191,7 +191,7 @@ class ProcurementInventoryFlowTest extends TestCase
         $sku = Sku::firstOrFail();
         $pr = $this->withToken($buyerToken)->postJson('/api/v1/purchase-requests', ['reason' => 'Five levels', 'items' => [['sku_id' => $sku->id, 'quantity' => 2]]])->assertCreated()->json('data.id');
         $this->withToken($buyerToken)->postJson("/api/v1/purchase-requests/{$pr}/approve")->assertOk();
-        $quote = $this->withToken($token)->post('/api/v1/supplier-quotations', ['purchase_request_id' => $pr, 'supplier_id' => 1, 'quoted_at' => now()->toDateString(), 'lines' => [['sku_id' => $sku->id, 'quantity' => 2, 'unit_price' => 10000]], 'document' => \Illuminate\Http\UploadedFile::fake()->create('q.pdf', 20, 'application/pdf')], ['Accept' => 'application/json'])->assertCreated()->json('data.id');
+        $quote = $this->withToken($token)->post('/api/v1/supplier-quotations', ['purchase_request_id' => $pr, 'supplier_id' => \App\Models\Supplier::firstOrFail()->id, 'quoted_at' => now()->toDateString(), 'lines' => [['sku_id' => $sku->id, 'quantity' => 2, 'unit_price' => 10000]], 'document' => \Illuminate\Http\UploadedFile::fake()->create('q.pdf', 20, 'application/pdf')], ['Accept' => 'application/json'])->assertCreated()->json('data.id');
         foreach (array_slice($tokens, 0, 4) as $actorToken) {
             $this->withToken($actorToken)->postJson("/api/v1/supplier-quotations/{$quote}/select", ['create_purchase_order' => true])->assertOk()->assertJsonPath('purchase_order', null);
         }
@@ -230,7 +230,7 @@ class ProcurementInventoryFlowTest extends TestCase
         $config = ['enabled' => true, 'rules' => [['minimum_amount' => 0, 'approvers' => [$buyer->id, $admin->id]]]];
         $this->withToken($buyerToken)->postJson('/api/v1/tenant/procurement-approval', $config)->assertForbidden();
         $this->withToken($adminToken)->postJson('/api/v1/tenant/procurement-approval', $config)->assertOk();
-        $quote = $this->withToken($buyerToken)->postJson('/api/v1/supplier-quotations', ['purchase_request_id' => $pr, 'supplier_id' => 1, 'quoted_at' => now()->toDateString(), 'lines' => [['sku_id' => $sku->id, 'quantity' => 1, 'unit_price' => 10000]]])->assertCreated()->json('data.id');
+        $quote = $this->withToken($buyerToken)->postJson('/api/v1/supplier-quotations', ['purchase_request_id' => $pr, 'supplier_id' => \App\Models\Supplier::firstOrFail()->id, 'quoted_at' => now()->toDateString(), 'lines' => [['sku_id' => $sku->id, 'quantity' => 1, 'unit_price' => 10000]]])->assertCreated()->json('data.id');
         $this->withToken($buyerToken)->getJson("/api/v1/supplier-quotations/{$quote}")->assertOk()->assertJsonPath('data.approval_flow.0.user_id', $buyer->id)->assertJsonPath('data.approval_flow.1.final', true);
         $this->withToken($adminToken)->postJson("/api/v1/supplier-quotations/{$quote}/approval-flow", ['approvers' => [$buyer->id, $admin->id]])->assertStatus(422);
         $this->withToken($adminToken)->postJson('/api/v1/tenant/procurement-approval', ['enabled' => true, 'rules' => [['minimum_amount' => 0, 'approvers' => [$admin->id, $buyer->id]]]])->assertOk();
@@ -265,7 +265,7 @@ class ProcurementInventoryFlowTest extends TestCase
         $warehouse = Warehouse::where('code', 'WH-HCM')->firstOrFail();
         $quotationId = $this->withToken($salesToken)
             ->postJson('/api/v1/quotations', [
-                'customer_id' => 1,
+                'customer_id' => \App\Models\Customer::where('code','CUS-001')->value('id'),
                 'items' => [
                     ['sku_id' => $sku->id, 'quantity' => 1, 'unit_price' => 3500000],
                 ],
@@ -302,7 +302,7 @@ class ProcurementInventoryFlowTest extends TestCase
         $purchaseOrderId = $this->withToken($procurementToken)
             ->postJson('/api/v1/purchase-orders', [
                 'purchase_request_id' => $purchaseRequest->id,
-                'supplier_id' => 1,
+                'supplier_id' => \App\Models\Supplier::firstOrFail()->id,
                 'receiving_warehouse_id' => $warehouse->id,
             ])
             ->assertCreated()

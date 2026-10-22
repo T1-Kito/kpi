@@ -6,7 +6,7 @@ const source = fs.readFileSync(require('node:path').join(__dirname,'../../public
 function setup(request) {
     const listeners = {};
     let intervals = [];
-    const root = {innerHTML:'',dataset:{},querySelector:()=>null,insertAdjacentHTML(_p,html){this.innerHTML += html;}};
+    const root = {innerHTML:'',dataset:{},closest:()=>null,querySelector:()=>null,insertAdjacentHTML(_p,html){this.innerHTML += html;}};
     const date = {value:'',dataset:{},addEventListener(type,fn){listeners['date-'+type]=fn;}};
     const context = vm.createContext({window:{addEventListener(type,fn){listeners['window-'+type]=fn;}},document:{hidden:false,getElementById:id=>id === 'myKpiRoot' ? root : date,addEventListener(type,fn){listeners[type]=fn;}},
         VKApi:{request},VKTable:{escapeHtml:value=>String(value).replaceAll('<','&lt;')},setInterval(fn,ms){intervals.push({fn,ms});return intervals.length;},clearInterval(){},Intl,Date});
@@ -23,7 +23,8 @@ test('personal KPI polls without page reload and replaces changed data safely',a
     assert.equal(state.intervals[0].ms,30000);
     state.intervals[0].fn();await flush();
     assert.equal(calls,2);
-    assert.match(state.root.innerHTML,/100\/100/);
+    assert.match(state.root.innerHTML,/aria-valuenow="100"/);
+    assert.match(state.root.innerHTML,/<strong>2<small> \/ 2 việc/);
     assert.doesNotMatch(source,/location\.reload/);
 });
 test('selecting another date with identical results does not leave loading markup',async()=>{

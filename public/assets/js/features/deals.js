@@ -97,7 +97,7 @@ async function openDealModal() {
     `, async form => {
         const data = Object.fromEntries(new FormData(form));
         ['customer_id', 'lead_id', 'owner_id'].forEach(key => { data[key] = data[key] ? Number(data[key]) : null; });
-        data.amount = Number(data.amount || 0);
+        data.amount = VKMoney.parse(data.amount || 0);
         await VKApi.request('/deals', { method: 'POST', body: JSON.stringify(data) });
         VKModal.close(); VKModal.toast('Đã tạo cơ hội bán hàng.', 'success'); loadDeals();
     }, { submitText: 'Tạo cơ hội' });
@@ -152,9 +152,9 @@ async function openDealItemsModal(id) {
         const items = [...document.querySelectorAll('[data-deal-item-line]')].map(line => ({
             sku_id: Number(line.querySelector('[data-deal-item-sku]').value),
             quantity: Number(line.querySelector('[data-deal-item-quantity]').value || 0),
-            unit_price: Number(line.querySelector('[data-deal-item-price]').value || 0),
+            unit_price: VKMoney.parse(line.querySelector('[data-deal-item-price]').value || 0),
         })).filter(item => item.sku_id && item.quantity > 0);
-        await VKApi.request(`/deals/${id}/items`, { method: 'PUT', body: JSON.stringify({ items }) });
+        await VKApi.request(`/deals/${id}/items`, { method: 'PUT', body: JSON.stringify({ items, version: deal.version }) });
         VKModal.close();
         VKModal.toast('Đã cập nhật hàng hóa và giá trị cơ hội.', 'success');
         await reloadDealDetail(id);
@@ -167,7 +167,7 @@ function dealItemLine(skus, item = {}) {
     return `<div class="deal-item-line" data-deal-item-line>
         <select data-deal-item-sku>${options}</select>
         <input data-deal-item-quantity type="number" min="0.001" step="0.001" value="${VKTable.escapeHtml(String(item.quantity || 1))}" aria-label="Số lượng">
-        <input data-deal-item-price type="number" min="0" step="1000" value="${VKTable.escapeHtml(String(item.unit_price || 0))}" aria-label="Đơn giá">
+        <input data-deal-item-price type="text" inputmode="decimal" data-money-ready="1" value="${VKTable.escapeHtml(VKMoney.format(Number(item.unit_price || 0)))}" aria-label="Đơn giá">
         <button class="btn small danger" type="button" data-deal-remove-line aria-label="Xóa dòng">×</button>
     </div>`;
 }

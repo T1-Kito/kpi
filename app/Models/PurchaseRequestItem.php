@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PurchaseRequestItem extends Model
 {
+    use \App\Models\Concerns\CastsDatabaseIdentifiers;
+
     protected $fillable = ['purchase_request_id', 'sku_id', 'quantity', 'available_qty'];
 
     public function sku(): BelongsTo

@@ -35,11 +35,12 @@ class ApprovalCenterController extends Controller
             $pending = $pending->concat($this->orders($user->tenant_id, ['draft'], true, $user));
             $recent = $recent->concat($this->orders($user->tenant_id, ['approved', 'rejected'], false));
         }
-        if ($user->hasPermission('kpi.lock')) {
-            $pending = $pending->concat($this->kpiRows(KpiAdjustment::class, $user->tenant_id, ['pending'], true))
-                ->concat($this->kpiRows(KpiException::class, $user->tenant_id, ['pending'], true));
-            $recent = $recent->concat($this->kpiRows(KpiAdjustment::class, $user->tenant_id, ['approved', 'rejected'], false))
-                ->concat($this->kpiRows(KpiException::class, $user->tenant_id, ['approved', 'rejected'], false));
+        foreach ([KpiAdjustment::class=>'kpi.adjustment.review',KpiException::class=>'kpi.exception.review'] as $model=>$permission) {
+            if (!$user->hasPermission($permission)) continue;
+            $reviewer = clone $user;
+            $reviewer->restrictDataScopeToPermissions([$permission]);
+            $pending = $pending->concat($this->kpiRows($model, $user->tenant_id, ['pending'], true, $reviewer));
+            $recent = $recent->concat($this->kpiRows($model, $user->tenant_id, ['approved', 'rejected'], false, $reviewer));
         }
 
         $pending = $pending->sortByDesc('created_at')->values();
@@ -63,7 +64,7 @@ class ApprovalCenterController extends Controller
     {
         return Quotation::where('tenant_id', $tenantId)->whereIn('status', $statuses)->whereIn('id', $assigned)->with(['customer:id,name', 'salesOwner:id,name'])->withCount('items')->latest('id')->limit(50)->get()->map(fn ($row) => $this->row(
             'quotation', $row, 'Duyệt báo giá biên lợi nhuận', $row->salesOwner?->name ?? '-', ($row->customer?->name ?? 'Khách hàng').' · '.number_format((float) $row->total_amount, 0, ',', '.').' đ',
-            $row->items_count.' dòng · Biên lợi nhuận '.number_format((float) $row->margin_percent, 2, ',', '.').'%', (float) $row->margin_percent < 15 ? 'high' : 'normal', '/quotations?record='.$row->id, $pending
+            $row->items_count.' dòng'.(request()->user()->hasPermission('master.cost.view') ? ' · Biên lợi nhuận '.number_format((float) $row->margin_percent, 2, ',', '.').'%' : ''), (float) $row->margin_percent < 15 ? 'high' : 'normal', '/quotations?record='.$row->id, $pending
         ));
     }
 
@@ -83,11 +84,14 @@ class ApprovalCenterController extends Controller
         ));
     }
 
-    private function kpiRows(string $model, int $tenantId, array $statuses, bool $pending): Collection
+    private function kpiRows(string $model, int $tenantId, array $statuses, bool $pending, \App\Models\User $actor): Collection
     {
         $adjustment = $model === KpiAdjustment::class;
         $relations = $adjustment ? ['user:id,name', 'creator:id,name'] : ['user:id,name', 'definition:id,name'];
-        return $model::where('tenant_id', $tenantId)->whereIn('status', $statuses)->with($relations)->latest('id')->limit(50)->get()->map(function ($row) use ($adjustment, $pending) {
+        $query = \App\Support\DataScope::owned($model::where('tenant_id', $tenantId), $actor, 'user_id', 'user');
+        return $query->whereIn('status', $statuses)
+            ->when($pending,fn($q)=>$q->where($adjustment?'created_by':'user_id','<>',$actor->id))
+            ->with($relations)->latest('id')->limit(50)->get()->map(function ($row) use ($adjustment, $pending) {
             $code = ($adjustment ? 'KPI-ADJ-' : 'KPI-EXC-').$row->id;
             $title = $adjustment ? ($row->adjustment_type === 'bonus' ? 'Duyệt cộng điểm nhân viên' : 'Duyệt trừ điểm nhân viên') : 'Duyệt giải trình ngoại lệ KPI';
             $detail = $adjustment ? (($row->adjustment_type === 'bonus' ? '+' : '-').number_format((float) $row->points, 2, ',', '.').' điểm · Người tạo '.($row->creator?->name ?? '-')) : (($row->definition?->name ?? 'KPI').' · '.$row->period_start?->format('d/m/Y').' - '.$row->period_end?->format('d/m/Y'));

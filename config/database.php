@@ -101,17 +101,25 @@ return [
 
         'sqlsrv' => [
             'driver' => 'sqlsrv',
-            'url' => env('DB_URL'),
-            'host' => env('DB_HOST', 'localhost'),
-            'port' => env('DB_PORT', '1433'),
-            'database' => env('DB_DATABASE', 'laravel'),
-            'username' => env('DB_USERNAME', 'root'),
-            'password' => env('DB_PASSWORD', ''),
+            // Match Eloquent integer/FK semantics; PDO_SQLSRV otherwise returns
+            // integers as strings, breaking strict ownership checks and SLA math.
+            'options' => extension_loaded('pdo_sqlsrv') ? [
+                PDO::SQLSRV_ATTR_FETCHES_NUMERIC_TYPE => true,
+                PDO::SQLSRV_ATTR_QUERY_TIMEOUT => (int)env('SQLSERVER_QUERY_TIMEOUT',30),
+            ] : [],
+            'login_timeout' => (int)env('SQLSERVER_LOGIN_TIMEOUT',5),
+            'restrict_foreign_key_deletes' => env('SQLSERVER_RESTRICT_FOREIGN_KEYS', false),
+            'url' => env('SQLSERVER_URL', env('DB_URL')),
+            'host' => env('SQLSERVER_HOST', env('DB_HOST', 'localhost')),
+            'port' => env('SQLSERVER_PORT', env('DB_PORT', '1433')),
+            'database' => env('SQLSERVER_DATABASE', env('DB_DATABASE', 'laravel')),
+            'username' => env('SQLSERVER_USERNAME', env('DB_USERNAME', 'root')),
+            'password' => env('SQLSERVER_PASSWORD', env('DB_PASSWORD', '')),
             'charset' => env('DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
-            // 'encrypt' => env('DB_ENCRYPT', 'yes'),
-            // 'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
+            'encrypt' => env('DB_ENCRYPT', 'yes'),
+            'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
         ],
 
     ],

@@ -12,6 +12,14 @@ use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable
 {
+    use \App\Models\Concerns\CastsDatabaseIdentifiers;
+
+    private ?array $scopePermissions = null;
+
+    public function restrictDataScopeToPermissions(array $permissions): void
+    {
+        $this->scopePermissions = $permissions;
+    }
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
@@ -39,6 +47,7 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'token_version',
     ];
 
     /**
@@ -49,10 +58,21 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
+            'tenant_id'=>'integer','department_id'=>'integer','position_id'=>'integer','manager_id'=>'integer',
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::updating(function (User $user) {
+            if ($user->isDirty('password') || $user->isDirty('is_active')) {
+                // Atomic increment also handles concurrent security changes.
+                $user->token_version = \Illuminate\Support\Facades\DB::raw('token_version + 1');
+            }
+        });
     }
 
     public function tenant(): BelongsTo
@@ -77,20 +97,38 @@ class User extends Authenticatable
 
     public function hasPermission(string $permissionCode): bool
     {
+        if ($permissionCode===\App\Support\SystemAccount::PERMISSION) return $this->isSpAdmin();
         return $this->roles()
+            ->where('tenant_id',$this->tenant_id)
             ->whereHas('permissions', fn ($query) => $query->where('code', $permissionCode))
             ->exists();
     }
+    public function isSpAdmin(): bool
+    {
+        return $this->roles()->where('tenant_id',$this->tenant_id)->where('code',\App\Support\SystemAccount::ROLE)->exists();
+    }
 
-    public function dataScope(): string
+    public function effectivePermissionCodes(): \Illuminate\Support\Collection
+    {
+        $codes=$this->roles()->where('tenant_id',$this->tenant_id)->with('permissions')->get()->flatMap(fn($role)=>$role->permissions->pluck('code'))->reject(fn($code)=>$code===\App\Support\SystemAccount::PERMISSION);
+        if($this->isSpAdmin())$codes->push(\App\Support\SystemAccount::PERMISSION);
+        return $codes->unique()->values();
+    }
+
+    public function dataScope(?string $permission = null): string
     {
         $rank = ['own' => 1, 'warehouse' => 2, 'department' => 3, 'company' => 4];
-        $roles = $this->relationLoaded('roles') ? $this->roles : $this->roles()->get(['data_scope']);
+        $roles = $this->relationLoaded('roles') ? $this->roles : $this->roles()->get();
+        $permissions = $permission === null ? $this->scopePermissions : [$permission];
+        if ($permissions !== null) {
+            $roles = $roles->filter(fn ($role) => $role->permissions->pluck('code')->intersect($permissions)->isNotEmpty());
+        }
 
         return $roles
             ->pluck('data_scope')
             ->filter()
-            ->sortByDesc(fn (string $scope) => $rank[$scope] ?? 0)
+            // Without an action context, never infer the widest scope across unrelated roles.
+            ->sortBy(fn (string $scope) => ($permissions === null ? 1 : -1) * ($rank[$scope] ?? 0))
             ->first() ?: 'own';
     }
 }

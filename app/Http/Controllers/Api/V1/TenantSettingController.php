@@ -190,7 +190,7 @@ class TenantSettingController extends Controller
         return response()->json([
             'data' => [
                 'logo_path' => $path,
-                'logo_url' => Storage::url($path),
+                'logo_url' => Storage::disk('public')->url($path),
             ],
         ]);
     }
@@ -253,7 +253,7 @@ class TenantSettingController extends Controller
         $path = $data['icon']->store("tenants/{$tenant->id}/sidebar-icons", 'public');
 
         $paths[$key] = $path;
-        $urls[$key] = Storage::url($path);
+        $urls[$key] = Storage::disk('public')->url($path);
         $icons[$key] = 'custom';
 
         $settings['custom_sidebar_icon_paths'] = $paths;

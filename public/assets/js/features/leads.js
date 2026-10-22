@@ -159,6 +159,7 @@ function renderContact(row) {
 }
 
 async function openLeadModal() {
+    const requestKey = crypto.randomUUID();
     const me = await VKApi.request('/me');
     const users = await VKApi.request('/lookups/sales-users');
     const canAssignOthers = me.data.data_scope === 'company';
@@ -178,7 +179,7 @@ async function openLeadModal() {
         <details class="crm-optional-fields"><summary>Thông tin chiến dịch (không bắt buộc)</summary>${VKModal.field('campaign_code', 'Mã chiến dịch')}</details>
         <p class="crm-auto-note">Mã hồ sơ tự sinh. Khi có người phụ trách, hệ thống tự tạo việc chăm sóc và đặt hạn theo cấu hình SLA.</p>
     `, async (form) => {
-        const response = await VKApi.request('/leads', { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(form))) });
+        const response = await VKApi.request('/leads', { method: 'POST', headers: {'Idempotency-Key': requestKey}, body: JSON.stringify(Object.fromEntries(new FormData(form))) });
         VKModal.toast(response.data.assigned_to ? 'Đã tạo hồ sơ, phân công và tạo việc chăm sóc.' : 'Đã tạo hồ sơ trong hàng chờ phân công.');
         VKModal.close();
         loadLeads();
@@ -313,7 +314,8 @@ async function openQualifyModal(id) {
         <label class="crm-auto-note"><input type="checkbox" data-open-created-deal checked> Mở cơ hội sau khi chuyển đổi để tiếp tục xử lý</label>
     `, async (form) => {
         const openDeal = form.querySelector('[data-open-created-deal]')?.checked;
-        const response = await VKApi.request(`/leads/${id}/qualify`, { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(form))) });
+        const payload=Object.fromEntries(new FormData(form));payload.amount=VKMoney.parse(payload.amount || 0);
+        const response = await VKApi.request(`/leads/${id}/qualify`, { method: 'POST', body: JSON.stringify(payload) });
         VKModal.toast('Đã liên kết khách hàng và tạo cơ hội bán hàng.');
         VKModal.close();
         if (openDeal && response.data?.deal?.id) {

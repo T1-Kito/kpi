@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CustomerDuplicateReview extends Model
 {
+    use \App\Models\Concerns\CastsDatabaseIdentifiers;
+
     protected $fillable = [
         'tenant_id', 'first_customer_id', 'second_customer_id', 'matched_on', 'status',
         'retained_customer_id', 'reviewed_by', 'reviewed_at', 'reason',

@@ -44,9 +44,15 @@ class ContractController extends Controller
         $data = $request->validate(['name' => ['required','string','max:255'], 'quotation_id' => ['nullable', Rule::exists('quotations','id')->where('tenant_id',$tenantId)], 'sales_order_id' => ['nullable', Rule::exists('sales_orders','id')->where('tenant_id',$tenantId)], 'customer_id' => ['nullable', Rule::exists('customers','id')->where('tenant_id',$tenantId)], 'effective_date' => ['nullable','date'], 'expiry_date' => ['nullable','date','after_or_equal:effective_date'], 'note' => ['nullable','string','max:2000'], 'milestones' => ['nullable','array'], 'milestones.*.name' => ['required','string','max:255'], 'milestones.*.amount' => ['required','numeric','gt:0'], 'milestones.*.due_date' => ['nullable','date']]);
         $quotation = !empty($data['quotation_id']) ? Quotation::find($data['quotation_id']) : null;
         $order = !empty($data['sales_order_id']) ? SalesOrder::find($data['sales_order_id']) : null;
+        if ($quotation) abort_unless(DataScope::owned(Quotation::whereKey($quotation->id), $request->user(), 'sales_owner_id', 'salesOwner')->exists(), 404);
+        if ($order) abort_unless(DataScope::owned(SalesOrder::whereKey($order->id), $request->user(), 'sales_owner_id', 'salesOwner')->exists(), 404);
         $customerId = $data['customer_id'] ?? $order?->customer_id ?? $quotation?->customer_id;
+        abort_if($quotation && $quotation->customer_id != $customerId, 422, 'Khách hàng không khớp báo giá.');
+        abort_if($order && $order->customer_id != $customerId, 422, 'Khách hàng không khớp đơn bán.');
+        abort_if($order && $quotation && $order->quotation_id != $quotation->id, 422, 'Báo giá không thuộc đơn bán đã chọn.');
         abort_if(! $customerId, 422, 'Cần chọn khách hàng, báo giá hoặc đơn hàng để tạo hợp đồng.');
         $amount = $order?->total_amount ?? $quotation?->total_amount ?? collect($data['milestones'] ?? [])->sum('amount');
+        abort_if(!empty($data['milestones']) && abs((float)collect($data['milestones'])->sum('amount') - (float)$amount) > 0.005, 422, 'Tổng mốc thanh toán phải bằng giá trị hợp đồng.');
         $contract = DB::transaction(function () use ($request, $data, $tenantId, $quotation, $order, $customerId, $amount) {
             $contract = Contract::create(['tenant_id'=>$tenantId,'code'=>$this->codes->next('contracts','code','CTR-',fn($q)=>$q->where('tenant_id',$tenantId)),'name'=>$data['name'],'customer_id'=>$customerId,'quotation_id'=>$quotation?->id,'sales_order_id'=>$order?->id,'owner_id'=>$request->user()->id,'total_amount'=>$amount,'effective_date'=>$data['effective_date']??null,'expiry_date'=>$data['expiry_date']??null,'note'=>$data['note']??null,'status'=>'draft']);
             $milestones = $data['milestones'] ?? [];
@@ -61,8 +67,16 @@ class ContractController extends Controller
 
     public function activate(Request $request, Contract $contract): JsonResponse
     {
+        abort_unless(DataScope::owned(Contract::whereKey($contract->id), $request->user(), 'owner_id', 'owner')->exists(), 404);
         abort_if($contract->tenant_id !== $request->user()->tenant_id, 404); abort_if($contract->status !== 'draft', 422, 'Chỉ có thể kích hoạt hợp đồng đang nháp.');
-        $contract->update(['status'=>'active']); return response()->json(['data'=>$contract->refresh()]);
+        return DB::transaction(function () use ($request,$contract) {
+            $locked=Contract::whereKey($contract->id)->lockForUpdate()->firstOrFail();
+            abort_if($locked->status !== 'draft',422,'Chỉ có thể kích hoạt hợp đồng đang nháp.');
+            $old=$locked->only('status');
+            $locked->update(['status'=>'active']);
+            $this->audit->record('contract',$locked->id,'activate_contract',$request->user(),$old,$locked->only('status'),$request);
+            return response()->json(['data'=>$locked]);
+        });
     }
 
     public function exportWord(Request $request, Contract $contract): BinaryFileResponse|JsonResponse
@@ -87,7 +101,17 @@ class ContractController extends Controller
     }
     public function acceptMilestone(Request $request, Contract $contract, ContractMilestone $milestone): JsonResponse
     {
-        abort_if($contract->tenant_id !== $request->user()->tenant_id || $milestone->contract_id !== $contract->id, 404); abort_if($contract->status !== 'active',422,'Hợp đồng cần hiệu lực trước khi nghiệm thu.');
-        $milestone->update(['status'=>'accepted','accepted_date'=>now()->toDateString()]); return response()->json(['data'=>$milestone->refresh()]);
+        abort_unless(DataScope::owned(Contract::whereKey($contract->id), $request->user(), 'owner_id', 'owner')->exists(), 404);
+        abort_if($contract->tenant_id !== $request->user()->tenant_id || (int)$milestone->contract_id !== (int)$contract->id, 404); abort_if($contract->status !== 'active',422,'Hợp đồng cần hiệu lực trước khi nghiệm thu.');
+        return DB::transaction(function () use ($request,$contract,$milestone) {
+            $lockedContract=Contract::whereKey($contract->id)->lockForUpdate()->firstOrFail();
+            abort_if($lockedContract->status !== 'active',422,'Hợp đồng cần hiệu lực trước khi nghiệm thu.');
+            $locked=ContractMilestone::whereKey($milestone->id)->lockForUpdate()->firstOrFail();
+            if ($locked->status === 'accepted') return response()->json(['data'=>$locked]);
+            $old=$locked->only(['status','accepted_date']);
+            $locked->update(['status'=>'accepted','accepted_date'=>now()->toDateString()]);
+            $this->audit->record('contract_milestone',$locked->id,'accept_contract_milestone',$request->user(),$old,$locked->only(['status','accepted_date']),$request);
+            return response()->json(['data'=>$locked]);
+        });
     }
 }

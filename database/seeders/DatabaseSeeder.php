@@ -106,6 +106,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $permissions = collect([
+            'master.cost.view' => 'Xem giá vốn và biên lợi nhuận',
             'user.manage' => 'Quản lý người dùng',
             'role.manage' => 'Quản lý vai trò',
             'dashboard.executive.view' => 'Xem dashboard giám đốc',
@@ -169,6 +170,10 @@ class DatabaseSeeder extends Seeder
             $code => Permission::updateOrCreate(['code' => $code], ['name' => $name]),
         ]);
 
+        foreach (\App\Support\ActionPermissions::SPLITS as $split) {
+            foreach ($split as $code=>$name) $permissions[$code]=Permission::updateOrCreate(['code'=>$code],['name'=>$name]);
+        }
+
         $roleDefinitions = [
             'ROLE-ADMIN' => ['name' => 'Quản trị hệ thống', 'scope' => 'company', 'permissions' => $permissions->keys()->all()],
             'ROLE-DIR' => ['name' => 'Ban giám đốc', 'scope' => 'company', 'permissions' => ['dashboard.executive.view', 'dashboard.manager.view', 'master.view', 'task.view', 'task.approve', 'alert.view', 'audit.view', 'kpi.lock', 'sales.lead.view', 'sales.deal.view', 'sales.margin.approve', 'procurement.pr.view', 'procurement.pr.approve', 'procurement.sq.view', 'procurement.po.view', 'procurement.po.approve', 'sales.order.view', 'sales.delivery.view', 'sales.delivery.accept', 'finance.invoice.view', 'finance.payment.view', 'service.ticket.view', 'service.ticket.manage']],
@@ -187,7 +192,7 @@ class DatabaseSeeder extends Seeder
                 ['name' => $definition['name'], 'data_scope' => $definition['scope']],
             );
             $role->permissions()->sync(
-                collect($definition['permissions'])
+                collect(\App\Support\ActionPermissions::expand($definition['permissions']))
                     ->map(fn (string $permissionCode) => $permissions[$permissionCode]->id)
                     ->all(),
             );

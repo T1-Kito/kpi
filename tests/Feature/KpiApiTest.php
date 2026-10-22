@@ -112,6 +112,10 @@ class KpiApiTest extends TestCase
         $this->withToken($token)
             ->postJson("/api/v1/kpi/exceptions/{$exceptionId}/review", [
                 'status' => 'approved',
+            ])->assertForbidden();
+        $this->withToken($this->loginAs('director@vk-kpi.local'))
+            ->postJson("/api/v1/kpi/exceptions/{$exceptionId}/review", [
+                'status' => 'approved',
                 'review_note' => 'Đã ghi nhận ngoại lệ demo.',
             ])
             ->assertOk()
@@ -154,6 +158,10 @@ class KpiApiTest extends TestCase
         $adjustmentId = $create->json('data.id');
 
         $this->withToken($token)
+            ->postJson("/api/v1/kpi/adjustments/{$adjustmentId}/review", [
+                'status' => 'approved',
+            ])->assertForbidden();
+        $this->withToken($this->loginAs('director@vk-kpi.local'))
             ->postJson("/api/v1/kpi/adjustments/{$adjustmentId}/review", [
                 'status' => 'approved',
                 'review_note' => 'Đã kiểm tra dữ liệu SLA.',

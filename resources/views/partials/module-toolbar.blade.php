@@ -12,11 +12,12 @@
             ],
         ],
         [
-            'match' => ['customers', 'leads', 'customer-contacts'],
+            'match' => ['customers', 'leads', 'customer-contacts', 'import-center'],
             'items' => [
                 ['label' => 'Khách hàng', 'href' => '/customers', 'match' => 'customers', 'permission' => 'master.view'],
                 ['label' => 'Khách hàng tiềm năng', 'href' => '/leads', 'match' => 'leads', 'permission' => 'sales.lead.view'],
                 ['label' => 'Người liên hệ', 'href' => '/customer-contacts', 'match' => 'customer-contacts', 'permission' => 'master.view'],
+                ['label' => 'Quản lý nhập', 'href' => '/import-center', 'match' => 'import-center', 'permission' => 'master.view'],
             ],
         ],
         [
@@ -81,7 +82,7 @@
                 ['label' => 'Mẫu in', 'href' => '/print-templates', 'match' => 'print-templates', 'permission' => 'user.manage'],
                 ['label' => 'Nhật ký', 'href' => '/audit-logs', 'match' => 'audit-logs', 'permission' => 'audit.view'],
                 ['label' => 'Thiết lập', 'href' => '/settings', 'match' => 'settings', 'permission' => 'audit.view'],
-                ['label' => 'Dữ liệu nền bán hàng', 'href' => '/sales-master-data', 'match' => 'sales-master-data', 'permission' => 'master.manage'],
+                ['label' => 'Dữ liệu nền bán hàng', 'href' => '/sales-master-data', 'match' => 'sales-master-data', 'permission' => 'sales.master.manage'],
             ],
         ],
     ];

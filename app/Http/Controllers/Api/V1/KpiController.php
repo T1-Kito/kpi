@@ -401,7 +401,12 @@ class KpiController extends Controller
 
     public function reviewAdjustment(Request $request, KpiAdjustment $kpiAdjustment): JsonResponse
     {
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($request,$kpiAdjustment) {
+        $kpiAdjustment=KpiAdjustment::whereKey($kpiAdjustment->id)->lockForUpdate()->firstOrFail();
         abort_if($kpiAdjustment->tenant_id !== $request->user()->tenant_id, 404);
+        abort_unless(\App\Support\DataScope::owned(KpiAdjustment::whereKey($kpiAdjustment->id),$request->user(),'user_id','user')->exists(),404);
+        abort_if((int)$kpiAdjustment->created_by === (int)$request->user()->id,403,'Người lập không được tự duyệt phiếu điểm.');
+        abort_if($kpiAdjustment->status !== 'pending',409,'Phiếu điểm đã được xử lý.');
 
         $data = $request->validate([
             'status' => ['required', Rule::in(['approved', 'rejected'])],
@@ -430,6 +435,7 @@ class KpiController extends Controller
         return response()->json([
             'data' => $kpiAdjustment->refresh()->load(['user:id,name,email', 'definition:id,code,name', 'reviewer:id,name,email']),
         ]);
+        });
     }
 
     public function storeException(Request $request): JsonResponse
@@ -467,7 +473,12 @@ class KpiController extends Controller
 
     public function reviewException(Request $request, KpiException $kpiException): JsonResponse
     {
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($request,$kpiException) {
+        $kpiException=KpiException::whereKey($kpiException->id)->lockForUpdate()->firstOrFail();
         abort_if($kpiException->tenant_id !== $request->user()->tenant_id, 404);
+        abort_unless(\App\Support\DataScope::owned(KpiException::whereKey($kpiException->id),$request->user(),'user_id','user')->exists(),404);
+        abort_if((int)$kpiException->user_id === (int)$request->user()->id,403,'Người lập không được tự duyệt ngoại lệ của mình.');
+        abort_if($kpiException->status !== 'pending',409,'Ngoại lệ đã được xử lý.');
 
         $data = $request->validate([
             'status' => ['required', Rule::in(['approved', 'rejected'])],
@@ -493,5 +504,6 @@ class KpiController extends Controller
         );
 
         return response()->json(['data' => $kpiException->refresh()->load(['definition:id,code,name', 'user:id,name,email'])]);
+        });
     }
 }

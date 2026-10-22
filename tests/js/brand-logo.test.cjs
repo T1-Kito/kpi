@@ -12,6 +12,9 @@ function setup() {
         classList: { add() { this.owner.hidden = true; }, remove() { this.owner.hidden = false; } },
         removeAttribute(name) { delete this[name]; } });
     const image = element();
+    image.dataset.defaultLogo = '/assets/branding/vk-software-logo.png';
+    image.src = image.dataset.defaultLogo;
+    image.hidden = false;
     const fallback = element();
     for (const item of [image, fallback]) item.classList.owner = item;
     const pending = [];
@@ -23,16 +26,16 @@ function setup() {
     return { image, fallback, pending, hydrate: context.hydrateLogo };
 }
 
-test('initial markup hides both logo choices and reserves the existing brand container', () => {
+test('initial markup shows the supplied logo and hides the abstract fallback', () => {
     const blade = fs.readFileSync(path.join(root, 'resources/views/partials/sidebar.blade.php'), 'utf8');
     assert.match(blade, /class="brand-logo hidden"/);
-    assert.match(blade, /class="brand-image hidden"/);
+    assert.match(blade, /class="brand-image" src="\/assets\/branding\/vk-software-logo.png"/);
 });
 
 test('saved logo is revealed only after loading; repeated hydration does not reload it', () => {
     const s = setup();
     s.hydrate('/logo.png');
-    assert.equal(s.image.hidden, true);
+    assert.equal(s.image.hidden, false);
     assert.equal(s.fallback.hidden, true);
     s.hydrate('/logo.png');
     assert.equal(s.pending.length, 1);
@@ -42,17 +45,18 @@ test('saved logo is revealed only after loading; repeated hydration does not rel
     assert.equal(s.fallback.hidden, true);
 });
 
-test('no logo or a failed image reveals fallback; a failure can retry', () => {
+test('missing or failed custom logo uses supplied brand; a failure can retry', () => {
     const s = setup();
     s.hydrate('');
-    assert.equal(s.fallback.hidden, false);
+    assert.equal(s.fallback.hidden, true);
     s.hydrate('/broken.png');
     assert.equal(s.fallback.hidden, true);
-    s.pending[0].onerror();
-    assert.equal(s.fallback.hidden, false);
-    assert.equal(s.image.hidden, true);
+    s.pending[1].onerror();
+    assert.equal(s.fallback.hidden, true);
+    assert.equal(s.image.hidden, false);
+    assert.equal(s.image.src,s.image.dataset.defaultLogo);
     s.hydrate('/broken.png');
-    assert.equal(s.pending.length, 2);
+    assert.equal(s.pending.length, 3);
 });
 
 test('outdated load and error callbacks cannot overwrite the latest logo', () => {
@@ -66,8 +70,10 @@ test('outdated load and error callbacks cannot overwrite the latest logo', () =>
     assert.equal(s.fallback.hidden, true);
     s.hydrate('');
     s.pending[1].onload();
-    assert.equal(s.image.hidden, true);
-    assert.equal(s.fallback.hidden, false);
+    s.pending[2].onload();
+    assert.equal(s.image.src,s.image.dataset.defaultLogo);
+    assert.equal(s.image.hidden, false);
+    assert.equal(s.fallback.hidden, true);
 });
 
 function restoreEarly(values) {
@@ -95,7 +101,7 @@ test('cached branding is attached during HTML parsing, without async app bootstr
 test('early branding ignores logged-out and malformed cache', () => {
     for (const values of [{}, { vk_token: 'test-token', 'vk.currentUser.v3': '{broken' }]) {
         const s = restoreEarly(values);
-        assert.equal(s.image.hidden, true);
-        assert.equal(s.image.src, undefined);
+        assert.equal(s.image.hidden, false);
+        assert.equal(s.image.src,s.image.dataset.defaultLogo);
     }
 });

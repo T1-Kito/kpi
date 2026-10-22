@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SalesOrderItem extends Model
 {
+    use \App\Models\Concerns\CastsDatabaseIdentifiers;
+
     protected $fillable = ['sales_order_id', 'sku_id', 'quantity', 'unit_price', 'line_subtotal', 'vat_rate', 'vat_amount', 'line_total'];
 
     public function sku(): BelongsTo

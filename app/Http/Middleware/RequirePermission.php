@@ -17,6 +17,8 @@ class RequirePermission
             return response()->json(['error_code' => 'FORBIDDEN', 'message' => 'Permission denied.'], 403);
         }
 
+        // A company-wide reporting role must not widen an unrelated Sales action.
+        $user->restrictDataScopeToPermissions(explode('|',$permission));
         return $next($request);
     }
 }

@@ -2,7 +2,7 @@
 @section('title', 'Báo cáo nghiệp vụ')
 @section('page', 'business-reports')
 @section('page_title', 'Báo cáo nghiệp vụ')
-@section('page_subtitle', 'Bán hàng, mua hàng, kho và công nợ.')
+@section('page_subtitle', 'Khách hàng, chăm sóc, phản hồi, bán hàng, mua hàng, kho và công nợ.')
 @section('content')
 <section class="module-panel business-report-panel">
     <div class="panel-head"><h2>Báo cáo và Excel</h2><button type="button" class="btn primary" id="businessReportExport" disabled>Xuất Excel</button></div>
@@ -26,5 +26,5 @@
 </section>
 @endsection
 @push('scripts')
-<script src="/assets/js/features/business-reports.js?v=20261013-permissions1"></script>
+<script src="/assets/js/features/business-reports.js?v=20261020-care-report1"></script>
 @endpush

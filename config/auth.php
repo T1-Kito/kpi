@@ -3,6 +3,8 @@
 use App\Models\User;
 
 return [
+    'local_admin_alias'=>env('LOCAL_ADMIN_ALIAS'),
+    'local_admin_email'=>env('LOCAL_ADMIN_EMAIL'),
 
     /*
     |--------------------------------------------------------------------------

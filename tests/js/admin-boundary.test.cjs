@@ -21,7 +21,7 @@ test('employee ledger review controls respect KPI management permission', () => 
     vm.runInContext(source.slice(source.indexOf('function canManagePoints('),source.indexOf('async function safeRequest(')),context);
     vm.runInContext(source.slice(source.indexOf('function renderRow('),source.indexOf('async function openAdjustmentModal(')),context);
     assert.doesNotMatch(context.renderRow({id:2,status:'pending'}),/data-review-kpi-adjustment/);
-    context.window.VKUser.permissions=['kpi.lock'];
+    context.window.VKUser.permissions=['kpi.adjustment.review'];
     assert.match(context.renderRow({id:2,status:'pending'}),/data-review-kpi-adjustment/);
     assert.doesNotMatch(source,/if \(root.dataset.serverRendered/);
 });

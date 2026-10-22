@@ -87,6 +87,7 @@ function renderAlertInfo(row) {
 
 function renderAlertActions(row) {
     const actions = [VKTable.smallButton('Mở', `data-alert-detail="${row.id}"`)];
+    if (!window.VKUser?.permissions?.includes('alert.update')) return VKTable.rowActions(actions);
     if (row.status === 'open') actions.push(VKTable.smallButton('Ghi nhận', `data-alert-status="${row.id}" data-status="acknowledged"`));
     if (row.status === 'open' || row.status === 'acknowledged') actions.push(VKTable.smallButton('Đã xử lý', `data-alert-status="${row.id}" data-status="resolved"`, 'primary'));
     return VKTable.rowActions(actions);

@@ -30,7 +30,7 @@ class DashboardSummaryApiTest extends TestCase
                     'purchaseOrders' => ['data', 'meta'],
                     'executive' => [
                         'generated_at', 'governance' => ['unassigned_leads', 'customers_without_owner', 'organizations_without_contact', 'duplicate_reviews', 'sales_quotes_pending'],
-                        'period', 'revenue', 'previous_revenue', 'receivables',
+                        'period', 'revenue', 'previous_revenue', 'receivables', 'employee_work',
                         'inventory_value', 'monthly_revenue', 'funnel', 'top_customers', 'low_stock_items',
                         'receivable_aging', 'purchase', 'operations', 'activity', 'recent_orders',
                     ],

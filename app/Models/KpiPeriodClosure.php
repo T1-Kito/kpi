@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class KpiPeriodClosure extends Model
 {
+    use \App\Models\Concerns\CastsDatabaseIdentifiers;
+
     protected $guarded = ['id'];
 
     protected function casts(): array

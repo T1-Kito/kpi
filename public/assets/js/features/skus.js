@@ -64,7 +64,7 @@ function renderSkuTable(rows) {
         { label: 'Tên hàng', render: row => `<strong>${VKTable.escapeHtml(row.name)}</strong>${row.serial_number ? `<span class="row-note">Serial: ${VKTable.escapeHtml(row.serial_number)}</span>` : ''}` },
         { label: 'Sản phẩm', render: row => renderProduct(row.product) },
         { label: 'Đơn vị', render: row => VKTable.escapeHtml(row.unit || '-') },
-        { label: 'Giá vốn', render: row => VKTable.money(row.cost_price) },
+        ...(VKLayout.hasPermission('master.cost.view') ? [{ label: 'Giá vốn', render: row => VKTable.money(row.cost_price) }] : []),
         { label: 'Giá bán', render: row => VKTable.money(row.sale_price) },
         { label: 'Tồn min/max', render: row => `${VKTable.money(row.min_stock)} / ${VKTable.money(row.max_stock)}` },
         { label: 'Trạng thái', render: row => VKTable.statusBadge(row.status) },
@@ -118,7 +118,7 @@ ${VKModal.field('product_name', 'Tên sản phẩm', 'text', row?.product?.name 
             ${VKModal.field('unit', 'Đơn vị tính', 'text', row?.unit || 'pcs')}
             ${VKModal.field('min_stock', 'Tồn tối thiểu', 'number', row?.min_stock || '0')}
             ${VKModal.field('max_stock', 'Tồn tối đa', 'number', row?.max_stock || '0')}
-            <div class="field"><label for="cost_price">Giá vốn</label><input id="cost_price" name="cost_price" type="text" inputmode="numeric" autocomplete="off" data-money-input value="${formatSkuMoney(row?.cost_price || 0)}"><small>Nhập số, hệ thống tự ngăn cách hàng nghìn.</small></div>
+            ${VKLayout.hasPermission('master.cost.view') ? `<div class="field"><label for="cost_price">Giá vốn</label><input id="cost_price" name="cost_price" type="text" inputmode="numeric" autocomplete="off" data-money-input value="${formatSkuMoney(row?.cost_price || 0)}"><small>Nhập số, hệ thống tự ngăn cách hàng nghìn.</small></div>` : ''}
             <div class="field"><label for="sale_price">Giá bán</label><input id="sale_price" name="sale_price" type="text" inputmode="numeric" autocomplete="off" data-money-input value="${formatSkuMoney(row?.sale_price || 0)}"><small>Nhập số, hệ thống tự ngăn cách hàng nghìn.</small></div>
             ${VKModal.select('status', 'Trạng thái', [
                 { value: 'active', label: 'Hoạt động' },
@@ -128,7 +128,7 @@ ${VKModal.field('product_name', 'Tên sản phẩm', 'text', row?.product?.name 
         </div>
     `, async (form) => {
         const data = new FormData(form);
-        ['cost_price', 'sale_price'].forEach(name => data.set(name, String(parseSkuMoney(data.get(name)))));
+        ['cost_price', 'sale_price'].forEach(name => { if (data.has(name)) data.set(name, String(parseSkuMoney(data.get(name)))); });
         if (id) data.append('_method', 'PUT');
         await VKApi.request(id ? `/skus/${id}` : '/skus', {
             method: 'POST', body: data,
