@@ -107,6 +107,7 @@ class CustomerController extends Controller
             'sales_owner_id' => ['nullable', Rule::exists('users', 'id')->where('tenant_id', $tenantId)],
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
         ]);
+        $data += $this->classification($request);
         $data = $this->normalizeTypeSpecificFields($data);
         $data = $this->validateOwner($request, $data, true);
         $data['tax_code'] = $this->normalizeTaxCode($data['tax_code'] ?? null);
@@ -369,6 +370,7 @@ class CustomerController extends Controller
             'sales_owner_id' => ['nullable', Rule::exists('users', 'id')->where('tenant_id', $tenantId)],
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
         ]);
+        $data += $this->classification($request);
         $data = $this->normalizeTypeSpecificFields($data);
         $data = $this->validateOwner($request, $data);
         $data['tax_code'] = $this->normalizeTaxCode($data['tax_code'] ?? null);
@@ -411,6 +413,14 @@ class CustomerController extends Controller
         return $data;
     }
 
+    private function classification(Request $request):array
+    {
+        return $request->validate([
+            'business_segment'=>['sometimes','nullable',Rule::in(['B2C','B2B','B2B2C'])],
+            'customer_group'=>['sometimes','nullable','string','max:100'],
+            'customer_audience'=>['sometimes','nullable','string','max:150'],
+        ]);
+    }
     private function normalizeTaxCode(?string $taxCode): ?string
     {
         $value = preg_replace('/[^0-9-]/', '', trim((string) $taxCode));

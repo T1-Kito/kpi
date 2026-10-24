@@ -1,9 +1,11 @@
 (function () {
     let submitHandler = null;
     let toastTimer = null;
+    let inlineMount = null;
     const closeIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 
     function open(title, bodyHtml, handler, options = {}) {
+        if(inlineMount)close();
         const modal = document.querySelector('#modalBackdrop .modal');
         const submit = document.getElementById('modalSubmit');
         const cancel = document.querySelector('#modalForm [data-modal-close]');
@@ -29,6 +31,12 @@
     }
 
     function close() {
+        if(inlineMount){
+            inlineMount.modal.setAttribute('role','dialog');inlineMount.modal.setAttribute('aria-modal','true');
+            inlineMount.parent.appendChild(inlineMount.modal);
+            inlineMount.page.remove();
+            inlineMount=null;
+        }
         const form = document.getElementById('modalForm');
         const modal = document.querySelector('#modalBackdrop .modal');
         const submit = document.getElementById('modalSubmit');
@@ -121,5 +129,16 @@
         }
     });
 
-    window.VKModal = { open, close, field, select, toast, notice, hideToast };
+    function mountPage(target) {
+        const backdrop=document.getElementById('modalBackdrop');
+        const modal=backdrop?.querySelector('.modal');
+        if(!target || !modal)return;
+        const page=document.createElement('section');page.className='customer-editor-page';
+        inlineMount={parent:modal.parentElement,modal,page};
+        page.appendChild(modal);target.replaceChildren(page);
+        modal.setAttribute('role','region');modal.removeAttribute('aria-modal');
+        backdrop.classList.remove('open');backdrop.setAttribute('aria-hidden','true');
+    }
+    window.VKModal = { open, close, mountPage, field, select, toast, notice, hideToast };
+    document.addEventListener('click',event=>{if(inlineMount && event.target.closest('a[href]'))close();},true);
 })();

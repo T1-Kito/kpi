@@ -15,6 +15,19 @@ class User extends Authenticatable
     use \App\Models\Concerns\CastsDatabaseIdentifiers;
 
     private ?array $scopePermissions = null;
+    private ?array $requestPermissionCodes = null;
+    private ?bool $requestSpAdmin = null;
+
+    /** Request-local only: the JWT middleware reloads the account and grants every request. */
+    public function snapshotAuthorizationForRequest(): void
+    {
+        $this->loadMissing('roles.permissions');
+        $roles=$this->roles->where('tenant_id',$this->tenant_id);
+        $this->requestSpAdmin=$roles->contains('code',\App\Support\SystemAccount::ROLE);
+        $codes=$roles->flatMap(fn($role)=>$role->permissions->pluck('code'))->reject(fn($code)=>$code===\App\Support\SystemAccount::PERMISSION);
+        if($this->requestSpAdmin)$codes->push(\App\Support\SystemAccount::PERMISSION);
+        $this->requestPermissionCodes=array_fill_keys($codes->unique()->all(),true);
+    }
 
     public function restrictDataScopeToPermissions(array $permissions): void
     {
@@ -97,6 +110,7 @@ class User extends Authenticatable
 
     public function hasPermission(string $permissionCode): bool
     {
+        if($this->requestPermissionCodes!==null)return isset($this->requestPermissionCodes[$permissionCode]);
         if ($permissionCode===\App\Support\SystemAccount::PERMISSION) return $this->isSpAdmin();
         return $this->roles()
             ->where('tenant_id',$this->tenant_id)
@@ -105,11 +119,13 @@ class User extends Authenticatable
     }
     public function isSpAdmin(): bool
     {
+        if($this->requestSpAdmin!==null)return $this->requestSpAdmin;
         return $this->roles()->where('tenant_id',$this->tenant_id)->where('code',\App\Support\SystemAccount::ROLE)->exists();
     }
 
     public function effectivePermissionCodes(): \Illuminate\Support\Collection
     {
+        if($this->requestPermissionCodes!==null)return collect(array_keys($this->requestPermissionCodes));
         $codes=$this->roles()->where('tenant_id',$this->tenant_id)->with('permissions')->get()->flatMap(fn($role)=>$role->permissions->pluck('code'))->reject(fn($code)=>$code===\App\Support\SystemAccount::PERMISSION);
         if($this->isSpAdmin())$codes->push(\App\Support\SystemAccount::PERMISSION);
         return $codes->unique()->values();

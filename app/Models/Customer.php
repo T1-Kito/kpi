@@ -13,7 +13,7 @@ class Customer extends Model
     protected $fillable = [
         'tenant_id', 'code', 'name', 'customer_type', 'merged_into_id', 'tax_code', 'identity_number', 'contact_name', 'phone', 'email', 'billing_address', 'address',
         'legal_representative', 'representative_position', 'payment_terms', 'bank_name', 'bank_account_no', 'bank_account_name',
-        'credit_limit', 'sales_owner_id', 'status',
+        'credit_limit', 'sales_owner_id', 'status','business_segment','customer_group','customer_audience',
     ];
 
     public function salesOwner(): BelongsTo

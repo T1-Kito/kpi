@@ -36,7 +36,7 @@
         state.booted = true;
         bindEvents();
         await loadNotifications();
-        state.poller = window.setInterval(loadNotifications, 15000);
+        state.poller = window.setInterval(loadNotifications, 30000);
     }
 
     function bindEvents() {
@@ -93,7 +93,7 @@
     }
 
     async function loadNotifications() {
-        if (state.loading || !window.VKApi?.token()) return;
+        if (state.loading || document.hidden || document.body?.classList.contains('pjax-loading') || !window.VKApi?.token()) return;
         state.loading = true;
 
         try {

@@ -27,7 +27,7 @@ Không sử dụng DatabaseSeeder: seeder hiện có tạo dữ liệu/tài kho�
 - Kiểm tra tên database UAT trước khi `php artisan migrate --force`.
   Chưa nghiệm thu migration SQL Server: nếu lỗi, dừng và giữ log, không đổi sang migrate:fresh.
 - Khi migration hoàn tất trên database mới, chạy `php artisan crm:install-admin`.
-  Nhập doanh nghiệp/email, mật khẩu riêng tối thiểu 12 ký tự và xác nhận database.
+  Nhập doanh nghiệp/email, mật khẩu riêng tối thiểu 8 ký tự và xác nhận database.
   Chỉ chạy khi site chưa công bố và không có tiến trình khởi tạo khác cùng chạy.
   Lệnh từ chối khi đã có công ty hoặc tài khoản, không đổi mật khẩu hiện có.
   Tạo một Super Admin toàn quyền, không tạo dữ liệu demo; cần cấu hình vai trò

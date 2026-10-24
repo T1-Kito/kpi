@@ -10,7 +10,7 @@ File chưa ký số. Không tắt antivirus/SmartScreen; nếu máy chặn, gi�
 2. Chọn thư mục mới trống, ví dụ thư mục VK-CRM-UAT trong Documents.
 3. Bấm Giải nén bản thử. Chờ hoàn tất; không cần tự mở Explorer.
 4. Bỏ qua PHP/Composer nâng cao vì runtime và vendor đã có sẵn.
-5. Nhập doanh nghiệp giả, email Admin và mật khẩu riêng >=12 ký tự.
+5. Nhập doanh nghiệp giả, email Admin và mật khẩu riêng >=8 ký tự.
 6. Bấm Tạo SQLite UAT riêng. Không dùng lại thư mục đã có .env/database.
 7. Bấm Mở CRM thử tại máy này. Chờ kiểm tra sức khỏe rồi trình duyệt mở cổng 8099.
 8. Đăng nhập bằng email/mật khẩu vừa nhập. Giữ cửa sổ Setup mở khi sử dụng.

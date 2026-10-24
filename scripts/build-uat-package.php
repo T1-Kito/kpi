@@ -27,7 +27,7 @@ try {
         if ($file->isFile()) $add($file->getPathname(),str_replace('\\','/',substr($file->getPathname(),strlen($root)+1)));
     }
     foreach (['bootstrap/cache','storage/app/private','storage/app/public','storage/framework/cache/data','storage/framework/sessions','storage/framework/views','storage/logs'] as $directory) $zip->addEmptyDir($directory);
-    $zip->addFromString('PACKAGE-MANIFEST.json',json_encode(['type'=>'UAT_SOURCE_NOT_INSTALLER','release_version'=>'0.8.8','sqlserver_certified'=>false,'files'=>$manifest],JSON_PRETTY_PRINT|JSON_THROW_ON_ERROR));
+    $zip->addFromString('PACKAGE-MANIFEST.json',json_encode(['type'=>'UAT_SOURCE_NOT_INSTALLER','release_version'=>'0.8.9','sqlserver_certified'=>false,'files'=>$manifest],JSON_PRETTY_PRINT|JSON_THROW_ON_ERROR));
 } finally {$zip->close();}
 $check=new ZipArchive();$check->open($output.'/'.$name);
 foreach ($manifest as $relative=>$hash) if (!hash_equals($hash,hash('sha256',$check->getFromName($relative)))) throw new RuntimeException('Package verification failed: '.$relative);

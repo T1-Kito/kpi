@@ -17,8 +17,8 @@ class ProvisionChairman extends Command
         if(!$tenant || User::whereHas('roles',fn($q)=>$q->where('code',SystemAccount::ROLE))->exists()) {
             $this->error('Doanh nghiệp không hợp lệ hoặc tài khoản Chủ tịch đã tồn tại. Không thay đổi tài khoản cũ.');return self::FAILURE;
         }
-        $data=['email'=>$this->option('email'),'password'=>$this->secret('Mật khẩu riêng cho Chủ tịch (ít nhất 12 ký tự)')];
-        if(Validator::make($data,['email'=>'required|email|max:255|unique:users,email','password'=>'required|string|min:12|max:128'])->fails()) {
+        $data=['email'=>$this->option('email'),'password'=>$this->secret('Mật khẩu riêng cho Chủ tịch (ít nhất 8 ký tự)')];
+        if(Validator::make($data,['email'=>'required|email|max:255|unique:users,email','password'=>'required|string|min:8|max:128'])->fails()) {
             $this->error('Email hoặc mật khẩu không hợp lệ.');return self::FAILURE;
         }
         if($data['password']!==$this->secret('Nhập lại mật khẩu'))return self::FAILURE;

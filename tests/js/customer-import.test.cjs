@@ -9,7 +9,7 @@ function setup() {
     const input={files:[{name:'customers.csv'}],addEventListener:(_type,fn)=>change=fn};
     const result={innerHTML:'',textContent:''},button={textContent:''},calls=[];
     const form={querySelector:selector=>selector.includes('customer_import_file')?input:result};
-    let response={data:{total:1,imported:0,can_import:true,errors:[],preview:[{row:2,name:'<script>unsafe</script>'}]}};
+    let response={data:{id:7,status:'ready',result:{total:1,imported:0,can_import:true,errors:[],preview:[{row:2,name:'<script>unsafe</script>'}]}}};
     const context=vm.createContext({
         document:{querySelector:selector=>selector.includes('customer_import_file')?input:result,getElementById:()=>button},
         VKModal:{open:(_title,body,fn,options)=>{handler=fn;html=body;modalOptions=options;}},VKTable:{escapeHtml:value=>String(value).replaceAll('<','&lt;')},
@@ -18,7 +18,7 @@ function setup() {
     });
     vm.runInContext(source.slice(source.indexOf('function openCustomerImport('),source.indexOf('async function loadCustomers(')),context);
     context.openCustomerImport();
-    return {input,result,button,calls,html,modalOptions,submit:()=>handler(form),change:()=>change(),response:value=>response={data:value}};
+    return {input,result,button,calls,html,modalOptions,submit:()=>handler(form),change:()=>change(),response:value=>response={data:{id:8,status:'invalid',result:value}}};
 }
 
 test('import dialog keeps technical guidance collapsed and primary controls concise',()=>{
@@ -31,12 +31,12 @@ test('import dialog keeps technical guidance collapsed and primary controls conc
     assert.match(primary,/customer_import_file/);
     assert.match(primary,/300 khách/);
     assert.match(primary,/\.xlsx/);
-    assert.match(primary,/Excel hoặc CSV/);
+    assert.match(primary,/Excel \.xlsx/);
     assert.equal(state.modalOptions.className,'customer-import-modal');
 });
 
 test('template download retains the Excel extension instead of forcing CSV',()=>{
-    assert.match(source,/link\.download='mau-khach-hang\.xlsx'/);
+    assert.match(source,/link\.download='Mẫu khách hàng\.xlsx'/);
 });
 
 test('file chooser overrides generic input height so its button and filename are not clipped',()=>{
@@ -56,7 +56,8 @@ test('customer import previews first, escapes file data, then explicitly confirm
     assert.doesNotMatch(state.result.innerHTML,/<script>/);
     assert.equal(state.button.textContent,'Xác nhận nhập');
     await state.submit();
-    assert.equal(state.calls[1].options.body.values.confirm,'1');
+    assert.equal(state.calls[1].url,'/import-center/batches/7/commit');
+    assert.deepEqual(JSON.parse(state.calls[1].options.body),{confirmed:true});
 });
 
 test('changing file invalidates confirmation and invalid rows remain in preview mode',async()=>{

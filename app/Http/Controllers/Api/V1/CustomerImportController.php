@@ -73,7 +73,9 @@ class CustomerImportController extends Controller
                 }
             }
             return response()->json(['data'=>['total'=>count($rows),'imported'=>$imported,'can_import'=>!$errors,'errors'=>$errors,
-                'preview'=>array_map(fn ($row)=>['row'=>$row['row'],'name'=>$row['data']['name'],'customer_type'=>$row['data']['customer_type']],array_slice($rows,0,20))]]);
+                'preview'=>array_map(fn ($row)=>['row'=>$row['row'],'action'=>'create','name'=>$row['data']['name'],'customer_type'=>$row['data']['customer_type'],
+                    'phone'=>$row['data']['phone'] ?? null,'email'=>$row['data']['email'] ?? null,'tax_code'=>$row['data']['tax_code'] ?? null,
+                    'identity_number'=>$row['data']['identity_number'] ?? null,'contact_name'=>$row['data']['contact_name'] ?? null,'address'=>$row['data']['address'] ?? null],$rows)]]);
         });
     }
 

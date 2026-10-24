@@ -8,7 +8,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>Setup</AssemblyName>
     <ApplicationIcon>VK-CRM.ico</ApplicationIcon>
-    <Version>0.8.8</Version>
+    <Version>0.8.9</Version>
     <DebugType>None</DebugType>
     <DebugSymbols>false</DebugSymbols>
     <PublishSingleFile>true</PublishSingleFile>
@@ -27,7 +27,7 @@
     <EmbeddedResource Include="../../VK-Logo.png" LogicalName="VK-Logo.png" />
     <EmbeddedResource Include="initialize-uat.php" LogicalName="initialize-uat.php" />
     <EmbeddedResource Include="portable.sha256" LogicalName="portable.sha256" />
-    <EmbeddedResource Include="../../storage/app/private/portable-payload.zip" LogicalName="portable.zip" />
-    <EmbeddedResource Include="../../storage/app/private/release-packages/vk-crm-uat-source-20261022-014732-f780b3.zip" LogicalName="crm.zip" />
+    <EmbeddedResource Include="../../storage/app/private/portable-payload-0.8.9.1.zip" LogicalName="portable.zip" />
+    <EmbeddedResource Include="../../storage/app/private/release-packages/vk-crm-uat-source-20261023-092330-ad0a8d.zip" LogicalName="crm.zip" />
   </ItemGroup>
 </Project>

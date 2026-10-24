@@ -5,6 +5,7 @@
 @section('page_title', 'Nhà cung cấp')
 @section('page_subtitle', 'Quản lý nguồn mua, thông tin liên hệ, điều khoản và đánh giá nhà cung cấp.')
 @section('page_actions')
+    <button class="btn" type="button" data-directory-import="suppliers" data-permission="supplier.manage">Nhập file</button>
     <button class="btn primary" type="button" data-create-supplier>Tạo nhà cung cấp</button>
 @endsection
 
@@ -13,5 +14,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/suppliers.js?v=20261012-modal1"></script>
+<script src="/assets/js/features/suppliers.js?v=20261023-procurement1"></script>
 @endpush

@@ -50,10 +50,23 @@ Route::prefix('v1')->group(function () {
 
     Route::middleware(['jwt', \App\Http\Middleware\HideCostFields::class])->group(function () {
         Route::prefix('import-center')->group(function(){
+            Route::get('/procurement/{kind}/template',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'procurementTemplate']);
+            Route::get('/organization/{kind}/template',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'organizationTemplate']);
+            Route::post('/organization/{kind}/preview',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'organizationPreview'])->middleware('throttle:10,1');
+            Route::post('/procurement/{kind}/preview',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'procurementPreview'])->middleware('throttle:10,1');
+            Route::get('/products/{kind}/template',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'productTemplate']);
+            Route::post('/products/{kind}/preview',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'productPreview'])->middleware('throttle:10,1');
+            Route::get('/customer-template',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'customerTemplate']);
+            Route::post('/customer-preview',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'simpleCustomerPreview'])->middleware('throttle:10,1');
+            Route::get('/contact-template',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'contactTemplate']);
+            Route::post('/contact-preview',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'simpleContactPreview'])->middleware('throttle:10,1');
+            Route::get('/lead-template',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'leadTemplate']);
+            Route::post('/lead-preview',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'simpleLeadPreview'])->middleware('throttle:10,1');
             Route::get('/sources',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'sources']);
             Route::post('/sources',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'saveSource']);
             Route::put('/sources/{source}',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'saveSource'])->whereNumber('source');
             Route::get('/batches',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'index']);
+            Route::get('/batches/{batch}/errors',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'errors'])->whereNumber('batch')->middleware('throttle:10,1');
             Route::post('/batches',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'preview'])->middleware('throttle:10,1');
             Route::get('/batches/{batch}',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'show'])->whereNumber('batch');
             Route::post('/batches/{batch}/commit',[\App\Http\Controllers\Api\V1\ImportBatchController::class,'commit'])->whereNumber('batch')->middleware('throttle:10,1');
@@ -221,6 +234,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/users/{user}/roles', [UserAdminController::class, 'syncRoles']);
             Route::post('/users/{user}/organization', [UserAdminController::class, 'updateOrganization']);
             Route::post('/users/{user}/status', [UserAdminController::class, 'updateStatus']);
+            Route::post('/users/{user}/activate-imported', [UserAdminController::class, 'activateImported'])->middleware('throttle:10,1');
             Route::get('/users/{user}/handover', [\App\Http\Controllers\Api\V1\PersonnelHandoverController::class, 'preview']);
             Route::post('/users/{user}/handover', [\App\Http\Controllers\Api\V1\PersonnelHandoverController::class, 'transfer']);
             Route::get('/departments', [DepartmentController::class, 'index']);

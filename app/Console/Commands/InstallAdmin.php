@@ -19,13 +19,13 @@ class InstallAdmin extends Command
             return self::FAILURE;
         }
         if (!filled(config('app.key'))) {$this->error('Generate APP_KEY for the new installation first.');return self::FAILURE;}
-        $data=['company'=>$this->option('company') ?: $this->ask('Company name'),'email'=>$this->option('email') ?: $this->ask('Admin email'),'password'=>$this->secret('New admin password (at least 12 characters)')];
-        $validator=Validator::make($data,['company'=>['required','string','max:255'],'email'=>['required','email','max:255'],'password'=>['required','string','min:12','max:128']]);
+        $data=['company'=>$this->option('company') ?: $this->ask('Company name'),'email'=>$this->option('email') ?: $this->ask('Admin email'),'password'=>$this->secret('Mật khẩu Chủ tịch (ít nhất 8 ký tự)')];
+        $validator=Validator::make($data,['company'=>['required','string','max:255'],'email'=>['required','email','max:255'],'password'=>['required','string','min:8','max:128']]);
         if ($validator->fails()) {$this->error('Invalid company, email or password length. Nothing was created.');return self::FAILURE;}
         if ($data['password']!==$this->secret('Confirm password')) {$this->error('Passwords do not match.');return self::FAILURE;}
         $data['operator_email']=$this->ask('Email Admin thường');
-        $data['operator_password']=$this->secret('Mật khẩu Admin thường (ít nhất 12 ký tự)');
-        if(Validator::make($data,['operator_email'=>'required|email|different:email','operator_password'=>'required|string|min:12|max:128'])->fails() || $data['operator_password']!==$this->secret('Nhập lại mật khẩu Admin thường')) {
+        $data['operator_password']=$this->secret('Mật khẩu Admin thường (ít nhất 8 ký tự)');
+        if(Validator::make($data,['operator_email'=>'required|email|different:email','operator_password'=>'required|string|min:8|max:128'])->fails() || $data['operator_password']!==$this->secret('Nhập lại mật khẩu Admin thường')) {
             $this->error('Thông tin Admin thường không hợp lệ. Chưa tạo tài khoản.');return self::FAILURE;
         }
         if (!$this->confirm('Initialize a NEW installation on database '.config('database.default').' / '.DB::connection()->getDatabaseName().'?',false)) return self::FAILURE;

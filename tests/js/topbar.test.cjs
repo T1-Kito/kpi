@@ -4,9 +4,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const read = file => fs.readFileSync(path.join(__dirname, '../..', file), 'utf8');
 
-test('unused app switcher is not rendered in the shared topbar', () => {
+test('application launcher is rendered alongside notifications and page actions', () => {
     const layout = read('resources/views/layouts/app.blade.php');
-    assert.doesNotMatch(layout, /@include\('partials\.app-switcher'\)/);
+    assert.match(layout, /@include\('partials\.app-switcher'\)/);
+    assert.match(layout, /\/assets\/css\/app-switcher\.css\?v=/);
     assert.match(layout, /@include\('partials\.notifications'\)/);
     assert.match(layout, /data-pjax-actions/);
 });

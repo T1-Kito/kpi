@@ -17,6 +17,15 @@ class ImportBatchTest extends TestCase
         return [$admin,$token,$source];
     }
     private function file():UploadedFile {return UploadedFile::fake()->createWithContent('khach-hang.csv',"name,customer_type,phone,email,tax_code,address,contact_name,identity_number\nKhách theo nguồn,organization,0900991234,batch@example.test,,Hồ Chí Minh,Anh An,\n");}
+    public function test_source_metadata_edit_preserves_members_and_new_source_starts_without_members():void {
+        [$admin,$token,$source]=$this->setupImport();
+        $this->withToken($token)->putJson('/api/v1/import-center/sources/'.$source,['name'=>'Tên mới','is_active'=>true])->assertOk();
+        $this->assertDatabaseHas('import_source_users',['source_id'=>$source,'user_id'=>$admin->id]);
+        $new=$this->withToken($token)->postJson('/api/v1/import-center/sources',['code'=>'NO-MEMBERS','name'=>'Chưa cấp quyền','is_active'=>true])->assertCreated()->json('data.id');
+        $this->assertDatabaseMissing('import_source_users',['source_id'=>$new]);
+        $this->withToken($token)->putJson('/api/v1/import-center/sources/'.$source,['name'=>'Tên mới','is_active'=>true,'member_ids'=>[]])->assertOk();
+        $this->assertDatabaseMissing('import_source_users',['source_id'=>$source]);
+    }
     private function preview(string $token,int $source) {return $this->withToken($token)->post('/api/v1/import-center/batches',['source_id'=>$source,'catalog'=>'customers','file'=>$this->file()],['Accept'=>'application/json']);}
     private function directoryFile(string $kind,array $values):UploadedFile {
         $path=tempnam(sys_get_temp_dir(),'batch-template-');copy(resource_path('templates/import/'.$kind.'.xlsx'),$path);

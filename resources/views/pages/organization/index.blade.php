@@ -5,6 +5,8 @@
 @section('page_title', 'Phòng ban và chức vụ')
 @section('page_subtitle', 'Tạo phòng ban và chức vụ trước; gán nhân viên vào sau ở mục Người dùng.')
 @section('page_actions')
+    <button class="btn" type="button" data-directory-import="positions" data-permission="user.manage">Nhập chức vụ</button>
+    <button class="btn" type="button" data-directory-import="departments" data-permission="user.manage">Nhập phòng ban</button>
     <button class="btn" type="button" data-create-position>Tạo chức vụ</button>
     <button class="btn primary" type="button" data-create-department>Tạo phòng ban</button>
 @endsection

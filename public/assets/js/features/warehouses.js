@@ -10,7 +10,7 @@ let warehouseRows = [];
 
 async function loadWarehouses() {
     if (!document.getElementById('warehousesRoot')) return;
-    const warehouses = await VKApi.request('/warehouses');
+    const warehouses = await VKApi.request('/warehouses',{cache:false});
     warehouseRows = warehouses.data;
     const active = warehouseRows.filter(row => row.status === 'active').length;
     const locations = warehouseRows.reduce((sum, row) => sum + (row.locations?.length || 0), 0);

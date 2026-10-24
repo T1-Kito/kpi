@@ -28,7 +28,9 @@ class CustomerImportTest extends TestCase
         $rows="Công ty Nhập Mẫu,organization,0918111222,import@example.test,0012345678,Hà Nội,Nguyễn An,\nNgười Nhập Mẫu,person,0918333444,,,,,001234567890";
         $this->withServerVariables(['REMOTE_ADDR'=>'192.0.2.10','HTTP_USER_AGENT'=>'Customer import test']);
         $before=Customer::count();
-        $this->send($rows)->assertOk()->assertJsonPath('data.can_import',true)->assertJsonPath('data.imported',0);
+        $this->send($rows)->assertOk()->assertJsonPath('data.can_import',true)->assertJsonPath('data.imported',0)
+            ->assertJsonPath('data.preview.0.action','create')->assertJsonPath('data.preview.0.phone','0918111222')
+            ->assertJsonPath('data.preview.0.tax_code','0012345678')->assertJsonPath('data.preview.1.identity_number','001234567890');
         $this->assertSame($before,Customer::count());
         $this->send($rows,true)->assertOk()->assertJsonPath('data.imported',2);
         $company=Customer::where('email','import@example.test')->firstOrFail();
@@ -49,6 +51,14 @@ class CustomerImportTest extends TestCase
         $this->assertSame($before,Customer::count());
         $this->send("One,organization,0918555666,,,,,\nTwo,organization,+84 918 555 666,,,,,",true)
             ->assertOk()->assertJsonPath('data.can_import',false)->assertJsonPath('data.imported',0);
+        $this->assertSame($before,Customer::count());
+    }
+    public function test_preview_includes_every_row_not_just_first_twenty(): void
+    {
+        $rows=[];for($i=0;$i<25;$i++)$rows[]='Khách '.$i.',organization,,preview'.$i.'@example.test,,,, ';
+        $before=Customer::count();
+        $response=$this->send(implode("\n",$rows))->assertOk()->assertJsonPath('data.can_import',true)->assertJsonPath('data.preview.24.name','Khách 24');
+        $this->assertCount(25,$response->json('data.preview'));
         $this->assertSame($before,Customer::count());
     }
 

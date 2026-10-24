@@ -24,6 +24,8 @@ $db=Illuminate\Support\Facades\DB::connection('update_trial');
 $db->setPdo($master->getPdo());$db->unprepared('USE ['.$name.']');
 $db->getSchemaBuilder()->create('migrations',function($t){$t->increments('id');$t->string('migration');$t->integer('batch');});
 $db->getSchemaBuilder()->create('service_tickets',function($t){$t->id();$t->string('subject');});
+$db->getSchemaBuilder()->create('customers',function($t){$t->id();$t->string('name');});
+$db->table('customers')->insert(['name'=>'Synthetic existing customer']);
 $db->table('service_tickets')->insert(['subject'=>'Synthetic customer data retained']);
 $service=new App\Support\AdditiveDatabaseUpgrade;$steps=array_keys($service::STEPS);
 $backup=$service->backup($db,'');echo "PASS native backup and VERIFYONLY\n";
@@ -39,6 +41,8 @@ foreach(['import_sources','import_source_users','import_batches'] as $table)if(!
 $db->table('import_sources')->insert(['tenant_id'=>1,'code'=>'TRIAL','name'=>'Synthetic import source','is_active'=>true]);
 if($db->table('import_sources')->value('code')!=='TRIAL')throw new RuntimeException('Import write failed');
 echo "PASS three import tables, writes and full rollback verified\n";
+if(!$db->getSchemaBuilder()->hasTable('import_record_links') || !$db->getSchemaBuilder()->hasColumn('customers','business_segment') || $db->table('customers')->value('name')!=='Synthetic existing customer')throw new RuntimeException('New import upgrade failed');
+echo "PASS record links and customer classification added without replacing customer data\n";
 $files=$master->select('RESTORE FILELISTONLY FROM DISK = '.$quote($backup));
 $paths=$master->selectOne("SELECT CAST(SERVERPROPERTY('InstanceDefaultDataPath') AS nvarchar(4000)) AS data_path, CAST(SERVERPROPERTY('InstanceDefaultLogPath') AS nvarchar(4000)) AS log_path");
 $moves=[];

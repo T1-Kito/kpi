@@ -11,6 +11,8 @@ final class AdditiveDatabaseUpgrade
         '2026_10_20_110000_link_feedback_documents'=>['document_type'=>'string20','document_id'=>'bigint'],
         '2026_10_20_120000_create_ticket_attachments'=>['@new_table'=>'ticket_attachments'],
         '2026_10_22_100000_create_import_batch_tables'=>['@new_table'=>'import_sources','@membership'=>'import_source_users','@batches'=>'import_batches'],
+        '2026_10_22_110000_create_import_record_links'=>['@new_table'=>'import_record_links'],
+        '2026_10_22_120000_add_customer_business_classification'=>['business_segment'=>'string10','customer_group'=>'string100','customer_audience'=>'string150'],
     ];
     public function pending(Connection $db,array $required):array
     {
@@ -22,8 +24,9 @@ final class AdditiveDatabaseUpgrade
         if($pending && !$db->getSchemaBuilder()->hasTable('service_tickets')) throw new \RuntimeException('UPGRADE_BASELINE');
         foreach($pending as $name) foreach(self::STEPS[$name] as $column=>$type) {
             if(str_starts_with($column,'@')) { if($db->getSchemaBuilder()->hasTable($type))throw new \RuntimeException('UPGRADE_SCHEMA_CONFLICT'); }
-            elseif($db->getSchemaBuilder()->hasColumn('service_tickets',$column)) throw new \RuntimeException('UPGRADE_SCHEMA_CONFLICT');
+            elseif($db->getSchemaBuilder()->hasColumn(str_contains($name,'customer_business_classification')?'customers':'service_tickets',$column)) throw new \RuntimeException('UPGRADE_SCHEMA_CONFLICT');
         }
+        if(in_array('2026_10_22_120000_add_customer_business_classification',$pending,true) && !$db->getSchemaBuilder()->hasTable('customers'))throw new \RuntimeException('UPGRADE_BASELINE');
         return $pending;
     }
     public function apply(Connection $db,array $pending,?callable $fault=null):void
@@ -34,10 +37,18 @@ final class AdditiveDatabaseUpgrade
             foreach($pending as $name) {
                 if(isset(self::STEPS[$name]['@batches'])) {
                     self::importSchema($db);
+                } elseif((self::STEPS[$name]['@new_table'] ?? '')==='import_record_links') {
+                    $db->getSchemaBuilder()->create('import_record_links',function($t){
+                        $t->id();$t->unsignedBigInteger('tenant_id');$t->unsignedBigInteger('source_id');
+                        $t->string('catalog',30);$t->string('external_id',100);$t->unsignedBigInteger('record_id');
+                        $t->unsignedInteger('source_revision');$t->string('source_hash',64);$t->string('crm_hash',64);$t->timestamps();
+                        $t->unique(['tenant_id','source_id','catalog','external_id'],'import_links_identity_unique');
+                        $t->unique(['tenant_id','catalog','record_id'],'import_links_record_unique');
+                    });
                 } elseif(isset(self::STEPS[$name]['@new_table'])) {
                     $db->getSchemaBuilder()->create('ticket_attachments',fn($table)=>self::evidenceSchema($table));
                 } else {
-                $db->getSchemaBuilder()->table('service_tickets',function($table)use($name){
+                $db->getSchemaBuilder()->table(str_contains($name,'customer_business_classification')?'customers':'service_tickets',function($table)use($name){
                     foreach(self::STEPS[$name] as $column=>$type) {
                         if($type==='bigint')$table->unsignedBigInteger($column)->nullable();
                         else $table->string($column,(int)substr($type,6))->nullable();

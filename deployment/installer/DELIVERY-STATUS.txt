@@ -1,4 +1,4 @@
-VK CRM 0.7.0 — BẢN KIỂM THỬ, CHƯA PHÊ DUYỆT GIAO KHÁCH
+VK CRM 0.8.9 — BẢN KIỂM THỬ CẬP NHẬT, CHƯA PHÊ DUYỆT GIAO KHÁCH
 
 Chỉ cần chạy Setup.exe. Không cần giao file PDB, mã nguồn dự án hoặc mật khẩu.
 
@@ -7,20 +7,22 @@ Chỉ cần chạy Setup.exe. Không cần giao file PDB, mã nguồn dự án h
 - Bộ chạy kèm theo; không bắt khách chọn PHP/Composer.
 - Kiểm tra checksum, không giải nén đè dữ liệu.
 - SQLite thử: tạo tài khoản quản trị riêng; có VK CRM.exe để mở lại sau cài.
+- Cập nhật tại chỗ: giữ .env, database và tệp người dùng; sao lưu database và chỉ áp dụng bổ sung đã duyệt.
+- Bổ sung 12/16 danh mục nhập theo nguồn, mẫu tiếng Việt và bước kích hoạt người dùng riêng.
 - Khởi động/dừng máy chủ tại localhost:8099. Đóng trình quản lý sẽ dừng máy chủ.
 - SQL Server: kiểm tra kết nối và tiếng Việt bằng SQL/Windows Authentication.
 - Không tự chuyển SQL Server sang SQLite, không ghi mật khẩu vào dòng lệnh.
 
 CÁCH THỬ:
 1. Chạy Setup.exe, chọn thư mục mới hoặc trống, chọn SQLite.
-2. Cài đặt, nhập doanh nghiệp, email và mật khẩu Admin ít nhất 12 ký tự.
+2. Cài đặt, nhập doanh nghiệp, email và mật khẩu Admin ít nhất 8 ký tự.
 3. Bấm tạo dữ liệu, đóng hộp cấu hình khi có thông báo thành công.
 4. Bấm Khởi động; lần sau chạy VK CRM.exe trong thư mục đã cài.
 5. Muốn thử SQL: chọn SQL Server và bấm Kiểm tra kết nối; chưa thể cài bằng SQL Server.
 
 CHƯA ĐƯỢC GIAO NHƯ BẢN CHÍNH THỨC:
 - Chưa thực thi và nghiệm thu toàn bộ tạo bảng/nghiệp vụ/backup-restore SQL Server.
-- Chưa có dịch vụ Windows, HTTPS/LAN, cập nhật hoặc gỡ cài đặt tự động.
+- Chưa có dịch vụ Windows, HTTPS/LAN hoặc gỡ cài đặt tự động.
 - Bộ chạy PHP 8.2.12 cũ chỉ dùng đánh giá cách ly; phải cập nhật trước triển khai thực tế.
 - Chưa mã hóa mã PHP, chưa có license hoặc chữ ký số bộ cài.
 - Chưa nghiệm thu trên Windows sạch. Không dùng dữ liệu khách thật.

@@ -27,7 +27,7 @@ sealed partial class SetupForm
         if(!sqlSetupConsent.Checked&&!sqlTrialEnabled){status.Text="Vui lòng xác nhận cơ sở dữ liệu trước khi thiết lập.";return;}
         var target=Path.GetFullPath(destination.Text.Trim());
         try{
-            if(password.Text.Length<12||!email.Text.Contains('@')||string.IsNullOrWhiteSpace(company.Text))throw new Exception("Nhập doanh nghiệp, email và mật khẩu Admin ít nhất 12 ký tự.");
+            if(password.Text.Length<8||!email.Text.Contains('@')||string.IsNullOrWhiteSpace(company.Text))throw new Exception("Nhập doanh nghiệp, email và mật khẩu Admin ít nhất 8 ký tự.");
             var info=new ProcessStartInfo(Path.Combine(target,"runtime/php.exe")){WorkingDirectory=target,UseShellExecute=false,CreateNoWindow=true,RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true,StandardInputEncoding=new System.Text.UTF8Encoding(false),StandardOutputEncoding=System.Text.Encoding.UTF8,StandardErrorEncoding=System.Text.Encoding.UTF8};
             foreach(var arg in new[]{"-c",Path.Combine(target,"runtime/php.ini"),"-d","extension_dir="+Path.Combine(target,"runtime/ext"),Path.Combine(target,"initialize-sqlserver.php")})info.ArgumentList.Add(arg);
             ProcessText.UseUtf8(info);

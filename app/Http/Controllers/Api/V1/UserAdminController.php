@@ -42,6 +42,8 @@ class UserAdminController extends Controller
         }
 
         $users = $query->latest('id')->paginate($pageSize);
+        $pending=\App\Support\ImportedUserActivation::pendingIds($tenantId);
+        foreach($users->items() as $row)$row->import_pending_activation=!$row->is_active && in_array($row->id,$pending,true);
 
         return response()->json([
             'data' => $users->items(),
@@ -138,6 +140,22 @@ class UserAdminController extends Controller
         });
     }
 
+    public function activateImported(Request $request,User $user):JsonResponse
+    {
+        \App\Support\SystemAccount::protect($user);
+        abort_if($user->tenant_id!==$request->user()->tenant_id,404);
+        abort_unless($request->user()->dataScope()==='company',403,'Kích hoạt tài khoản nhập cần phạm vi toàn công ty.');
+        $data=$request->validate(['password'=>['required','string','min:8','max:128','confirmed']],['required'=>':attribute không được để trống.','string'=>':attribute phải là văn bản.','min'=>'Mật khẩu phải có ít nhất 8 ký tự.','max'=>'Mật khẩu không được quá 128 ký tự.','confirmed'=>'Hai mật khẩu chưa khớp.'],['password'=>'Mật khẩu']);
+        return DB::transaction(function()use($request,$user,$data){
+            Tenant::whereKey($user->tenant_id)->lockForUpdate()->firstOrFail();$user->refresh();
+            abort_unless(!$user->is_active && in_array($user->id,\App\Support\ImportedUserActivation::pendingIds($user->tenant_id),true),422,'Tài khoản không còn chờ kích hoạt từ Excel.');
+            abort_unless($user->roles()->exists(),422,'Cần cấp vai trò cho tài khoản trước khi kích hoạt.');
+            \App\Support\SystemAccount::assertOrdinaryRoles($user->roles()->pluck('roles.id')->all(),$user->tenant_id);
+            $user->update(['password'=>$data['password'],'is_active'=>true]);
+            $this->audit->record('user',$user->id,'activate_imported_user',$request->user(),['is_active'=>false],['is_active'=>true],$request);
+            return response()->json(['data'=>['id'=>$user->id,'is_active'=>true]]);
+        });
+    }
     public function updateStatus(Request $request, User $user): JsonResponse
     {
         \App\Support\SystemAccount::protect($user);
@@ -146,6 +164,7 @@ class UserAdminController extends Controller
         \Illuminate\Support\Facades\DB::table('tenants')->where('id',$user->tenant_id)->lockForUpdate()->first();
         abort_unless(User::whereKey($request->user()->id)->where('is_active',true)->exists(),403);
         $data = $request->validate(['is_active' => ['required', 'boolean']]);
+        abort_if($data['is_active'] && in_array($user->id,\App\Support\ImportedUserActivation::pendingIds($user->tenant_id),true),422,'Tài khoản nhập cần cấp vai trò và thiết lập mật khẩu bằng nút Kích hoạt.');
         abort_if(!$data['is_active'] && $user->id === $request->user()->id, 422, 'Không thể tự khóa tài khoản đang đăng nhập.');
 
         if (!$data['is_active'] && $user->hasPermission('user.manage') && $user->hasPermission('role.manage')) {

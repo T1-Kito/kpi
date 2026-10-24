@@ -35,7 +35,7 @@ document.addEventListener('click', (event) => {
     const scope = event.target.closest('[data-lead-scope]');
     if (scope) { leadState.scope = scope.dataset.leadScope; leadState.page = 1; loadLeads(); return; }
     const page = event.target.closest('[data-lead-page]');
-    if (page) { leadState.page = Number(page.dataset.leadPage); loadLeads(); return; }
+    if (page) { if(page.disabled)return;leadState.page = Number(page.dataset.leadPage); loadLeads(); return; }
     const assign = event.target.closest('[data-assign-lead]');
     if (assign) { event.stopPropagation(); openAssignLeadModal(assign.dataset.assignLead); return; }
     const qualify = event.target.closest('[data-qualify-lead]');
@@ -99,6 +99,16 @@ function renderLeads() {
         table: renderLeadTable(rows),
     }) + `<div class="lead-pagination"><button class="btn small" type="button" data-lead-page="${leadState.page - 1}" ${leadState.page <= 1 ? 'disabled' : ''}>← Trước</button><span>Trang ${leadState.page} / ${Math.max(1, Math.ceil(leadState.total / 20))}</span><button class="btn small" type="button" data-lead-page="${leadState.page + 1}" ${leadState.page * 20 >= leadState.total ? 'disabled' : ''}>Sau →</button></div>`);
     restoreFilters();
+    const root=document.getElementById('leadsRoot');
+    root.querySelector('.lead-workbench')?.classList.add('customer-lead-summary');
+    const list=root.querySelector('.list-page');
+    const pager=root.querySelector('.lead-pagination');
+    if(list && pager){
+        list.classList.add('customer-list-workspace','customer-lead-workspace');
+        const table=list.querySelector('.table-wrap');
+        if(table){const scroll=document.createElement('div');scroll.className='customer-list-scroll';table.before(scroll);scroll.appendChild(table);}
+        pager.className='customer-list-pagination';pager.setAttribute('aria-label','Trang khách hàng tiềm năng');list.appendChild(pager);
+    }
 }
 
 function leadMetric(label, value, note, tone) {
@@ -108,7 +118,7 @@ function leadMetric(label, value, note, tone) {
 function renderLeadTable(rows) {
     const canManage = window.VKLayout?.hasPermission('sales.lead.manage');
     return VKTable.renderTable([
-        { label: 'Mã', render: row => `<span class="mono customer-code-accent">${VKTable.escapeHtml(row.code)}</span>` },
+        { label: 'Mã', render: row => `<span class="customer-list-code">${VKTable.escapeHtml(row.code)}</span>` },
         { label: 'Khách hàng tiềm năng', render: row => renderLeadName(row) },
         { label: 'Số điện thoại', render: row => VKTable.escapeHtml(row.phone || '—') },
         { label: 'Email', render: row => VKTable.escapeHtml(row.email || '—') },
@@ -151,7 +161,7 @@ function restoreFilters() {
 }
 
 function renderLeadName(row) {
-    return `<span class="customer-name-accent">${VKTable.escapeHtml(row.name || '—')}</span>`;
+    return `<div class="customer-list-name"><span class="customer-list-avatar" aria-hidden="true">${VKTable.escapeHtml((row.name || '?').slice(0,1).toUpperCase())}</span><strong>${VKTable.escapeHtml(row.name || '—')}</strong></div>`;
 }
 
 function renderContact(row) {

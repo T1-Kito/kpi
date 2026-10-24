@@ -11,7 +11,7 @@ final class InitialAdministrator
     {
         Validator::make(compact('email','password'),[
             'email'=>'required|email|max:255|unique:users,email',
-            'password'=>'required|string|min:12|max:128',
+            'password'=>'required|string|min:8|max:128',
         ])->validate();
         $role=Role::firstOrCreate(['tenant_id'=>$tenantId,'code'=>'ROLE-ADMIN'],['name'=>'Quản trị hệ thống','data_scope'=>'company']);
         $role->permissions()->sync(Permission::where('code','!=',SystemAccount::PERMISSION)->pluck('id'));

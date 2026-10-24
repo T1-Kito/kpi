@@ -23,6 +23,7 @@ document.addEventListener('click', (event) => {
     if (event.target.matches('[data-update-user-organization]')) openUserOrganizationModal(Number(event.target.dataset.updateUserOrganization));
     if (event.target.matches('[data-sync-user-roles]')) openRoleAssignModal(Number(event.target.dataset.syncUserRoles));
     if (event.target.matches('[data-user-status]')) updateUserStatus(event.target.dataset.userStatus, event.target.dataset.active === '1');
+    if (event.target.matches('[data-activate-imported]')) openImportedActivation(Number(event.target.dataset.activateImported));
     if (event.target.closest('.row-action-menu') && !event.target.closest('[data-user-detail]')) return;
     const detail = event.target.closest('[data-user-detail], tr[data-row-detail]');
     if (detail && (event.target.closest('[data-user-detail]') || !event.target.closest('button'))) openUserDetail(detail.dataset.userDetail || detail.dataset.rowDetail);
@@ -63,7 +64,7 @@ function renderUserTable(rows) {
         { label: 'Người dùng', render: row => renderUser(row) },
         { label: 'Phòng ban', render: row => renderOrg(row) },
         { label: 'Vai trò', render: row => renderRoles(row.roles) },
-        { label: 'Trạng thái', render: row => row.is_active ? '<span class="badge success">Hoạt động</span>' : '<span class="badge inactive">Tạm khóa</span>' },
+        { label: 'Trạng thái', render: row => row.import_pending_activation ? '<span class="badge warning">Chờ kích hoạt</span>' : row.is_active ? '<span class="badge success">Hoạt động</span>' : '<span class="badge inactive">Tạm khóa</span>' },
         { label: '', render: row => renderActions(row) },
     ], rows, 'Chưa có người dùng', { rowAttr: row => `data-row-detail="${row.id}"` });
 }
@@ -99,12 +100,21 @@ function renderRoles(roles = []) {
     return roles.slice(0, 3).map(role => `<span class="badge info" title="${VKTable.escapeHtml(role.code)}">${VKTable.escapeHtml(role.name || VKTable.translateRole(role.code))}</span>`).join(' ');
 }
 
+function openImportedActivation(id) {
+    const user=userState.rows.find(row=>row.id===id);if(!user)return;
+    if(!user.roles?.length){VKModal.toast('Cấp vai trò cho tài khoản trước khi kích hoạt.','warning');return;}
+    VKModal.open('Kích hoạt tài khoản nhập',`<p>Thiết lập mật khẩu riêng cho ${VKTable.escapeHtml(user.name)}. Không gửi mật khẩu trong file Excel.</p>${VKModal.field('password','Mật khẩu (ít nhất 8 ký tự)','password')}${VKModal.field('password_confirmation','Nhập lại mật khẩu','password')}`,async form=>{
+        const values=Object.fromEntries(new FormData(form));
+        await VKApi.request(`/users/${id}/activate-imported`,{method:'POST',body:JSON.stringify({password:values.password,password_confirmation:values.password_confirmation})});
+        VKModal.close();VKModal.toast('Đã kích hoạt tài khoản.','success');await loadUsers();
+    },{submitText:'Kích hoạt'});
+}
 function renderActions(row) {
     return VKTable.rowActions([
         VKTable.smallButton('Tổ chức', `data-update-user-organization="${row.id}"`),
         userState.canHandover ? VKTable.smallButton('Bàn giao', `data-user-handover="${row.id}"`) : '',
         userState.canAssignRoles ? VKTable.smallButton('Vai trò', `data-sync-user-roles="${row.id}"`) : '',
-        VKTable.smallButton(row.is_active ? 'Khóa' : 'Mở', `data-user-status="${row.id}" data-active="${row.is_active ? '0' : '1'}"`, row.is_active ? 'danger' : 'primary'),
+        row.import_pending_activation ? VKTable.smallButton('Kích hoạt',`data-activate-imported="${row.id}"`,'primary') : VKTable.smallButton(row.is_active ? 'Khóa' : 'Mở', `data-user-status="${row.id}" data-active="${row.is_active ? '0' : '1'}"`, row.is_active ? 'danger' : 'primary'),
     ]);
 }
 

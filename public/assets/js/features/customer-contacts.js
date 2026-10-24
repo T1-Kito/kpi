@@ -6,24 +6,24 @@
         if (!root) return;
         const version = ++sequence;
         if (!root.querySelector('[data-contact-search]')) {
-            root.innerHTML = VKTable.fullList({title:'Người liên hệ',subtitle:'Một khách hàng có thể có nhiều đầu mối; liên hệ chính được đánh dấu riêng.',meta:'Đang tải…',filters:`<div class="field"><input data-contact-search placeholder="Tìm tên, điện thoại, email hoặc khách hàng…" value="${esc(query)}"></div>`,table:'<div data-contact-results></div>'}) + '<div data-contact-pagination></div>';
+            root.innerHTML = `<section class="customer-list-workspace"><div class="customer-list-heading"><div><h2>Người liên hệ <span>/ Danh sách</span></h2><span class="list-meta">Đang tải…</span></div></div><div class="customer-list-tools"><input type="search" aria-label="Tìm người liên hệ" data-contact-search placeholder="Tìm tên, điện thoại, email hoặc khách hàng…" value="${esc(query)}"><button type="button" class="btn small" data-contact-retry aria-label="Tải lại danh sách">↻</button></div><div class="customer-list-scroll" data-contact-results></div><nav class="customer-list-pagination" aria-label="Trang người liên hệ" data-contact-pagination></nav></section>`;
         }
         try {
-            const response = await VKApi.request(`/customer-contacts?page=${page}&q=${encodeURIComponent(query)}`);
+            const response = await VKApi.request(`/customer-contacts?page=${page}&q=${encodeURIComponent(query)}`,{cache:false});
             if (version !== sequence || document.getElementById('customerContactsRoot') !== root) return;
             rows = response.data;
             root.querySelector('.list-meta').textContent = `${VKTable.money(response.meta.total)} người liên hệ`;
             root.querySelector('[data-contact-results]').innerHTML = VKTable.renderTable([
-                {label:'Họ tên',render:row => `<span class="customer-name-accent">${esc(row.name) || '—'}</span>`},
+                {label:'Họ tên',render:row => `<div class="customer-list-name"><span class="customer-list-avatar" aria-hidden="true">${esc((row.name || '?').slice(0,1).toUpperCase())}</span><strong>${esc(row.name) || '—'}</strong></div>`},
                 {label:'Loại liên hệ',render:row => row.is_primary ? '<span class="badge success">Liên hệ chính</span>' : 'Thông thường'},
-                {label:'Mã khách hàng',render:row => `<a class="mono customer-code-accent" href="/customers?open=${encodeURIComponent(row.customer_id)}">${esc(row.customer?.code)}</a>`},
+                {label:'Mã khách hàng',render:row => `<a class="customer-list-code" href="/customers?open=${encodeURIComponent(row.customer_id)}">${esc(row.customer?.code)}</a>`},
                 {label:'Tên khách hàng',render:row => `<a class="customer-name-accent" href="/customers?open=${encodeURIComponent(row.customer_id)}">${esc(row.customer?.name)}</a>`},
                 {label:'Chức vụ',render:row => esc(row.position) || '—'},
                 {label:'Điện thoại',render:row => esc(row.phone) || '—'},
                 {label:'Email',render:row => esc(row.email) || '—'},
                 {label:'',render:row => VKLayout.hasPermission('customer.manage') ? `<button class="btn secondary small" data-edit-contact="${row.id}">Chỉnh sửa</button>` : ''}
             ],rows,'Chưa có người liên hệ phù hợp.');
-            root.querySelector('[data-contact-pagination]').innerHTML = `<div class="button-row" style="margin-top:16px"><button class="btn secondary small" data-contact-page="${page-1}" ${page <= 1 ? 'disabled' : ''}>Trước</button><span>Trang ${page} / ${response.meta.last_page}</span><button class="btn secondary small" data-contact-page="${page+1}" ${page >= response.meta.last_page ? 'disabled' : ''}>Sau</button></div>`;
+            root.querySelector('[data-contact-pagination]').innerHTML = `<span>${response.meta.total} người liên hệ</span><div><button class="btn small" data-contact-page="${page-1}" ${page <= 1 ? 'disabled' : ''}>‹ Trước</button><span>Trang ${page} / ${response.meta.last_page}</span><button class="btn small" data-contact-page="${page+1}" ${page >= response.meta.last_page ? 'disabled' : ''}>Sau ›</button></div>`;
         } catch(error) {
             if (version !== sequence || document.getElementById('customerContactsRoot') !== root) return;
             root.querySelector('.list-meta').textContent = 'Không tải được kết quả';

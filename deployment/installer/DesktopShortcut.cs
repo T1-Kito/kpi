@@ -27,9 +27,9 @@ sealed partial class SetupForm
             shell=null;link=null;
             try{
                 shell=Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell")!);link=((dynamic)shell!).CreateShortcut(shortcut);
-                if((string)((dynamic)link).Arguments!="--open"||(string)((dynamic)link).TargetPath!=Path.Combine(install,"VK CRM.exe")||!((string)((dynamic)link).IconLocation).Contains("VK-CRM.ico"))throw new IOException("Incorrect shortcut properties");
+                if((string)((dynamic)link).Arguments!="--open"||(string)((dynamic)link).TargetPath!=Path.Combine(install,"VK CRM.exe")||!((string)((dynamic)link).IconLocation).Contains("VK-CRM-no-black-border.ico"))throw new IOException("Incorrect shortcut properties");
             }finally{if(link is not null)Marshal.FinalReleaseComObject(link);if(shell is not null)Marshal.FinalReleaseComObject(shell);}
-            using var icon=new Icon(Path.Combine(install,"VK-CRM.ico"));
+            using var icon=new Icon(Path.Combine(install,"VK-CRM-no-black-border.ico"));
             if(icon.Width<16||icon.Height<16)throw new IOException("Invalid embedded icon");
         }finally{
             // This exact UUID directory is created above for this test, never a user-selected path.
@@ -43,7 +43,7 @@ sealed partial class SetupForm
         if(!File.Exists(launcher)||!File.Exists(Path.Combine(target,InstalledMarker)))throw new IOException("Ứng dụng chưa được cài đặt đầy đủ.");
         var desktop=desktopOverride??Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
         if(string.IsNullOrWhiteSpace(desktop)||!Directory.Exists(desktop))throw new IOException("Không tìm thấy thư mục Desktop.");
-        var iconPath=Path.Combine(target,"VK-CRM.ico");
+        var iconPath=Path.Combine(target,"VK-CRM-no-black-border.ico");
         using(var resource=Assembly.GetExecutingAssembly().GetManifestResourceStream("VK-CRM.ico")??throw new IOException("Thiếu biểu tượng ứng dụng.")){
             if(!File.Exists(iconPath)){using var icon=new FileStream(iconPath,FileMode.CreateNew);resource.CopyTo(icon);}
             else {using var current=File.OpenRead(iconPath);if(!SHA256.HashData(current).SequenceEqual(SHA256.HashData(resource)))throw new IOException("Biểu tượng hiện có không thuộc bản cài này.");}
@@ -57,7 +57,11 @@ sealed partial class SetupForm
                 link=((dynamic)shell!).CreateShortcut(shortcutPath);
                 if(File.Exists(shortcutPath)){
                     var existingTarget=(string)((dynamic)link).TargetPath;
-                    if(string.Equals(existingTarget,launcher,StringComparison.OrdinalIgnoreCase))return shortcutPath;
+                    if(string.Equals(existingTarget,launcher,StringComparison.OrdinalIgnoreCase)){
+                        ((dynamic)link).IconLocation=iconPath+",0";
+                        ((dynamic)link).Save();
+                        return shortcutPath;
+                    }
                     Marshal.FinalReleaseComObject(link);link=null;continue;
                 }
                 ((dynamic)link).TargetPath=launcher;

@@ -1,5 +1,6 @@
 (function(){
-    const labels={customers:'Khách hàng',contacts:'Người liên hệ',leads:'Khách hàng tiềm năng'};
+    const labels={customers:'Khách hàng · chỉ thêm mới','customers-v1':'Khách hàng · thêm mới và cập nhật',contacts:'Người liên hệ · chỉ thêm mới','contacts-v1':'Người liên hệ · thêm mới và cập nhật',leads:'Khách tiềm năng · mẫu cũ','leads-v1':'Khách tiềm năng · theo nguồn, chỉ thêm mới','categories-v1':'Danh mục sản phẩm · chỉ thêm mới','brands-v1':'Hãng sản phẩm · chỉ thêm mới','skus-v1':'Sản phẩm và mã hàng · thêm mới và cập nhật','suppliers-v1':'Nhà cung cấp · thêm mới và cập nhật','warehouses-v1':'Kho · thêm mới và cập nhật','locations-v1':'Vị trí kho · chỉ thêm mới'};
+    Object.assign(labels,{'positions-v1':'Chức vụ · thêm mới và cập nhật','departments-v1':'Phòng ban · thêm mới và cập nhật','users-v1':'Người dùng · tạo chưa kích hoạt'});
     const statuses={ready:'Đã kiểm tra — chờ xác nhận',invalid:'Có lỗi — chưa nhập',committed:'Đã nhập thành công',expired:'Hết hạn — cần kiểm tra lại'};
     const esc=value=>VKTable.escapeHtml(String(value ?? ''));
     let sources=[],meta={},page=1,generation=0;
@@ -13,6 +14,7 @@
             sources=list.data;meta=list.meta;
             root.innerHTML=`<section class="module-panel"><div class="panel-head"><div><h2>Nhập danh sách theo nguồn</h2><span>Lưu lịch sử và xác nhận đúng lô đã kiểm tra.</span></div><div class="row-actions">${meta.can_manage?'<button type="button" class="btn" data-import-sources>Quản lý nguồn</button>':''}<button type="button" class="btn primary" data-import-new ${meta.catalogs.length?'':'disabled'}>Nhập danh sách</button></div></div><p class="form-note">Hiện hỗ trợ nhập mới khách hàng, người liên hệ và khách tiềm năng · tối đa 300 dòng, 1 MB. Chưa hỗ trợ cập nhật hồ sơ đã có qua nguồn. Chức năng Nhập file cũ vẫn được giữ tại từng danh mục.</p><h3>Lịch sử của bạn</h3><div class="table-wrap"><table class="list-table"><thead><tr><th>Lần nhập</th><th>Danh mục</th><th>File</th><th>Trạng thái</th><th></th></tr></thead><tbody>${batches.data.map(row=>`<tr><td>#${Number(row.id)}</td><td>${esc(labels[row.catalog])}</td><td>${esc(row.original_name)}</td><td>${esc(statuses[row.status] || 'Cần kiểm tra')}</td><td><button type="button" class="btn small" data-import-batch="${Number(row.id)}">Xem kết quả</button></td></tr>`).join('') || '<tr><td colspan="5">Chưa có lần nhập nào.</td></tr>'}</tbody></table></div><nav class="row-actions"><button type="button" class="btn small" data-import-page="${page-1}" ${page<=1?'disabled':''}>Trang trước</button><span>Trang ${page} / ${batches.meta.last_page}</span><button type="button" class="btn small" data-import-page="${page+1}" ${page>=batches.meta.last_page?'disabled':''}>Trang sau</button></nav></section>`;
             root.querySelector('[data-import-new]').onclick=newBatch;
+            root.querySelector('.form-note').textContent='Excel · Tối đa 300 dòng, 1 MB. Chọn mẫu theo danh mục. Khách hàng theo phiên bản chỉ cập nhật hồ sơ đã nhập cùng nguồn.';
             root.querySelector('[data-import-sources]')?.addEventListener('click',sourceList);
             root.querySelectorAll('[data-import-batch]').forEach(button=>button.onclick=()=>openBatch(Number(button.dataset.importBatch)).catch(notify));
             root.querySelectorAll('[data-import-page]').forEach(button=>button.onclick=()=>{page=Number(button.dataset.importPage);load();});
@@ -23,8 +25,8 @@
         const body=document.getElementById('modalBody');body.querySelector('[data-source-new]').onclick=()=>editSource();body.querySelectorAll('[data-source-edit]').forEach(button=>button.onclick=()=>editSource(sources.find(s=>Number(s.id)===Number(button.dataset.sourceEdit))));
     }
     function editSource(source){
-        VKModal.open(source?'Chỉnh sửa nguồn nhập':'Thêm nguồn nhập',`<section class="source-editor-section"><h3>Thông tin nguồn</h3><div class="source-editor-grid"><div class="field"><label for="sourceCode">Mã nguồn</label><input id="sourceCode" name="code" value="${esc(source?.code || '')}" placeholder="VD: WEBSITE" maxlength="50" ${source?'readonly':'required pattern="[A-Za-z0-9_-]+"'}><small>${source?'Mã nguồn được giữ cố định.':'Dùng chữ không dấu, số, dấu - hoặc _.'}</small></div><div class="field"><label for="sourceName">Tên nguồn</label><input id="sourceName" name="name" value="${esc(source?.name || '')}" placeholder="VD: Khách từ website" maxlength="150" required></div></div><label class="source-active-row"><span><strong>Cho phép sử dụng</strong><small>Nguồn đang hoạt động có thể nhận danh sách mới.</small></span><input name="is_active" type="checkbox" ${!source || source.is_active?'checked':''}></label></section><section class="source-editor-section"><div class="source-members-heading"><h3>Người được nhập dữ liệu</h3><span>${(meta.users || []).length} người</span></div><p class="source-editor-note">Chọn người được phép sử dụng nguồn này.</p><div class="source-member-list">${(meta.users || []).map(user=>`<label class="source-member-row"><input type="checkbox" name="members" value="${Number(user.id)}" ${(source?.member_ids || []).map(Number).includes(Number(user.id))?'checked':''}><span class="source-member-avatar" aria-hidden="true">${esc(Array.from(user.name || '?')[0].toUpperCase())}</span><span class="source-member-name">${esc(user.name)}</span></label>`).join('') || '<p class="source-editor-note">Chưa có người dùng đang hoạt động.</p>'}</div></section>`,async form=>{
-            const values=new FormData(form),payload={name:values.get('name'),is_active:values.has('is_active'),member_ids:values.getAll('members').map(Number)};if(!source)payload.code=values.get('code');
+VKModal.open(source?'Chỉnh sửa nguồn nhập':'Thêm nguồn nhập',`<section class="source-editor-section"><h3>Thông tin nguồn</h3><div class="source-editor-grid"><div class="field"><label for="sourceCode">Mã nguồn</label><input id="sourceCode" name="code" value="${esc(source?.code || '')}" placeholder="VD: WEBSITE" maxlength="50" ${source?'readonly':'required pattern="[A-Za-z0-9_-]+"'}><small>${source?'Mã nguồn được giữ cố định.':'Dùng chữ không dấu, số, dấu - hoặc _.'}</small></div><div class="field"><label for="sourceName">Tên nguồn</label><input id="sourceName" name="name" value="${esc(source?.name || '')}" placeholder="VD: Khách từ website" maxlength="150" required></div></div><label class="source-active-row"><span><strong>Cho phép sử dụng</strong><small>Nguồn đang hoạt động có thể nhận danh sách mới.</small></span><input name="is_active" type="checkbox" ${!source || source.is_active?'checked':''}></label></section><p class="form-note">Cấp người sử dụng tại Quản trị → Vai trò và quyền → Quyền nguồn nhập.</p>`,async form=>{
+            const values=new FormData(form),payload={name:values.get('name'),is_active:values.has('is_active')};if(!source)payload.code=values.get('code');
             await VKApi.request('/import-center/sources'+(source?'/'+source.id:''),{method:source?'PUT':'POST',body:JSON.stringify(payload)});VKModal.close();await load();VKModal.toast('Đã lưu nguồn nhập.');
         },{submitText:'Lưu nguồn',className:'source-editor-modal'});
     }
@@ -38,8 +40,11 @@
         },{submitText:'Kiểm tra file'});
         document.querySelector('[data-import-template]').onclick=async()=>{
             const catalog=document.querySelector('#modalBody [name="catalog"]').value;
-            const path=catalog==='customers'?'/customer-import/template':`/directory-import/${catalog}/template`;
-            try{const response=await fetch('/api/v1'+path,{headers:{Authorization:`Bearer ${VKApi.token()}`}});if(!response.ok)throw new Error('Không tải được mẫu hoặc chưa có quyền danh mục.');const url=URL.createObjectURL(await response.blob());const a=document.createElement('a');a.href=url;a.download=`mau-${({customers:'khach-hang',contacts:'nguoi-lien-he',leads:'khach-tiem-nang'})[catalog]}.xlsx`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(error){notify(error);}
+            const product=['categories-v1','brands-v1','skus-v1'].includes(catalog);
+            const procurement=['suppliers-v1','warehouses-v1','locations-v1'].includes(catalog);
+            const organization=['positions-v1','departments-v1','users-v1'].includes(catalog);
+            const path=organization?`/import-center/organization/${catalog.slice(0,-3)}/template`:procurement?`/import-center/procurement/${catalog.slice(0,-3)}/template`:product?`/import-center/products/${catalog.slice(0,-3)}/template`:catalog==='leads-v1'?'/import-center/lead-template':catalog==='contacts-v1'?'/import-center/contact-template':catalog==='customers-v1'?'/import-center/customer-template':catalog==='customers'?'/customer-import/template':`/directory-import/${catalog}/template`;
+            try{const response=await fetch('/api/v1'+path,{cache:'no-store',headers:{Authorization:`Bearer ${VKApi.token()}`}});if(!response.ok)throw new Error('Không tải được mẫu hoặc chưa có quyền danh mục.');const url=URL.createObjectURL(await response.blob());const a=document.createElement('a');a.href=url;a.download=`Mẫu ${labels[catalog].split(' · ')[0]}.xlsx`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(error){notify(error);}
         };
     }
     async function openBatch(id){await showBatch((await VKApi.request('/import-center/batches/'+id,{cache:false})).data);}
@@ -48,12 +53,33 @@
         VKModal.open('Kết quả kiểm tra #'+batch.id,`<p><strong>${esc(labels[batch.catalog])}</strong> · ${esc(batch.original_name)}</p><p>${esc(statuses[batch.status] || 'Cần kiểm tra')}</p><p>Tổng số dòng: ${Number(result.total || 0)} · Đã nhập: ${Number(result.imported || 0)}</p>${(result.errors || []).length?`<p>Chưa nhập dữ liệu. Sửa các dòng sau rồi tải lại file:</p><ul>${result.errors.map(error=>`<li>Dòng ${Number(error.row)}: ${esc(error.message)}</li>`).join('')}</ul>`:''}${ready?`<p class="form-note">Kết quả kiểm tra có hiệu lực 2 giờ. Khi xác nhận, hệ thống kiểm tra lại quyền, nguồn và dữ liệu trùng. Một dòng lỗi sẽ chặn toàn bộ lô.</p><label><input name="confirmed" type="checkbox" value="1" required> Tôi đã kiểm tra và đồng ý nhập toàn bộ danh sách.</label>`:''}`,async form=>{
             if(!form.elements.confirmed.checked)throw new Error('Vui lòng xác nhận đã kiểm tra danh sách.');
             const response=await VKApi.request(`/import-center/batches/${batch.id}/commit`,{method:'POST',body:JSON.stringify({confirmed:true}),timeout:180000});VKModal.close();await load();await showBatch(response.data);
-        },{hideSubmit:!ready,submitText:'Xác nhận nhập'});
+        },{hideSubmit:!ready,submitText:'Xác nhận nhập',className:'import-preview-modal',cancelText:'Đóng'});
         const body=document.getElementById('modalBody');
+        if((result.errors || []).length && body){
+            const download=document.createElement('button');download.type='button';download.className='btn small';download.textContent='Tải danh sách lỗi';
+            download.onclick=async()=>{
+                download.disabled=true;
+                try{
+                    const response=await fetch(`/api/v1/import-center/batches/${Number(batch.id)}/errors`,{headers:{Authorization:`Bearer ${VKApi.token()}`}});
+                    if(!response.ok)throw new Error('Không tải được file lỗi. Hãy kiểm tra quyền và mở lại lô nhập.');
+                    const url=URL.createObjectURL(await response.blob());const link=document.createElement('a');link.href=url;link.download=`loi-nhap-danh-sach-${Number(batch.id)}.xlsx`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+                }catch(error){notify(error);}finally{download.disabled=false;}
+            };body.appendChild(download);
+        }
         if((result.preview || []).length && body) {
             const preview=document.createElement('section');preview.className='table-wrap';
-            preview.innerHTML=`<h3>Kiểm tra nhanh ${result.preview.length} dòng đầu</h3><table class="list-table"><thead><tr><th>Dòng</th><th>Tên khách hàng</th><th>Loại khách</th></tr></thead><tbody>${result.preview.map(row=>`<tr><td>${Number(row.row)}</td><td>${esc(row.name)}</td><td>${esc(({organization:'Doanh nghiệp',person:'Cá nhân'})[row.customer_type] || 'Chưa xác định')}</td></tr>`).join('')}</tbody></table>`;
-            body.appendChild(preview);
+            const isContact=batch.catalog==='contacts-v1';
+            const isLead=batch.catalog==='leads-v1';
+            const fieldLabels={name:isContact?'Tên người liên hệ':'Tên',position:'Chức vụ',customer_id:'Khách hàng',customer_type:'Loại khách',phone:'Điện thoại',email:'Email',tax_code:'Mã số thuế',identity_number:'CCCD',contact_name:'Người liên hệ',address:'Địa chỉ',payment_terms:'Điều khoản thanh toán',manager_id:'Người quản lý',warehouse_id:'Kho',code:'Mã vị trí',status:'Trạng thái'};
+            const actions={create:'Thêm mới',update:'Cập nhật',skip:'Bỏ qua'};
+            preview.innerHTML=`<h3>Danh sách kiểm tra · ${result.preview.length} dòng</h3><table class="list-table"><thead><tr><th>Dòng</th><th>Thao tác</th><th>Mã ngoài</th><th>${isContact?'Tên người liên hệ':'Tên khách hàng'}</th>${isContact?'<th>Khách hàng</th><th>Chức vụ</th>':''}<th>Điện thoại</th><th>Email</th><th>Thay đổi trước → sau</th></tr></thead><tbody>${result.preview.map(row=>`<tr><td>${Number(row.row)}</td><td>${esc(actions[row.action || 'create'] || 'Cần kiểm tra')}</td><td>${esc(row.external_id || '—')}</td><td>${esc(row.name)}</td>${isContact?`<td>${esc(row.customer_code)} · ${esc(row.customer_name)}</td><td>${esc(row.position || '—')}</td>`:''}<td>${esc(row.phone || '—')}</td><td>${esc(row.email || '—')}</td><td>${Object.entries(row.changes || {}).map(([key,value])=>`<div><strong>${esc(fieldLabels[key] || key)}</strong>: ${esc(value.before ?? 'Trống')} → ${esc(value.after ?? 'Trống')}</div>`).join('') || '—'}</td></tr>`).join('')}</tbody></table>`;
+            body.querySelector('[name="confirmed"]')?.closest('label')?.before(preview);
+            if(!body.contains(preview))body.appendChild(preview);
+            if(isLead){
+                const note=document.createElement('p');note.className='form-note';note.textContent='Khách tiềm năng chỉ thêm mới. Người nhập được gán phụ trách; công việc chăm sóc tạo theo luồng hiện hành.';preview.before(note);
+                const details=document.createElement('section');details.className='table-wrap';
+                details.innerHTML=`<table class="list-table"><thead><tr><th>Dòng</th><th>Nguồn</th><th>Mã chiến dịch</th></tr></thead><tbody>${result.preview.map(row=>`<tr><td>${Number(row.row)}</td><td>${esc(row.source || '—')}</td><td>${esc(row.campaign_code || '—')}</td></tr>`).join('')}</tbody></table>`;preview.after(details);
+            }
         }
     }
     document.addEventListener('click',event=>{if(event.target.closest('[data-import-retry]'))load();});

@@ -40,6 +40,7 @@ class AuthenticateJwt
             return response()->json(['error_code' => 'UNAUTHENTICATED', 'message' => 'User is inactive.'], 401);
         }
 
+        $user->snapshotAuthorizationForRequest();
         $request->setUserResolver(fn () => $user);
 
         return $next($request);

@@ -8,11 +8,11 @@ $stage='INPUT';
 $activeMigration=null;
 try {
     $input=json_decode(stream_get_contents(STDIN),true,32,JSON_THROW_ON_ERROR);
-    if(!filter_var($input['operator_email']??'',FILTER_VALIDATE_EMAIL)||strlen($input['operator_password']??'')<12||strcasecmp(trim($input['operator_email']??''),trim($input['email']??''))===0)throw new RuntimeException('Cần email riêng và mật khẩu ít nhất 12 ký tự cho Admin thường.');
+    if(!filter_var($input['operator_email']??'',FILTER_VALIDATE_EMAIL)||strlen($input['operator_password']??'')<8||strcasecmp(trim($input['operator_email']??''),trim($input['email']??''))===0)throw new RuntimeException('Cần email riêng và mật khẩu ít nhất 8 ký tự cho Admin thường.');
     $settings=vkSqlSettings($input);
     $databaseMode=vkDatabaseMode($input);
     if(($input['confirm_empty_trial']??false)!==true)throw new RuntimeException('Trial confirmation required');
-    if(!filter_var($input['email']??'',FILTER_VALIDATE_EMAIL)||strlen($input['password']??'')<12||trim($input['company']??'')==='')throw new RuntimeException('Invalid administrator details');
+    if(!filter_var($input['email']??'',FILTER_VALIDATE_EMAIL)||strlen($input['password']??'')<8||trim($input['company']??'')==='')throw new RuntimeException('Invalid administrator details');
     if(is_file(__DIR__.'/.env')||is_file(__DIR__.'/sql-install-started.json'))throw new RuntimeException('Existing or interrupted installation; will not overwrite');
     foreach(['pdo_sqlsrv','bcmath','mbstring','openssl','fileinfo','zip'] as $extension)if(!extension_loaded($extension))throw new RuntimeException('Required runtime extension missing');
     $dsn='sqlsrv:Server='.$settings['server'].';Database='.$settings['database'].';Encrypt=yes;TrustServerCertificate='.($settings['trust']?'yes':'no').';LoginTimeout=5';

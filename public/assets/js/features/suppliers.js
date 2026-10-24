@@ -34,7 +34,7 @@ async function loadSuppliers(options = {}) {
     if (options.source === 'pjax' && supplierState.rows.length) {
         renderSuppliers();
     }
-    const suppliers = await VKApi.request('/suppliers');
+    const suppliers = await VKApi.request('/suppliers',{cache:false});
     if (document.getElementById('suppliersRoot') !== root) return;
     supplierState.rows = suppliers.data || [];
     renderSuppliers(suppliers.meta.total);

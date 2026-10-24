@@ -16,10 +16,14 @@ internal static class Program
         {
             try{ProcessText.TestRoundTrip(args[1]);return 0;}catch{return 1;}
         }
+        if(args.Length==1&&args[0]=="--version")
+        {
+            Console.WriteLine(typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown");return 0;
+        }
         if(args.Length==1&&args[0]=="--self-test")
         {
             try{using var form=new SetupForm();form.TestWizard();return 0;}
-            catch{return 1;}
+            catch(Exception ex){Console.Error.WriteLine(ex);return 1;}
         }
         Application.Run(new SetupForm(args.Contains("--sql-trial"),args.Contains("--open")));
         return 0;
@@ -38,8 +42,8 @@ sealed partial class SetupForm : Form
     readonly TextBox company = new() { Width=650,PlaceholderText="Tên doanh nghiệp" };
     readonly TextBox email = new() { Width=650,PlaceholderText="Email Admin" };
     readonly TextBox operatorEmail = new() { Width=650,PlaceholderText="Email Admin thường" };
-    readonly TextBox operatorPassword = new() { Width=650,PlaceholderText="Mật khẩu Admin thường riêng, ít nhất 12 ký tự",UseSystemPasswordChar=true };
-    readonly TextBox password = new() { Width=650,PlaceholderText="Mật khẩu Admin riêng, ít nhất 12 ký tự",UseSystemPasswordChar=true };
+    readonly TextBox operatorPassword = new() { Width=650,PlaceholderText="Mật khẩu Admin thường riêng, ít nhất 8 ký tự",UseSystemPasswordChar=true };
+    readonly TextBox password = new() { Width=650,PlaceholderText="Mật khẩu Admin riêng, ít nhất 8 ký tự",UseSystemPasswordChar=true };
     readonly Button initialize = new() { Text="Tạo SQLite UAT riêng",AutoSize=true };
     readonly Button start = new() { Text="Mở CRM thử tại máy này",AutoSize=true };
     readonly Button stop = new() { Text="Dừng CRM thử",AutoSize=true };
@@ -135,8 +139,8 @@ sealed partial class SetupForm : Form
         var fields=new FlowLayoutPanel { Dock=DockStyle.Fill,Padding=new Padding(24),FlowDirection=FlowDirection.TopDown,WrapContents=false,AutoScroll=true };
         void Add(string label,Control field){fields.Controls.Add(new Label{Text=label,AutoSize=true,Margin=new Padding(0,10,0,4)});field.Width=470;fields.Controls.Add(field);}
         if(databaseType.SelectedIndex==0||sqlSetupConsent.Checked||sqlTrialEnabled){
-            Add("Doanh nghiệp",company);Add("Email Chủ tịch",email);Add("Mật khẩu Chủ tịch (tối thiểu 12 ký tự)",password);
-            Add("Email Admin thường",operatorEmail);Add("Mật khẩu Admin thường (tối thiểu 12 ký tự)",operatorPassword);
+            Add("Doanh nghiệp",company);Add("Email Chủ tịch",email);Add("Mật khẩu Chủ tịch (tối thiểu 8 ký tự)",password);
+            Add("Email Admin thường",operatorEmail);Add("Mật khẩu Admin thường (tối thiểu 8 ký tự)",operatorPassword);
             var create=new Button{Text="Hoàn tất thiết lập",AutoSize=true,Margin=new Padding(0,16,0,0)};
             create.Click+=async(_,_)=>{
                 if(configuring)return;
@@ -235,8 +239,8 @@ sealed partial class SetupForm : Form
             var target=Path.GetFullPath(destination.Text.Trim());
             RequireRuntime(target);
             SoftwareUpdate.EnsureReadyToStart(target);
-            if(password.Text.Length<12 || !email.Text.Contains('@') || string.IsNullOrWhiteSpace(company.Text))throw new Exception("Nhập doanh nghiệp, email và mật khẩu ít nhất 12 ký tự.");
-            if(operatorPassword.Text.Length<12 || !operatorEmail.Text.Contains('@') || string.Equals(operatorEmail.Text.Trim(),email.Text.Trim(),StringComparison.OrdinalIgnoreCase))throw new Exception("Nhập email riêng và mật khẩu ít nhất 12 ký tự cho Admin thường.");
+            if(password.Text.Length<8 || !email.Text.Contains('@') || string.IsNullOrWhiteSpace(company.Text))throw new Exception("Nhập doanh nghiệp, email và mật khẩu ít nhất 8 ký tự.");
+            if(operatorPassword.Text.Length<8 || !operatorEmail.Text.Contains('@') || string.Equals(operatorEmail.Text.Trim(),email.Text.Trim(),StringComparison.OrdinalIgnoreCase))throw new Exception("Nhập email riêng và mật khẩu ít nhất 8 ký tự cho Admin thường.");
             if(MessageBox.Show("Tạo cơ sở dữ liệu SQLite mới trên máy tính này? Không ghi đè dữ liệu hiện có.","Xác nhận thiết lập",MessageBoxButtons.YesNo)!=DialogResult.Yes)return;
             var info=new ProcessStartInfo(Path.Combine(target,"runtime","php.exe")){WorkingDirectory=target,UseShellExecute=false,CreateNoWindow=true,RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true};
             info.ArgumentList.Add("-c");info.ArgumentList.Add(Path.Combine(target,"runtime","php.ini"));info.ArgumentList.Add("-d");info.ArgumentList.Add("extension_dir="+Path.Combine(target,"runtime","ext"));info.ArgumentList.Add(Path.Combine(target,"initialize-uat.php"));
@@ -265,6 +269,13 @@ sealed partial class SetupForm : Form
             catch(System.Net.Sockets.SocketException){throw new Exception("Cổng 8099 đang được ứng dụng khác sử dụng. Đóng bản CRM đang chạy rồi thử lại. Không cần tải hoặc cài thêm thành phần.");}
             finally{listener.Stop();}
             var info=new ProcessStartInfo(Path.Combine(target,"runtime","php.exe")){WorkingDirectory=Path.Combine(target,"public"),UseShellExecute=false,CreateNoWindow=true};
+            var opcache=Path.Combine(target,"runtime","ext","php_opcache.dll");
+            if(File.Exists(opcache)){
+                if(!File.ReadAllText(Path.Combine(target,"runtime","php.ini")).Contains("php_opcache.dll",StringComparison.OrdinalIgnoreCase)){
+                    info.ArgumentList.Add("-d");info.ArgumentList.Add("zend_extension="+opcache);
+                }
+                foreach(var setting in new[]{"opcache.enable=1","opcache.enable_cli=1","opcache.validate_timestamps=1","opcache.revalidate_freq=0"}){info.ArgumentList.Add("-d");info.ArgumentList.Add(setting);}
+            }
             foreach(var arg in new[]{"-c",Path.Combine(target,"runtime","php.ini"),"-d","extension_dir="+Path.Combine(target,"runtime","ext"),"-S","127.0.0.1:8099","-t",Path.Combine(target,"public"),Path.Combine(target,"vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php")})info.ArgumentList.Add(arg);
             server=Process.Start(info) ?? throw new Exception("PHP không khởi động được.");
             using var client=new HttpClient { Timeout=TimeSpan.FromSeconds(2) };

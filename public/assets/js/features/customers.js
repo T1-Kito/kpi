@@ -1,6 +1,8 @@
 (function () {
 let customerState = { rows: [], q: '', status: '', customerType: '', view: 'list', currentId: null, detailCache: {} };
 customerState.page = 1;
+customerState.pageSize = 20;
+customerState.extraColumns = false;
 let customerSearchTimer, customerLoadVersion = 0;
 
 document.addEventListener('vk:ready', () => loadCustomers());
@@ -8,6 +10,7 @@ document.addEventListener('input', (event) => {
     if (!document.getElementById('customersRoot')) return;
     if (event.target.matches('[data-list-search]')) {
         customerState.q = event.target.value.toLowerCase();
+        ++customerLoadVersion;
         customerState.page = 1;
         clearTimeout(customerSearchTimer);
         customerSearchTimer = setTimeout(() => loadCustomers(), 300);
@@ -15,6 +18,8 @@ document.addEventListener('input', (event) => {
 });
 document.addEventListener('change', (event) => {
     if (!document.getElementById('customersRoot')) return;
+    if(event.target.matches('[data-customers-size]')){customerState.pageSize=Number(event.target.value);customerState.page=1;loadCustomers();return;}
+    if(event.target.matches('[data-customers-extra]')){customerState.extraColumns=event.target.checked;renderCustomers();return;}
     if (event.target.matches('[data-customer-type-filter]')) {
         customerState.customerType = event.target.value;
         customerState.page = 1;
@@ -30,7 +35,8 @@ document.addEventListener('change', (event) => {
 document.addEventListener('click', (event) => {
     if (!document.getElementById('customersRoot')) return;
     const pageButton = event.target.closest('[data-customers-page]');
-    if (pageButton) { customerState.page = Number(pageButton.dataset.customersPage); loadCustomers(); return; }
+    if (pageButton) { if(pageButton.disabled)return; customerState.page = Number(pageButton.dataset.customersPage); loadCustomers(); return; }
+    if(event.target.closest('[data-customers-refresh]')){loadCustomers();return;}
     const care = event.target.closest('[data-customer-care]');
     if (care) { event.stopPropagation(); openCustomerCare(Number(care.dataset.customerCare)); return; }
     if (event.target.matches('[data-create-customer]')) openCustomerModal();
@@ -76,6 +82,7 @@ document.addEventListener('click', (event) => {
     if (event.target.matches('[data-edit-customer]')) {
         event.stopPropagation();
         openCustomerModal(Number(event.target.dataset.editCustomer));
+        return;
     }
     if (event.target.closest('.row-action-menu') && !event.target.closest('[data-customer-detail]')) return;
     const detail = event.target.closest('[data-customer-detail], tr[data-row-detail]');
@@ -84,25 +91,26 @@ document.addEventListener('click', (event) => {
 
 async function downloadCustomerImportTemplate() {
     try {
-        const response = await fetch('/api/v1/customer-import/template', {headers:{Authorization:`Bearer ${VKApi.token()}`}});
+        const response = await fetch('/api/v1/import-center/customer-template?v=20261023-vietnamese', {cache:'no-store',headers:{Authorization:`Bearer ${VKApi.token()}`}});
         if (!response.ok) throw new Error('Không tải được mẫu hoặc bạn không có quyền nhập khách hàng.');
         const url = URL.createObjectURL(await response.blob());
-        const link = document.createElement('a'); link.href=url; link.download='mau-khach-hang.xlsx'; link.click();
+        const link = document.createElement('a'); link.href=url; link.download='Mẫu khách hàng.xlsx'; link.click();
         setTimeout(()=>URL.revokeObjectURL(url),1000);
     } catch (error) { VKModal.toast(error.message,'danger'); }
 }
 
 function openCustomerImport() {
     let checkedFile = null;
+    let checkedBatch = null;
     VKModal.open('Nhập khách hàng', `
         <div class="customer-import-template"><span>Chuẩn bị danh sách theo mẫu.</span><button type="button" class="btn" data-customer-import-template>Tải mẫu</button></div>
-        <label class="field customer-import-file">Chọn danh sách<input name="customer_import_file" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" aria-describedby="customerImportLimit" required></label>
-        <p class="customer-import-hint" id="customerImportLimit">Excel hoặc CSV · Tối đa 300 khách · 1 MB</p>
+        <label class="field customer-import-file">Chọn danh sách<input name="customer_import_file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="customerImportLimit" required></label>
+        <p class="customer-import-hint" id="customerImportLimit">Excel .xlsx · Tối đa 300 khách · 1 MB</p>
         <details class="customer-import-guide">
             <summary>Hướng dẫn nhập file</summary>
-            <p>Tải mẫu Excel, điền từ dòng 5 và giữ nguyên hàng tiêu đề. Chọn loại khách: Doanh nghiệp hoặc Cá nhân.</p>
+            <p>Điền trang Danh sách từ dòng 2, giữ nguyên các cột. Chọn loại khách Doanh nghiệp hoặc Cá nhân.</p>
             <p>Giữ điện thoại, MST và CCCD ở dạng văn bản để không mất số 0 đầu. Lưu .xlsx và nhập trực tiếp, không cần đổi sang CSV.</p>
-            <p>Khách mới được giao cho bạn phụ trách; không ghi đè khách có sẵn. File CSV cũ vẫn được hỗ trợ.</p>
+            <p>Giữ Mã ngoài để nhận đúng khách khi cập nhật. Phần mềm tự xử lý phiên bản, nhân viên không cần nhập. Người phụ trách điền email nhân viên; ô trống khi cập nhật giữ nguyên.</p>
         </details>
         <div data-customer-import-result role="status" aria-live="polite"></div>
     `, async form => {
@@ -110,22 +118,25 @@ function openCustomerImport() {
         if (!file) throw new Error('Vui lòng chọn file Excel hoặc CSV.');
         const confirm = checkedFile === file;
         const body = new FormData(); body.append('file',file); body.append('confirm',confirm ? '1' : '0');
-        const result = (await VKApi.request('/customer-import',{method:'POST',body,timeout:180000})).data;
+        const response = (await VKApi.request(confirm && checkedBatch?`/import-center/batches/${checkedBatch}/commit`:'/import-center/customer-preview',confirm && checkedBatch?{method:'POST',body:JSON.stringify({confirmed:true}),timeout:180000}:{method:'POST',body,timeout:180000})).data;
+        const result=response.result;
+        checkedBatch=response.id;
         const target = form.querySelector('[data-customer-import-result]');
-        if (result.imported > 0) {
+        if (response.status==='committed') {
             VKModal.close(); customerState.page=1; await loadCustomers();
-            VKModal.toast(`Đã nhập ${result.imported} khách hàng.`); return;
+            VKModal.toast(`Đã xử lý ${result.imported} khách hàng · Bỏ qua ${result.skipped || 0} dòng đã nhập.`); return;
         }
         checkedFile = result.can_import ? file : null;
         const escape = VKTable.escapeHtml;
         target.innerHTML = result.errors.length
             ? `<p>Chưa nhập khách nào. Sửa các dòng sau rồi kiểm tra lại:</p><ul>${result.errors.map(error=>`<li>Dòng ${Number(error.row)}: ${escape(error.message)}</li>`).join('')}</ul>`
-            : `<p>${Number(result.total)} khách hợp lệ. Bấm “Xác nhận nhập” để lưu.</p><ul>${result.preview.map(row=>`<li>Dòng ${Number(row.row)}: ${escape(row.name)}</li>`).join('')}</ul>`;
+            : `<p>${Number(result.total)} dòng hợp lệ. Xem thay đổi rồi bấm “Xác nhận nhập”.</p><div class="table-wrap"><table class="list-table"><thead><tr><th>Dòng</th><th>Mã ngoài</th><th>Thao tác</th><th>Khách hàng</th><th>Thay đổi</th></tr></thead><tbody>${result.preview.map(row=>`<tr><td>${Number(row.row)}</td><td>${escape(row.external_id || '')}</td><td>${({create:'Thêm mới',update:'Cập nhật',skip:'Bỏ qua'})[row.action] || 'Kiểm tra'}</td><td>${escape(row.name)}</td><td>${Object.entries(row.changes || {}).map(([field,value])=>`${escape(({name:'Tên',phone:'Điện thoại',email:'Email',address:'Địa chỉ',billing_address:'Địa chỉ hóa đơn',legal_representative:'Người đại diện',representative_position:'Chức vụ',credit_limit:'Hạn mức',status:'Trạng thái',sales_owner_ref:'Phụ trách'})[field] || field)}: ${escape(String(value.before ?? 'Trống'))} → ${escape(String(value.after ?? 'Trống'))}`).join('<br>') || '—'}</td></tr>`).join('')}</tbody></table></div>`;
         document.getElementById('modalSubmit').textContent = checkedFile ? 'Xác nhận nhập' : 'Kiểm tra file';
     }, {submitText:'Kiểm tra file',className:'customer-import-modal'});
     const input = document.querySelector('#modalForm [name="customer_import_file"]');
     input.addEventListener('change',()=>{
         checkedFile=null;
+        checkedBatch=null;
         document.getElementById('modalSubmit').textContent='Kiểm tra file';
         document.querySelector('[data-customer-import-result]').textContent='File đã đổi. Hãy kiểm tra lại trước khi nhập.';
     });
@@ -139,7 +150,7 @@ async function loadCustomers(options = {}) {
     }
     const version = ++customerLoadVersion;
     const focused = document.activeElement?.matches('[data-list-search]');
-    const params = new URLSearchParams({page_size:20,page:customerState.page,q:customerState.q,status:customerState.status,customer_type:customerState.customerType});
+    const params = new URLSearchParams({page_size:customerState.pageSize,page:customerState.page,q:customerState.q,status:customerState.status,customer_type:customerState.customerType});
     const customers = await VKApi.request(`/customers?${params}`, {cache:false});
     if (version !== customerLoadVersion || !document.getElementById('customersRoot')) return;
     const careBucket=new URLSearchParams(window.location.search).get('care');
@@ -169,22 +180,24 @@ async function loadCustomers(options = {}) {
 
 function renderCustomers(total = customerState.meta?.total || 0) {
     const rows = customerState.rows;
-    document.getElementById('customersRoot').innerHTML = VKTable.fullList({
-        title: 'Danh sách khách hàng',
-        subtitle: 'Dữ liệu dùng cho khách hàng tiềm năng, báo giá, đơn bán và công nợ.',
-        meta: `${VKTable.money(rows.length)} / ${VKTable.money(total)} khách hàng`,
-        filters: VKTable.filterBar({
-            searchPlaceholder: 'Tìm mã, tên, số điện thoại, email...',
-            extra: '<select data-customer-type-filter aria-label="Lọc loại khách hàng"><option value="">Tất cả loại khách hàng</option><option value="person">Cá nhân / khách lẻ</option><option value="organization">Tổ chức / doanh nghiệp</option></select>',
-            status: [
-                { value: 'active', label: 'Hoạt động' },
-                { value: 'inactive', label: 'Không hoạt động' },
-            ],
-        }),
-        table: renderCustomerTable(rows),
-    });
+    const page=Number(customerState.meta?.page || 1),last=Number(customerState.meta?.last_page || 1);
+    const start=total?(page-1)*customerState.pageSize+1:0,end=total?start+rows.length-1:0;
+    const pages=[...new Set([1,...Array.from({length:5},(_,i)=>page+i-2).filter(n=>n>1&&n<last),last])].sort((a,b)=>a-b);
+    const buttons=pages.map((n,i)=>`${i&&n>pages[i-1]+1?'<span class="customer-page-gap">…</span>':''}<button type="button" class="btn small ${n===page?'primary':''}" data-customers-page="${n}" ${n===page?'aria-current="page"':''}>${n}</button>`).join('');
+    document.getElementById('customersRoot').innerHTML = `<section class="customer-list-workspace" aria-label="Danh sách khách hàng">
+        <div class="customer-list-heading"><div><h2>Khách hàng <span>/ Danh sách</span></h2><span class="customer-list-count">${Number(total)} khách hàng</span></div></div>
+        <div class="customer-list-tools">
+            <select data-customer-type-filter aria-label="Lọc loại khách hàng"><option value="">Loại khách hàng</option><option value="person">Cá nhân</option><option value="organization">Doanh nghiệp</option></select>
+            <select data-list-status aria-label="Lọc trạng thái"><option value="">Trạng thái</option><option value="active">Hoạt động</option><option value="inactive">Ngừng hoạt động</option></select>
+            <input type="search" data-list-search placeholder="Tìm tên, mã, điện thoại, email…" aria-label="Tìm khách hàng">
+            <button type="button" class="btn small" data-customers-refresh title="Tải lại danh sách" aria-label="Tải lại danh sách">↻</button>
+            <label class="customer-columns-toggle"><input type="checkbox" data-customers-extra ${customerState.extraColumns?'checked':''}> Cột bổ sung</label>
+            ${window.VKLayout?.hasPermission('customer.manage')?'<button class="btn small" type="button" data-import-customers>Nhập file</button><button class="btn primary small" type="button" data-create-customer>＋ Thêm khách hàng</button>':''}
+        </div>
+        <div class="customer-list-scroll">${renderCustomerTable(rows)}</div>
+        <nav class="customer-list-pagination" aria-label="Trang khách hàng"><span>Hiển thị <strong>${start}–${end}</strong> / ${Number(total)} khách hàng</span><div><label>Số dòng <select data-customers-size aria-label="Số dòng mỗi trang">${[20,50,100].map(n=>`<option value="${n}" ${n===customerState.pageSize?'selected':''}>${n}</option>`).join('')}</select></label><button type="button" class="btn small" aria-label="Trang trước" data-customers-page="${page-1}" ${page<=1?'disabled':''}>‹</button>${buttons}<button type="button" class="btn small" aria-label="Trang sau" data-customers-page="${page+1}" ${page>=last?'disabled':''}>›</button></div></nav>
+    </section>`;
     restoreFilters();
-    document.getElementById('customersRoot').insertAdjacentHTML('beforeend', `<nav class="panel" aria-label="Trang khách hàng" style="display:flex;gap:12px;align-items:center;padding:12px"><button type="button" class="btn small" data-customers-page="${customerState.page-1}" ${customerState.page<=1?'disabled':''}>Trang trước</button><span>Trang ${customerState.meta?.page || 1} / ${customerState.meta?.last_page || 1} · ${total} khách hàng</span><button type="button" class="btn small" data-customers-page="${customerState.page+1}" ${customerState.page>=(customerState.meta?.last_page || 1)?'disabled':''}>Trang sau</button></nav>`);
 }
 
 async function loadCustomerDuplicates() {
@@ -240,20 +253,25 @@ function openDuplicateReviewModal(id, action) {
 
 function renderCustomerTable(rows) {
     return VKTable.renderTable([
-        { label: 'Mã', render: row => `<span class="mono customer-code-accent">${VKTable.escapeHtml(row.code)}</span>` },
-        { label: 'Tên khách hàng', render: row => `<span class="customer-name-accent">${VKTable.escapeHtml(row.name || '—')}</span>` },
-        { label: 'Mã số thuế', render: row => VKTable.escapeHtml(row.tax_code || '—') },
-        { label: 'Số CCCD', render: row => VKTable.escapeHtml(row.identity_number || '—') },
+        { label: 'Mã KH', render: row => `<span class="customer-list-code">${VKTable.escapeHtml(row.code)}</span>` },
+        { label: 'Tổ chức / Tên khách hàng', render: row => `<div class="customer-list-name"><span class="customer-list-avatar" aria-hidden="true">${VKTable.escapeHtml((row.name || '?').trim().slice(0,1).toUpperCase())}</span><strong title="${VKTable.escapeHtml(row.name || '')}">${VKTable.escapeHtml(row.name || '—')}</strong></div>` },
+        { label: 'Loại khách', render: row => `<span class="customer-type-chip ${row.customer_type==='person'?'person':'organization'}">${row.customer_type==='person'?'Cá nhân':'Doanh nghiệp'}</span>` },
         { label: 'Người liên hệ', render: row => VKTable.escapeHtml(row.contact_name || '—') },
         { label: 'Số điện thoại', render: row => VKTable.escapeHtml(row.phone || '—') },
-        { label: 'Hạn mức', render: row => VKTable.money(row.credit_limit) },
+        { label: 'Email', render: row => VKTable.escapeHtml(row.email || '—') },
+        { label: 'Địa chỉ', render: row => `<span class="customer-list-address" title="${VKTable.escapeHtml(row.address || '')}">${VKTable.escapeHtml(row.address || '—')}</span>` },
         { label: 'Phụ trách', render: row => VKTable.escapeHtml(row.sales_owner?.name || 'Chưa gán') },
-        { label: 'Trạng thái', render: row => VKTable.statusBadge(row.status) },
-        { label: '', render: row => VKTable.rowActions([
+        ...(customerState.extraColumns?[
+            {label:'Mã số thuế',render:row=>VKTable.escapeHtml(row.tax_code || '—')},
+            {label:'Số CCCD',render:row=>VKTable.escapeHtml(row.identity_number || '—')},
+            {label:'Hạn mức',render:row=>VKTable.money(row.credit_limit)},
+            {label:'Trạng thái',render:row=>VKTable.statusBadge(row.status)},
+        ]:[]),
+        { label: 'Thao tác', render: row => `<div class="customer-list-actions">${[
             VKTable.smallButton('Mở', `data-customer-detail="${row.id}"`),
             VKTable.smallButton('Chăm sóc', `data-customer-care="${row.id}"`),
-            VKTable.smallButton('Sửa', `data-edit-customer="${row.id}"`),
-        ]) },
+            ...(window.VKLayout?.hasPermission('customer.manage')?[VKTable.smallButton('Sửa', `data-edit-customer="${row.id}"`)]:[]),
+        ].join('')}</div>` },
     ], rows, 'Chưa có khách hàng', { rowAttr: row => `data-row-detail="${row.id}"` });
 }
 
@@ -297,12 +315,19 @@ async function openCustomerModal(id = null, readOnly = false, asPage = false) {
                     </div>
                     ${customerField('phone', 'Số điện thoại', 'text', row?.phone || '', 'SDT')}
                     ${customerField('email', 'Email', 'email', row?.email || '', '@')}
-                    ${customerSelect('status', 'Trạng thái', [
-                        { value: 'active', label: 'Hoạt động' },
-                        { value: 'inactive', label: 'Không hoạt động' },
-                    ], row?.status || 'active', 'TT')}
                     ${customerField('address', 'Địa chỉ liên hệ', 'text', row?.address || '', 'DC', true)}
                 </div>
+            </section>
+            <section class="quick-customer-section">
+                <h4>Phân nhóm khách hàng</h4>
+                <div class="quick-customer-grid">
+                    ${customerSelect('customer_group','Nhóm khách hàng (không bắt buộc)',[
+                        {value:'',label:'Chưa phân loại'},
+                        ...['Gia đình','Trường học','Doanh nghiệp','Đại lý/Đối tác','Khác'].map(value=>({value,label:value})),
+                        ...((row?.customer_group && !['Gia đình','Trường học','Doanh nghiệp','Đại lý/Đối tác','Khác'].includes(row.customer_group))?[{value:row.customer_group,label:row.customer_group}]:[]),
+                    ],row?.customer_group || '', 'KH')}
+                </div>
+                <p class="form-note">Phân nhóm phục vụ tư vấn và báo cáo, không thay đổi loại hồ sơ Cá nhân / Tổ chức.</p>
             </section>
             <section class="quick-customer-section" data-customer-invoice-section>
                 <h4><span aria-hidden="true">${customerFormIcon('document')}</span><span data-customer-invoice-title>Thông tin xuất hóa đơn</span></h4>
@@ -402,6 +427,24 @@ async function openCustomerModal(id = null, readOnly = false, asPage = false) {
     };
     typeSelect?.addEventListener('change', syncIdentityField);
     syncIdentityField();
+    {
+        const body=document.getElementById('modalBody');
+        body.querySelectorAll('.customer-form-sections > .quick-customer-section').forEach(section=>{section.hidden=false;});
+        const group=body.querySelector('[name="customer_group"]')?.closest('.field');
+        const groupSection=group?.closest('.quick-customer-section');
+        const mainGrid=body.querySelector('.quick-customer-section:first-child .quick-customer-grid');
+        if(group && groupSection && mainGrid){
+            const address=mainGrid.querySelector('[name="address"]')?.closest('.field');
+            mainGrid.insertBefore(group,address || null);
+            groupSection.remove();
+        }
+        if(!readOnly){
+        VKModal.mountPage(document.getElementById('customersRoot'));
+        document.querySelector('.customer-editor-page')?.scrollIntoView({block:'start',behavior:'instant'});
+        document.querySelector('.customer-editor-page [data-modal-close]')?.addEventListener('click',()=>loadCustomers());
+        document.querySelector('.customer-editor-page .modal-foot [data-modal-close]')?.addEventListener('click',()=>loadCustomers());
+        }
+    }
     if (readOnly) {
         const body = document.getElementById('modalBody');
         body.querySelectorAll('input, select').forEach(input => {
@@ -412,16 +455,14 @@ async function openCustomerModal(id = null, readOnly = false, asPage = false) {
         body.querySelector('[data-customer-detail-edit]').onclick = () => openCustomerModal(Number(id));
         body.querySelector('[data-customer-transactions]').onclick = () => openCustomerTransactions(id);
         if (asPage) {
-            const page = document.createElement('section');
-            page.className = 'customer-form-modal customer-detail-page';
-            page.innerHTML = '<div class="customer-detail-body"></div>';
-            const content = page.querySelector('.customer-detail-body');
-            while (body.firstChild) content.appendChild(body.firstChild);
-            const actions = content.querySelector('.customer-detail-actions');
-            actions.insertAdjacentHTML('afterbegin', '<button type="button" class="btn small" data-customer360-back>← Danh sách khách hàng</button>');
-            content.querySelector('.quick-customer-section h4').appendChild(actions);
-            VKModal.close();
-            document.getElementById('customersRoot').replaceChildren(page);
+            const actions=body.querySelector('.customer-detail-actions');
+            actions.classList.add('customer-page-view-actions');
+            VKModal.mountPage(document.getElementById('customersRoot'));
+            const page=document.querySelector('.customer-editor-page');
+            page.classList.add('customer-view-page');
+            page.querySelector('.quick-customer-section:first-child h4').appendChild(actions);
+            page.scrollIntoView({block:'start',behavior:'instant'});
+            page.querySelector('.modal-foot [data-modal-close]')?.addEventListener('click',()=>loadCustomers());
             customerState.view = 'detail';
         }
     }
@@ -521,8 +562,18 @@ async function openCustomerTransactions(id) {
             <section class="customer-transactions-section"><h3>Người liên hệ <small>${(customer.contacts || []).length} người</small></h3>
             ${(customer.contacts || []).length ? `<div class="customer-transactions-table"><table><thead><tr><th>Họ tên</th><th>Chức vụ</th><th>Điện thoại</th><th>Email</th></tr></thead><tbody>${customer.contacts.map(contact => `<tr><td>${VKTable.escapeHtml(contact.name)}${contact.is_primary ? ' <small>· Liên hệ chính</small>' : ''}</td><td>${VKTable.escapeHtml(contact.position || '-')}</td><td>${VKTable.escapeHtml(contact.phone || '-')}</td><td>${VKTable.escapeHtml(contact.email || '-')}</td></tr>`).join('')}</tbody></table></div>` : '<p class="customer-transactions-empty">Chưa có người liên hệ.</p>'}</section>
         `, null, {className:'customer-transactions-modal',hideSubmit:true,cancelText:'Đóng'});
+        // Keep transactions in the page, not a second overlay over the inline form.
+        const body=document.getElementById('modalBody');
+        const back=document.createElement('button');back.type='button';back.className='btn small';back.textContent='← Hồ sơ khách hàng';
+        const returnToProfile=()=>{VKModal.close();openCustomerDetail(id).catch(error=>{renderCustomers();VKModal.toast(error.message,'danger');});};
+        back.onclick=returnToProfile;body.prepend(back);
+        VKModal.mountPage(document.getElementById('customersRoot'));
+        document.querySelector('.customer-editor-page')?.scrollIntoView({block:'start',behavior:'instant'});
+        const close=document.querySelector('.customer-editor-page .modal-foot [data-modal-close]');
+        close?.addEventListener('click',()=>{openCustomerDetail(id).catch(error=>{renderCustomers();VKModal.toast(error.message,'danger');});});
     } catch (error) {
         VKModal.toast(error.message || 'Không tải được giao dịch khách hàng.', 'danger');
+        if(!document.getElementById('customersRoot')?.textContent.trim())renderCustomers();
     }
 }
 

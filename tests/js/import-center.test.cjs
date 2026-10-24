@@ -28,3 +28,25 @@ test('invalid and expired batches cannot offer a confirmation button',async()=>{
         assert.equal(state.modal.options.hideSubmit,true);assert.doesNotMatch(state.modal.html,/<script>/);assert.match(state.modal.html,/Dòng 5/);
     }
 });
+test('versioned preview shows translated actions and escaped before after values',async()=>{
+    const state=setup();const children=[];
+    const body={appendChild:node=>children.push(node),contains:node=>children.includes(node),querySelector:()=>null};
+    state.context.document.getElementById=()=>body;state.context.document.createElement=()=>({});
+    await state.context.window.testBatch({id:1,catalog:'customers-v1',status:'ready',expires_at:'2099-01-01T00:00:00Z',result:{total:1,preview:[{row:2,action:'update',external_id:'EXT-1',name:'Tên mới',changes:{name:{before:'<img src=x>',after:'<script>bad</script>'}}}]}});
+    const html=children[0].innerHTML;
+    assert.match(html,/Cập nhật/);assert.match(html,/EXT-1/);assert.match(html,/&lt;img/);assert.match(html,/&lt;script/);assert.doesNotMatch(html,/<img|<script>/);
+});
+test('invalid batch offers an Excel error download without enabling commit',async()=>{
+    const state=setup();const children=[];
+    state.context.document.getElementById=()=>({appendChild:node=>children.push(node)});
+    state.context.document.createElement=()=>({});
+    await state.context.window.testBatch({id:5,catalog:'customers-v1',status:'invalid',result:{errors:[{row:2,message:'Thiếu tên'}]}});
+    assert.equal(children[0].textContent,'Tải danh sách lỗi');assert.equal(children[0].type,'button');assert.equal(state.modal.options.hideSubmit,true);
+});
+test('contact preview identifies parent customer and translates position changes',async()=>{
+    const state=setup(),children=[];
+    const body={appendChild:node=>children.push(node),contains:node=>children.includes(node),querySelector:()=>null};
+    state.context.document.getElementById=()=>body;state.context.document.createElement=()=>({});
+    await state.context.window.testBatch({id:2,catalog:'contacts-v1',status:'ready',expires_at:'2099-01-01T00:00:00Z',result:{preview:[{row:2,action:'update',name:'Người liên hệ',customer_code:'CUS-001',customer_name:'<Khách>',position:'Mới',changes:{position:{before:'Cũ',after:'Mới'}}}]}});
+    const html=children[0].innerHTML;assert.match(html,/Tên người liên hệ/);assert.match(html,/CUS-001/);assert.match(html,/&lt;Khách&gt;/);assert.match(html,/Chức vụ/);assert.doesNotMatch(html,/<Khách>/);
+});

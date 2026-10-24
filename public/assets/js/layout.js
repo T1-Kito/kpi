@@ -34,9 +34,9 @@
     };
 
     const features = {
-        'import-center':['import-center.js?v=20261022-3','loadImportCenter'],
+        'import-center':['import-center.js?v=20261023-organization1','loadImportCenter'],
         dashboard: ['dashboard.js?v=20261014-kpilink1', 'loadDashboard'],
-        leads: ['leads.js?v=20261016-replay1', 'loadLeads'],
+        leads: ['leads.js?v=20261023-list-audit2', 'loadLeads'],
         deals: ['deals.js?v=20261016-policy1', 'loadDeals'],
         'sales-master-data': ['sales-master-data.js?v=20260923-1', 'loadSalesMasterData'],
         contracts: ['contracts.js?v=20260923-6', 'loadContracts'],
@@ -46,15 +46,15 @@
         'sales-invoices': ['sales-fulfillment.js?v=20261019-safety1', 'loadSalesInvoices'],
         'customer-receivables': ['customer-receivables.js?v=20260617-1', 'loadCustomerReceivables'],
         'customer-payments': ['sales-fulfillment.js?v=20261019-safety1', 'loadCustomerPayments'],
-        customers: ['customers.js?v=20261016-pages1', 'loadCustomers'],
-        'customer-contacts': ['customer-contacts.js?v=20261009-1', 'loadCustomerContacts'],
-        suppliers: ['suppliers.js?v=20261008-menu1', 'loadSuppliers'],
+        customers: ['customers.js?v=20261023-list-audit3', 'loadCustomers'],
+        'customer-contacts': ['customer-contacts.js?v=20261023-list-audit2', 'loadCustomerContacts'],
+        suppliers: ['suppliers.js?v=20261023-procurement1', 'loadSuppliers'],
         skus: ['skus.js?v=20261016-cost1', 'loadSkus'],
-        'product-categories': ['product-catalog.js?v=20260921-1', 'loadProductCatalog'],
-        'product-brands': ['product-catalog.js?v=20260921-1', 'loadProductCatalog'],
+        'product-categories': ['product-catalog.js?v=20261023-products1', 'loadProductCatalog'],
+        'product-brands': ['product-catalog.js?v=20261023-products1', 'loadProductCatalog'],
         inventory: ['inventory.js?v=20260615-3', 'loadInventory'],
         'inventory-transactions': ['inventory.js?v=20260615-3', 'loadInventory'],
-        warehouses: ['warehouses.js', 'loadWarehouses'],
+        warehouses: ['warehouses.js?v=20261023-procurement1', 'loadWarehouses'],
         'purchase-requests': ['purchase-requests.js?v=20261013-quick2', 'loadPurchaseRequests'],
         'supplier-quotations': ['supplier-quotations.js?v=20261013-modal2', 'loadSupplierQuotations'],
         'purchase-orders': ['purchase-orders.js?v=20261009-workflow1', 'loadPurchaseOrders'],
@@ -71,7 +71,7 @@
         'kpi-adjustments': ['kpi-adjustments.js?v=20261019-safety1', 'loadKpiAdjustments'],
         'kpi-settings': ['kpi-settings.js?v=20261013-fields2', 'loadKpiSettings'],
         workflows: ['workflows.js?v=20260618-2', 'loadWorkflows'],
-        users: ['users.js?v=20261016-handover1', 'loadUsers'],
+        users: ['users.js?v=20261023-organization1', 'loadUsers'],
         roles: ['roles.js?v=20261008-1', 'loadRoles'],
         organization: ['organization.js?v=20261011-master1', 'loadOrganization'],
         'print-templates': ['print-templates.js?v=20261010-workspace2', 'loadPrintTemplates'],
@@ -155,6 +155,7 @@
     let booted = false;
     let pjaxBusy = false;
     const pageCache = new Map();
+    const pageRequests = new Map();
     const prefetchingPages = new Set();
 
     function hasPermission(code) {
@@ -291,18 +292,9 @@
             }
         });
 
-        document.querySelectorAll('[data-module-card]').forEach((card) => {
-            const section = document.querySelector(`[data-module-section="${card.dataset.moduleCard}"]`);
-            const firstLink = section?.querySelector('a[href]');
-            if (!firstLink) {
-                card.remove();
-                return;
-            }
-            card.href = firstLink.href;
-        });
-
         setActiveUrl(window.location.pathname);
         applySidebarIcons();
+        document.querySelector('[data-app-switcher]')?.dispatchEvent(new CustomEvent('vk:apps:refresh'));
     }
 
     function bindAppSwitcher() {
@@ -313,35 +305,117 @@
         if (!root || !trigger || !panel || trigger.dataset.bound === '1') return;
         trigger.dataset.bound = '1';
 
-        const close = () => {
+        const all = root.querySelector('[data-app-all]');
+        const pinned = root.querySelector('[data-app-pinned]');
+        const pinnedSection = root.querySelector('[data-app-pinned-section]');
+        const status = root.querySelector('[data-app-status]');
+        const hint = 'Nhấn ngôi sao để ghim ứng dụng thường dùng.';
+        const storageKey = () => window.VKUser?.id
+            ? `vk.apps.pins.v1.${window.VKUser.tenant_id || window.VKUser.tenant?.id || 'current'}.${window.VKUser.id}` : null;
+        const tiles = () => Array.from(all.querySelectorAll('[data-app-tile]')).filter(tile => tile.querySelector('a'));
+        const readPins = () => {
+            const saved = storageKey() ? readJson(storageKey()) : null;
+            const defaults = ['customers', 'quotations', 'sales-orders', 'inventory', 'service-tickets', 'tasks'];
+            const available = new Set(tiles().map(tile => tile.dataset.appKey));
+            return [...new Set(Array.isArray(saved) ? saved : defaults)].filter(key => available.has(key)).slice(0, 6);
+        };
+        const filter = () => {
+            const keyword = normalizeAppSearch(search?.value || '');
+            const available = tiles();
+            let count = 0;
+            available.forEach(tile => {
+                tile.hidden = keyword !== '' && !normalizeAppSearch(tile.dataset.appSearch).includes(keyword);
+                if (!tile.hidden) count++;
+            });
+            pinnedSection.hidden = keyword !== '' || !pinned.children.length;
+            root.querySelector('[data-app-count]').textContent = keyword ? `(${count}/${available.length})` : `(${available.length})`;
+            root.querySelector('[data-app-empty]').hidden = count > 0;
+        };
+        const refresh = () => {
+            // Remove wrappers as well as forbidden links, including stale pinned copies.
+            all.querySelectorAll('[data-app-tile]').forEach(tile => {
+                if (!tile.querySelector('a')) tile.remove();
+            });
+            const keys = readPins();
+            tiles().forEach(tile => {
+                const button = tile.querySelector('[data-app-pin]');
+                const selected = keys.includes(tile.dataset.appKey);
+                const label = tile.querySelector('strong').textContent;
+                button.setAttribute('aria-pressed', String(selected));
+                button.setAttribute('aria-label', `${selected ? 'Bỏ ghim' : 'Ghim'} ${label}`);
+                button.title = button.getAttribute('aria-label');
+            });
+            pinned.replaceChildren();
+            keys.forEach(key => {
+                const tile = tiles().find(item => item.dataset.appKey === key);
+                const copy = tile.cloneNode(true);
+                copy.hidden = false;
+                pinned.append(copy);
+            });
+            root.querySelector('[data-app-pinned-count]').textContent = `(${keys.length}/6)`;
+            trigger.disabled = !window.VKUser;
+            filter();
+        };
+        const close = (restoreFocus = false) => {
             panel.hidden = true;
             trigger.setAttribute('aria-expanded', 'false');
             if (search) search.value = '';
-            root.querySelectorAll('[data-module-card]').forEach(card => card.hidden = false);
+            filter();
+            if (restoreFocus) trigger.focus();
         };
         const open = () => {
+            refresh();
+            status.textContent = hint;
             panel.hidden = false;
             trigger.setAttribute('aria-expanded', 'true');
+            root.querySelector('.app-switcher-scroll').scrollTop = 0;
             window.setTimeout(() => search?.focus(), 0);
         };
 
         trigger.addEventListener('click', (event) => {
             event.stopPropagation();
-            panel.hidden ? open() : close();
+            panel.hidden ? open() : close(true);
         });
-        root.querySelector('[data-app-switcher-close]')?.addEventListener('click', close);
+        root.querySelector('[data-app-switcher-close]')?.addEventListener('click', () => close(true));
+        root.addEventListener('vk:apps:refresh', refresh);
+        root.addEventListener('vk:apps:close', () => close());
+        root.addEventListener('click', event => {
+            const button = event.target.closest('[data-app-pin]');
+            if (button) {
+                const key = button.dataset.appPin;
+                const selected = readPins();
+                const removing = selected.includes(key);
+                if (!removing && selected.length >= 6) {
+                    status.textContent = 'Đã ghim đủ 6 ứng dụng. Bỏ ghim một mục để chọn mục khác.';
+                    return;
+                }
+                const next = removing ? selected.filter(item => item !== key) : [...selected, key];
+                if (storageKey()) writeJson(storageKey(), next);
+                refresh();
+                // A pinned copy is rebuilt above; restore keyboard focus to its live counterpart.
+                if (!button.isConnected) all.querySelector(`[data-app-pin="${key}"]`)?.focus();
+                status.textContent = `${removing ? 'Đã bỏ ghim' : 'Đã ghim'} ${all.querySelector(`[data-app-key="${key}"] strong`)?.textContent || 'ứng dụng'}.`;
+            } else if (event.target.closest('[data-module-card]')) {
+                close();
+            }
+        });
         search?.addEventListener('input', () => {
-            const keyword = search.value.trim().toLocaleLowerCase('vi');
-            root.querySelectorAll('[data-module-card]').forEach((card) => {
-                card.hidden = keyword !== '' && !String(card.dataset.moduleSearch || '').includes(keyword);
-            });
+            status.textContent = hint;
+            filter();
         });
         document.addEventListener('click', (event) => {
             if (!root.contains(event.target)) close();
         });
         document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape') close();
+            if (event.key === 'Escape' && !panel.hidden) { event.preventDefault(); close(true); }
         });
+        root.addEventListener('focusout', event => {
+            if (event.relatedTarget && !root.contains(event.relatedTarget)) close();
+        });
+    }
+
+    function normalizeAppSearch(value) {
+        return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase().trim();
     }
 
     function bindSidebar() {
@@ -474,6 +548,7 @@
 
         pjaxBusy = true;
         document.body.classList.add('pjax-loading');
+        document.querySelector('[data-pjax-content]')?.setAttribute('aria-busy','true');
         closeTransientUi();
         setActiveUrl(target.pathname);
 
@@ -494,12 +569,14 @@
         } finally {
             pjaxBusy = false;
             document.body.classList.remove('pjax-loading');
+            document.querySelector('[data-pjax-content]')?.setAttribute('aria-busy','false');
         }
     }
 
     async function fetchPageHtml(href) {
         if (pageCache.has(href)) return pageCache.get(href);
-
+        if(pageRequests.has(href))return pageRequests.get(href);
+        const pending=(async()=>{
         const response = await fetch(href, {
             headers: {
                 'Accept': 'text/html',
@@ -511,6 +588,9 @@
         const html = await response.text();
         rememberPage(href, html);
         return html;
+        })();
+        pageRequests.set(href,pending);
+        try{return await pending;}finally{if(pageRequests.get(href)===pending)pageRequests.delete(href);}
     }
 
     function rememberPage(href, html) {
@@ -592,6 +672,7 @@
     }
 
     function closeTransientUi() {
+        document.querySelector('[data-app-switcher]')?.dispatchEvent(new CustomEvent('vk:apps:close'));
         if (window.VKModal?.close) window.VKModal.close();
         if (window.VKDetailDrawer?.close) window.VKDetailDrawer.close();
     }
@@ -616,7 +697,10 @@
             section.hidden = false;
         });
         document.querySelectorAll('[data-module-card]').forEach((card) => {
-            card.classList.toggle('active', card.dataset.moduleCard === module);
+            const active = normalizePath(new URL(card.href, window.location.origin).pathname) === normalizePath(pathname);
+            card.classList.toggle('active', active);
+            if (active) card.setAttribute('aria-current', 'page');
+            else card.removeAttribute('aria-current');
         });
         document.querySelectorAll('[data-current-module-label]').forEach((node) => {
             node.textContent = moduleLabels[module] || 'Công việc';

@@ -19,8 +19,11 @@ class CustomerImportWorkbook
         $labels ??= self::LABELS;
         $aliases=[];
         foreach ($labels as $key=>$label) { $aliases[mb_strtolower($label)]=$key; $aliases[$key]=$key; }
+        if(array_key_exists('customer_ref',$labels))$aliases['mã khách hàng']='customer_ref';
+        foreach(['phiên bản mẫu (điền 1)'=>'schema_version','mã khách trong danh sách'=>'external_id','lần cập nhật (bắt đầu 1)'=>'source_revision'] as $label=>$key)if(array_key_exists($key,$labels))$aliases[$label]=$key;
         $headers=array_map(fn($value)=>$aliases[mb_strtolower(trim(ltrim((string)$value,"\xEF\xBB\xBF")))] ?? trim((string)$value),$values);
-        if (!in_array(array_key_first($labels),$headers,true) || count(array_unique($headers))!==count($headers) || array_diff($headers,array_keys($labels))) {
+        $first=array_key_first($labels);$required=$first==='schema_version' && !in_array('schema_version',$headers,true)?'external_id':$first;
+        if (!in_array($required,$headers,true) || count(array_unique($headers))!==count($headers) || array_diff($headers,array_keys($labels))) {
             self::fail('Tiêu đề không đúng mẫu hoặc có cột trùng. Hãy tải file mẫu mới.');
         }
         return $headers;
@@ -103,7 +106,8 @@ class CustomerImportWorkbook
                     $values=array_replace(array_fill(0,max(array_keys($cells))+1,''),$cells);
                     $labels=array_map(fn($value)=>mb_strtolower($value),$values);
                     $spec=$this->importLabels ?? self::LABELS;
-                    $looksLikeHeader=in_array(mb_strtolower(reset($spec)),$labels,true) || in_array(array_key_first($spec),$labels,true);
+                    $looksLikeHeader=in_array(mb_strtolower(reset($spec)),$labels,true) || in_array(array_key_first($spec),$labels,true) || (array_key_first($spec)==='schema_version' && in_array('phiên bản mẫu (điền 1)',$labels,true));
+                    if(array_key_first($spec)==='schema_version' && (in_array('mã ngoài',$labels,true) || in_array('external_id',$labels,true)))$looksLikeHeader=true;
                     if (!$looksLikeHeader) continue;
                     $header=self::header($values,$spec); continue;
                 }
