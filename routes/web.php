@@ -52,6 +52,7 @@ Route::get('/customer-receivables', CustomerReceivableController::class)->name('
 Route::get('/customer-payments', CustomerPaymentController::class)->name('customer-payments.index');
 Route::get('/contracts', ContractController::class)->name('contracts.index');
 Route::get('/customers', CustomerController::class)->name('customers.index');
+Route::view('/customer-groups', 'pages.customer-groups.index')->name('customer-groups.index');
 Route::get('/suppliers', SupplierController::class)->name('suppliers.index');
 Route::get('/skus', SkuController::class)->name('skus.index');
 Route::get('/product-categories', [ProductCatalogController::class, 'categories'])->name('product-categories.index');

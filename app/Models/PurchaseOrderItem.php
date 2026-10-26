@@ -13,6 +13,6 @@ class PurchaseOrderItem extends Model
 
     public function sku(): BelongsTo
     {
-        return $this->belongsTo(Sku::class);
+        return $this->belongsTo(Sku::class)->withoutGlobalScope('catalog_visibility');
     }
 }

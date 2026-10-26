@@ -16,6 +16,9 @@ class DataScope
         ?string $departmentColumn = null,
         ?string $warehouseRelation = null,
     ): Builder {
+        if ($query->getModel() instanceof \App\Models\Customer || $query->getModel() instanceof \App\Models\Sku) {
+            return CatalogAccess::visible($query, $user);
+        }
         return match ($user->dataScope()) {
             'company' => $query,
             'department' => self::department($query, $user, $ownerColumn, $ownerRelation, $departmentColumn),

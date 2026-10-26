@@ -21,7 +21,7 @@ class ServiceDeskApiTest extends TestCase
         $this->assertNotContains($customer->id,array_column($rows,'id'));
         $this->withToken($token)->postJson('/api/v1/service-tickets',['customer_id'=>$customer->id,'subject'=>'Ngoài phạm vi','category'=>'support','priority'=>'normal'])->assertNotFound();
         $this->assertDatabaseMissing('service_tickets',['subject'=>'Ngoài phạm vi']);
-        $customer->update(['sales_owner_id'=>$sales->id]);
+        $customer->update(['sales_owner_id'=>$sales->id,'is_shared'=>true]);
         $this->withToken($token)->postJson('/api/v1/service-tickets',['customer_id'=>$customer->id,'subject'=>'Trong phạm vi','category'=>'support','priority'=>'normal'])->assertCreated();
     }
 

@@ -14,5 +14,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/customers.js?v=20261023-list-audit3"></script>
+<script src="/assets/js/features/customers.js?v=20261025-groups3"></script>
 @endpush

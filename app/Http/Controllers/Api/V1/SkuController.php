@@ -51,6 +51,7 @@ class SkuController extends Controller
         abort_if($request->has('cost_price') && ! $request->user()->hasPermission('master.cost.view'), 403, 'Bạn chưa được cấp quyền giá vốn.');
         $tenantId = $request->user()->tenant_id;
         $data = $request->validate([
+            'is_shared' => ['sometimes', 'boolean'],
             'product_code' => ['nullable', 'string', 'max:100', Rule::unique('products', 'code')->where('tenant_id', $tenantId)],
             'sku_code' => ['nullable', 'string', 'max:100', Rule::unique('skus', 'sku_code')->where('tenant_id', $tenantId)],
             'product_name' => ['nullable', 'string', 'max:255'], 'category_id' => ['nullable', Rule::exists('product_categories', 'id')->where('tenant_id', $tenantId)], 'brand_id' => ['nullable', Rule::exists('product_brands', 'id')->where('tenant_id', $tenantId)],
@@ -83,6 +84,8 @@ class SkuController extends Controller
         ]);
 
         $sku = Sku::create([
+            'created_by' => $request->user()->id,
+            'is_shared' => $data['is_shared'] ?? false,
             'tenant_id' => $tenantId,
             'product_id' => $product?->id,
             'sku_code' => $data['sku_code'] ?? $this->codes->next('skus', 'sku_code', 'SKU-', fn ($query) => $query->where('tenant_id', $tenantId)),
@@ -106,16 +109,20 @@ class SkuController extends Controller
     public function show(Request $request, Sku $sku): JsonResponse
     {
         abort_if($sku->tenant_id !== $request->user()->tenant_id, 404);
+        \App\Support\CatalogAccess::authorize($sku, $request->user());
 
         return response()->json(['data' => $sku->load(['product.category:id,name', 'product.brand:id,name'])]);
     }
 
     public function update(Request $request, Sku $sku): JsonResponse
     {
+        \App\Support\CatalogAccess::authorize($sku, $request->user());
+        if ($request->has('is_shared')) abort_unless(\App\Support\CatalogAccess::mayShare($sku, $request->user()), 403, 'Chỉ người tạo, Admin hoặc Chủ tịch được thay đổi dùng chung.');
         abort_if($request->has('cost_price') && ! $request->user()->hasPermission('master.cost.view'), 403, 'Bạn chưa được cấp quyền giá vốn.');
         abort_if($sku->tenant_id !== $request->user()->tenant_id, 404);
         $tenantId = $request->user()->tenant_id;
         $data = $request->validate([
+            'is_shared' => ['sometimes', 'boolean'],
             'product_code' => ['nullable', 'string', 'max:100', Rule::unique('products', 'code')->where('tenant_id', $tenantId)->ignore($sku->product_id)],
             'sku_code' => ['nullable', 'string', 'max:100', Rule::unique('skus', 'sku_code')->where('tenant_id', $tenantId)->ignore($sku->id)],
             'product_name' => ['nullable', 'string', 'max:255'], 'category_id' => ['nullable', Rule::exists('product_categories', 'id')->where('tenant_id', $tenantId)], 'brand_id' => ['nullable', Rule::exists('product_brands', 'id')->where('tenant_id', $tenantId)],
@@ -150,6 +157,7 @@ class SkuController extends Controller
 
         $old = $sku->toArray();
         $sku->update([
+            'is_shared' => $data['is_shared'] ?? $sku->is_shared,
             'sku_code' => $data['sku_code'] ?? $sku->sku_code,
             'product_id' => $product?->id,
             'name' => $data['name'],

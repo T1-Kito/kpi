@@ -45,7 +45,7 @@ class SalesOrder extends Model
 
     public function customer(): BelongsTo
     {
-        return $this->belongsTo(Customer::class);
+        return $this->belongsTo(Customer::class)->withoutGlobalScope('catalog_visibility');
     }
 
     public function quotation(): BelongsTo

@@ -18,7 +18,7 @@ class ServiceTicket extends Model
     public function getResponseSlaAttribute(): array { return \App\Support\TicketDeadline::describe($this, 'response'); }
     public function getResolutionSlaAttribute(): array { return \App\Support\TicketDeadline::describe($this, 'resolution'); }
     protected function casts(): array { return ['document_id'=>'integer','first_responded_at' => 'datetime', 'response_due_at' => 'datetime', 'resolution_due_at' => 'datetime', 'resolved_at' => 'datetime', 'satisfaction_score' => 'integer']; }
-    public function customer(): BelongsTo { return $this->belongsTo(Customer::class); }
+    public function customer(): BelongsTo { return $this->belongsTo(Customer::class)->withoutGlobalScope('catalog_visibility'); }
     public function assignee(): BelongsTo { return $this->belongsTo(User::class, 'assignee_id'); }
     public function worklogs(): HasMany { return $this->hasMany(TicketWorklog::class); }
     public function slaEvents(): HasMany { return $this->worklogs()->whereIn('action',['sla_policy','sla_paused','sla_resumed']); }

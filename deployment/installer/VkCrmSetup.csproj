@@ -8,7 +8,9 @@
     <Nullable>enable</Nullable>
     <AssemblyName>Setup</AssemblyName>
     <ApplicationIcon>VK-CRM.ico</ApplicationIcon>
-    <Version>0.8.9</Version>
+    <Version>0.8.10</Version>
+    <SourcePackagePath Condition="'$(SourcePackagePath)' == ''">../../storage/app/private/release-packages/vk-crm-uat-source-20261026-010008-a4da4e.zip</SourcePackagePath>
+    <PortablePayloadPath Condition="'$(PortablePayloadPath)' == ''">../../storage/app/private/portable-payload-0.8.10.zip</PortablePayloadPath>
     <DebugType>None</DebugType>
     <DebugSymbols>false</DebugSymbols>
     <PublishSingleFile>true</PublishSingleFile>
@@ -27,7 +29,7 @@
     <EmbeddedResource Include="../../VK-Logo.png" LogicalName="VK-Logo.png" />
     <EmbeddedResource Include="initialize-uat.php" LogicalName="initialize-uat.php" />
     <EmbeddedResource Include="portable.sha256" LogicalName="portable.sha256" />
-    <EmbeddedResource Include="../../storage/app/private/portable-payload-0.8.9.1.zip" LogicalName="portable.zip" />
-    <EmbeddedResource Include="../../storage/app/private/release-packages/vk-crm-uat-source-20261023-092330-ad0a8d.zip" LogicalName="crm.zip" />
+    <EmbeddedResource Include="$(PortablePayloadPath)" LogicalName="portable.zip" />
+    <EmbeddedResource Include="$(SourcePackagePath)" LogicalName="crm.zip" />
   </ItemGroup>
 </Project>

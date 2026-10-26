@@ -71,6 +71,15 @@ class CustomerController extends Controller
             $query->where('status', $status);
         }
 
+        if ($groupId = $request->query('customer_group_id')) {
+            $ids = [(int)$groupId];
+            $groups = \App\Models\CustomerGroup::where('tenant_id', $request->user()->tenant_id)->get();
+            for ($depth = 0; $depth < 2; $depth++) {
+                foreach ($groups as $group) if (in_array((int)$group->parent_id, $ids, true)) $ids[] = (int)$group->id;
+            }
+            $query->whereIn('customer_group_id', array_unique($ids));
+        }
+
         $customers = $query->latest('id')->paginate($pageSize);
 
         return response()->json([
@@ -88,6 +97,7 @@ class CustomerController extends Controller
     {
         $tenantId = $request->user()->tenant_id;
         $data = $request->validate([
+            'is_shared' => ['sometimes', 'boolean'],
             'name' => ['required', 'string', 'max:255'],
             'customer_type' => ['nullable', Rule::in(['person', 'organization'])],
             'tax_code' => ['nullable', 'string', 'max:30'],
@@ -108,10 +118,11 @@ class CustomerController extends Controller
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
         ]);
         $data += $this->classification($request);
+        $data['created_by'] = $request->user()->id;
         $data = $this->normalizeTypeSpecificFields($data);
         $data = $this->validateOwner($request, $data, true);
         $data['tax_code'] = $this->normalizeTaxCode($data['tax_code'] ?? null);
-        if ($data['tax_code'] && Customer::where('tenant_id', $tenantId)->where('tax_code', $data['tax_code'])->exists()) {
+        if ($data['tax_code'] && Customer::withoutGlobalScope('catalog_visibility')->where('tenant_id', $tenantId)->where('tax_code', $data['tax_code'])->exists()) {
             return response()->json(['message' => 'Mã số thuế đã thuộc một khách hàng trong hệ thống.'], 409);
         }
 
@@ -131,6 +142,7 @@ class CustomerController extends Controller
     {
         $tenantId = $request->user()->tenant_id;
         $data = $request->validate([
+            'is_shared' => ['sometimes', 'boolean'],
             'name' => ['required', 'string', 'max:255'],
             'customer_type' => ['nullable', Rule::in(['person', 'organization'])],
             'tax_code' => ['nullable', 'string', 'max:30'],
@@ -152,7 +164,7 @@ class CustomerController extends Controller
         $taxCode = $this->normalizeTaxCode($data['tax_code'] ?? null);
         $phone = preg_replace('/\s+/', '', trim($data['phone']));
         if ($taxCode) {
-            $existingByTax = Customer::query()
+            $existingByTax = Customer::withoutGlobalScope('catalog_visibility')
                 ->where('tenant_id', $tenantId)
                 ->whereNull('merged_into_id')
                 ->where('tax_code', $taxCode)
@@ -168,7 +180,7 @@ class CustomerController extends Controller
             }
         }
 
-        $existing = Customer::query()
+        $existing = Customer::withoutGlobalScope('catalog_visibility')
             ->where('tenant_id', $tenantId)
             ->whereNull('merged_into_id')
             ->whereRaw("REPLACE(phone, ' ', '') = ?", [$phone])
@@ -185,6 +197,7 @@ class CustomerController extends Controller
 
         $customer = Customer::create([
             ...$data,
+            'created_by' => $request->user()->id,
             'tax_code' => $taxCode,
             'phone' => $phone,
             'tenant_id' => $tenantId,
@@ -211,7 +224,7 @@ class CustomerController extends Controller
         $taxCode = $this->normalizeTaxCode($taxCode);
         abort_if(! $taxCode, 422, 'Mã số thuế không hợp lệ.');
 
-        $customer = Customer::query()
+        $customer = Customer::withoutGlobalScope('catalog_visibility')
             ->where('tenant_id', $request->user()->tenant_id)
             ->where('tax_code', $taxCode)
             ->first();
@@ -343,9 +356,11 @@ class CustomerController extends Controller
     public function update(Request $request, Customer $customer): JsonResponse
     {
         $this->authorizeCustomer($request, $customer);
+        if ($request->has('is_shared')) abort_unless(\App\Support\CatalogAccess::mayShare($customer, $request->user()), 403, 'Chỉ người tạo, Admin hoặc Chủ tịch được thay đổi dùng chung.');
         abort_if($customer->merged_into_id, 409, 'Hồ sơ đã gộp, vui lòng sửa hồ sơ được giữ lại.');
         $tenantId = $request->user()->tenant_id;
         $data = $request->validate([
+            'is_shared' => ['sometimes', 'boolean'],
             'primary_contact_id' => ['nullable', 'integer', Rule::exists('customer_contacts', 'id')->where('customer_id', $customer->id)],
             'name' => ['required', 'string', 'max:255'],
             'customer_type' => ['nullable', Rule::in(['person', 'organization'])],
@@ -370,7 +385,7 @@ class CustomerController extends Controller
             'sales_owner_id' => ['nullable', Rule::exists('users', 'id')->where('tenant_id', $tenantId)],
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
         ]);
-        $data += $this->classification($request);
+        $data += $this->classification($request, $customer);
         $data = $this->normalizeTypeSpecificFields($data);
         $data = $this->validateOwner($request, $data);
         $data['tax_code'] = $this->normalizeTaxCode($data['tax_code'] ?? null);
@@ -393,7 +408,7 @@ class CustomerController extends Controller
     private function assertDuplicateVisible(Request $request, Customer $customer): void
     {
         abort_unless(DataScope::owned(Customer::whereKey($customer->id), $request->user(), 'sales_owner_id', 'salesOwner')->exists(), 409,
-            'Khách hàng đã tồn tại và do nhân sự khác phụ trách. Vui lòng liên hệ quản lý để được phân công.');
+            'Khách hàng đã tồn tại ngoài phạm vi được phép xem. Vui lòng liên hệ quản trị để kiểm tra.');
     }
 
     private function validateOwner(Request $request, array $data, bool $creating = false): array
@@ -413,13 +428,28 @@ class CustomerController extends Controller
         return $data;
     }
 
-    private function classification(Request $request):array
+    private function classification(Request $request, ?Customer $existing = null):array
     {
-        return $request->validate([
+        $data = $request->validate([
+            'customer_group_id'=>['sometimes','nullable','integer'],
             'business_segment'=>['sometimes','nullable',Rule::in(['B2C','B2B','B2B2C'])],
             'customer_group'=>['sometimes','nullable','string','max:100'],
             'customer_audience'=>['sometimes','nullable','string','max:150'],
         ]);
+        if (array_key_exists('customer_group_id', $data) && $data['customer_group_id']) {
+            $groups = \App\Models\CustomerGroup::where('tenant_id', $request->user()->tenant_id)->get()->keyBy('id');
+            $cursor = $data['customer_group_id']; $seen = [];
+            $routeCustomer = $request->route('customer');
+            $existing ??= $routeCustomer instanceof Customer ? $routeCustomer : Customer::find($routeCustomer);
+            while ($cursor) {
+                $group = $groups[$cursor] ?? null;
+                if (!$group || isset($seen[$cursor]) || count($seen) >= 3 || (!$group->is_active && (int)$existing?->customer_group_id !== (int)$data['customer_group_id'])) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['customer_group_id'=>'Nhóm khách hàng không hợp lệ hoặc đã ngừng sử dụng.']);
+                }
+                $seen[$cursor] = true; $cursor = $group->parent_id;
+            }
+        }
+        return $data;
     }
     private function normalizeTaxCode(?string $taxCode): ?string
     {

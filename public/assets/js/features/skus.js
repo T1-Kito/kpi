@@ -33,7 +33,7 @@ document.addEventListener('click', (event) => {
 
 async function loadSkus() {
     if (!document.getElementById('skusRoot')) return;
-    const [skus, categories, brands] = await Promise.all([VKApi.request('/skus'), VKApi.request('/product-categories'), VKApi.request('/product-brands')]);
+    const [skus, categories, brands] = await Promise.all([VKApi.request('/skus', {cache:false}), VKApi.request('/product-categories'), VKApi.request('/product-brands')]);
     skuState.rows = skus.data || [];
     skuState.categories = categories.data || [];
     skuState.brands = brands.data || [];
@@ -68,6 +68,7 @@ function renderSkuTable(rows) {
         { label: 'Giá bán', render: row => VKTable.money(row.sale_price) },
         { label: 'Tồn min/max', render: row => `${VKTable.money(row.min_stock)} / ${VKTable.money(row.max_stock)}` },
         { label: 'Trạng thái', render: row => VKTable.statusBadge(row.status) },
+        { label: 'Dùng chung', render: row => VKCatalogSharing.button(row, 'skus') },
         { label: '', render: row => VKTable.rowActions([
             VKTable.smallButton('Mở', `data-sku-detail="${row.id}"`),
             VKTable.smallButton('Sửa', `data-edit-sku="${row.id}"`),
@@ -113,6 +114,7 @@ ${VKModal.field('product_name', 'Tên sản phẩm', 'text', row?.product?.name 
             <div class="field"><label for="technical_specs">Thông số kỹ thuật</label><textarea id="technical_specs" name="technical_specs" rows="4" placeholder="Màn hình: 10 inch&#10;Kết nối: Wi-Fi, LAN&#10;Bảo hành: 12 tháng">${VKTable.escapeHtml((row?.product?.technical_specs || []).map(item => `${item.name}: ${item.value}`).join('\n'))}</textarea><small>Mỗi dòng một thông số, theo dạng “Tên: Giá trị”.</small></div>
         </div></div>
         <div class="product-form-step active">
+            ${VKCatalogSharing.field(row || {})}
             <div class="sku-stock-price-grid">
             ${VKModal.field('serial_number', 'Số serial', 'text', row?.serial_number || '')}
             ${VKModal.field('unit', 'Đơn vị tính', 'text', row?.unit || 'pcs')}
@@ -128,6 +130,7 @@ ${VKModal.field('product_name', 'Tên sản phẩm', 'text', row?.product?.name 
         </div>
     `, async (form) => {
         const data = new FormData(form);
+        if (form.elements.is_shared && !form.elements.is_shared.disabled) data.set('is_shared', form.elements.is_shared.checked ? '1' : '0');
         ['cost_price', 'sale_price'].forEach(name => { if (data.has(name)) data.set(name, String(parseSkuMoney(data.get(name)))); });
         if (id) data.append('_method', 'PUT');
         await VKApi.request(id ? `/skus/${id}` : '/skus', {

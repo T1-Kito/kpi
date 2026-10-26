@@ -42,7 +42,11 @@ class AuthenticateJwt
 
         $user->snapshotAuthorizationForRequest();
         $request->setUserResolver(fn () => $user);
-
-        return $next($request);
+        $request->attributes->set('catalog_actor', $user);
+        try {
+            \App\Support\CatalogAccess::validateReferences($request);
+            return $next($request);
+        }
+        finally { $request->attributes->remove('catalog_actor'); }
     }
 }

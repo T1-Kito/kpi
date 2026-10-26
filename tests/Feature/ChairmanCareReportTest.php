@@ -25,8 +25,8 @@ class ChairmanCareReportTest extends TestCase
     public function test_care_and_service_exports_are_scoped_require_export_permission_and_contain_real_xlsx():void
     {
         $this->seed();$sales=User::where('email','sales@vk-kpi.local')->firstOrFail();$admin=User::where('email','admin@vk-kpi.local')->firstOrFail();
-        $mine=Customer::create(['tenant_id'=>$sales->tenant_id,'code'=>'CARE-REPORT-MINE','name'=>'Care report mine','sales_owner_id'=>$sales->id,'status'=>'active']);
-        $other=Customer::create(['tenant_id'=>$sales->tenant_id,'code'=>'CARE-REPORT-OTHER','name'=>'Care report other','sales_owner_id'=>$admin->id,'status'=>'active']);
+        $mine=Customer::create(['tenant_id'=>$sales->tenant_id,'code'=>'CARE-REPORT-MINE','name'=>'Care report mine','created_by'=>$sales->id,'sales_owner_id'=>$sales->id,'status'=>'active']);
+        $other=Customer::create(['tenant_id'=>$sales->tenant_id,'code'=>'CARE-REPORT-OTHER','name'=>'Care report other','created_by'=>$admin->id,'sales_owner_id'=>$admin->id,'status'=>'active']);
         $token=$this->token($sales->email);$adminToken=$this->token($admin->email);
         $this->withToken($token)->postJson('/api/v1/customers/'.$mine->id.'/care',['title'=>'Report call','due_at'=>now()->addDay()->toIso8601String()])->assertCreated();
         $this->withToken($adminToken)->postJson('/api/v1/customers/'.$other->id.'/care',['title'=>'PRIVATE-CARE','due_at'=>now()->addDay()->toIso8601String()])->assertCreated();
@@ -56,7 +56,7 @@ class ChairmanCareReportTest extends TestCase
     public function test_gap_report_agrees_with_current_dashboard_and_rejects_historical_date_filter():void
     {
         $this->seed();$admin=User::where('email','admin@vk-kpi.local')->firstOrFail();$sales=User::where('email','sales@vk-kpi.local')->firstOrFail();
-        $customer=Customer::create(['tenant_id'=>$admin->tenant_id,'code'=>'REPORT-NEXT-GAP','name'=>'Khách cần hẹn','sales_owner_id'=>$sales->id,'status'=>'active']);
+        $customer=Customer::create(['tenant_id'=>$admin->tenant_id,'code'=>'REPORT-NEXT-GAP','name'=>'Khách cần hẹn','created_by'=>$sales->id,'sales_owner_id'=>$sales->id,'status'=>'active']);
         $adminToken=$this->token($admin->email);$token=$this->token($sales->email);
         $query='/api/v1/business-reports?type=care_gaps';
         $report=$this->withToken($adminToken)->getJson($query)->assertOk();

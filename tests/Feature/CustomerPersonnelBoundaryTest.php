@@ -24,7 +24,9 @@ class CustomerPersonnelBoundaryTest extends TestCase
         foreach ([['name'=>'Attempt','phone'=>$customer->phone], ['name'=>'Attempt','phone'=>'0999111222','tax_code'=>$customer->tax_code]] as $payload) {
             $this->withToken($token)->postJson('/api/v1/customers/quick',$payload)->assertConflict()->assertJsonMissingPath('data');
         }
+        \Illuminate\Support\Facades\Http::fake();
         $this->withToken($token)->getJson('/api/v1/customers/tax-lookup/'.$customer->tax_code)->assertConflict()->assertJsonMissingPath('data');
+        \Illuminate\Support\Facades\Http::assertNothingSent();
         $this->withToken($this->login($admin->email))->postJson('/api/v1/customers/quick',['name'=>'Existing','phone'=>$customer->phone])->assertOk()->assertJsonPath('data.id',$customer->id);
     }
 

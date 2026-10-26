@@ -12,11 +12,12 @@
             ],
         ],
         [
-            'match' => ['customers', 'leads', 'customer-contacts', 'import-center'],
+            'match' => ['customers', 'leads', 'customer-contacts', 'customer-groups', 'import-center'],
             'items' => [
                 ['label' => 'Khách hàng', 'href' => '/customers', 'match' => 'customers', 'permission' => 'master.view'],
                 ['label' => 'Khách hàng tiềm năng', 'href' => '/leads', 'match' => 'leads', 'permission' => 'sales.lead.view'],
                 ['label' => 'Người liên hệ', 'href' => '/customer-contacts', 'match' => 'customer-contacts', 'permission' => 'master.view'],
+                ['label' => 'Nhóm khách hàng', 'href' => '/customer-groups', 'match' => 'customer-groups', 'permission' => 'master.view'],
             ],
         ],
         [

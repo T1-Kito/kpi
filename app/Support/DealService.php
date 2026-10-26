@@ -42,6 +42,7 @@ class DealService
                 'name' => $data['name'],
                 'source' => $data['source'] ?? null,
                 'description' => $data['description'] ?? null,
+                'needs' => $data['needs'] ?? null,
                 'amount' => $data['amount'] ?? 0,
                 'probability' => $stages[$stage],
                 'expected_close_date' => $data['expected_close_date'] ?? null,

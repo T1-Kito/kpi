@@ -8,7 +8,7 @@ class CustomerCareTest extends TestCase {
     use RefreshDatabase;
     public function test_no_answer_requires_follow_up_and_completion_is_atomic_repeat_safe(): void {
         $this->seed();$sales=User::where('email','sales@vk-kpi.local')->firstOrFail();
-        $customer=Customer::create(['tenant_id'=>$sales->tenant_id,'code'=>'CARE-NEXT','name'=>'Next','sales_owner_id'=>$sales->id,'status'=>'active']);
+        $customer=Customer::create(['tenant_id'=>$sales->tenant_id,'code'=>'CARE-NEXT','name'=>'Next','created_by'=>$sales->id,'sales_owner_id'=>$sales->id,'status'=>'active']);
         $token=$this->postJson('/api/v1/auth/login',['email'=>$sales->email,'password'=>'Admin@123'])->json('data.access_token');
         $url='/api/v1/customers/'.$customer->id.'/care';
         $task=$this->withToken($token)->postJson($url,['title'=>'Gọi khách','due_at'=>now()->addDay()->toIso8601String()])->assertCreated()->json('data');
@@ -35,8 +35,8 @@ class CustomerCareTest extends TestCase {
 
     public function test_board_is_scoped_paginated_and_excludes_inactive_customers(): void {
         $this->seed();$sales=User::where('email','sales@vk-kpi.local')->firstOrFail();$admin=User::where('email','admin@vk-kpi.local')->firstOrFail();
-        $mine=Customer::create(['tenant_id'=>$sales->tenant_id,'code'=>'BOARD-MINE','name'=>'Mine','sales_owner_id'=>$sales->id,'status'=>'active']);
-        $other=Customer::create(['tenant_id'=>$sales->tenant_id,'code'=>'BOARD-OTHER','name'=>'Other','sales_owner_id'=>$admin->id,'status'=>'active']);
+        $mine=Customer::create(['tenant_id'=>$sales->tenant_id,'code'=>'BOARD-MINE','name'=>'Mine','created_by'=>$sales->id,'sales_owner_id'=>$sales->id,'status'=>'active']);
+        $other=Customer::create(['tenant_id'=>$sales->tenant_id,'code'=>'BOARD-OTHER','name'=>'Other','created_by'=>$admin->id,'sales_owner_id'=>$admin->id,'status'=>'active']);
         $token=$this->postJson('/api/v1/auth/login',['email'=>$sales->email,'password'=>'Admin@123'])->json('data.access_token');
         $rows=$this->withToken($token)->getJson('/api/v1/customers/care-board?bucket=unscheduled')->assertOk()->json('data');
         $this->assertContains($mine->id,array_column($rows,'id'));$this->assertNotContains($other->id,array_column($rows,'id'));
@@ -53,7 +53,7 @@ class CustomerCareTest extends TestCase {
         $this->seed();
         $sales=User::where('email','sales@vk-kpi.local')->firstOrFail();
         $admin=User::where('email','admin@vk-kpi.local')->firstOrFail();
-        $customer=Customer::create(['tenant_id'=>$sales->tenant_id,'code'=>'CARE-1','name'=>'Care customer','sales_owner_id'=>$sales->id,'status'=>'active']);
+        $customer=Customer::create(['tenant_id'=>$sales->tenant_id,'code'=>'CARE-1','name'=>'Care customer','created_by'=>$sales->id,'sales_owner_id'=>$sales->id,'status'=>'active']);
         $token=$this->postJson('/api/v1/auth/login',['email'=>$sales->email,'password'=>'Admin@123'])->json('data.access_token');
         $url='/api/v1/customers/'.$customer->id.'/care';
         $this->withToken($token)->getJson($url)->assertOk()->assertJsonPath('data.next_task',null);
@@ -67,6 +67,11 @@ class CustomerCareTest extends TestCase {
         $this->withToken($token)->postJson($url.'/'.$task['id'].'/complete',$body)->assertConflict();
         $this->withToken($token)->getJson($url)->assertOk()->assertJsonPath('data.next_task',null)->assertJsonPath('data.last_result','Đã liên hệ: Customer requested a quote');
         $customer->update(['sales_owner_id'=>$admin->id]);
+        // Assignment does not revoke the creator's visibility under catalog sharing.
+        $this->withToken($token)->getJson($url)->assertOk();
+        $this->assertSame($sales->id,$customer->fresh()->created_by);
+        $private=Customer::create(['tenant_id'=>$admin->tenant_id,'code'=>'CARE-PRIVATE','name'=>'Private customer','created_by'=>$admin->id,'sales_owner_id'=>$admin->id,'status'=>'active']);
+        $url='/api/v1/customers/'.$private->id.'/care';
         $this->withToken($token)->getJson($url)->assertNotFound();
         $this->withToken($token)->postJson($url,['title'=>'Blocked','due_at'=>now()->addDay()->toIso8601String()])->assertNotFound();
     }
@@ -86,7 +91,7 @@ class CustomerCareTest extends TestCase {
         $task=$this->withToken($token)->postJson($url,$payload)->assertCreated()->json('data');
         \App\Models\Task::whereKey($task['id'])->update(['due_at'=>now()->subHour()]);
         $this->withToken($token)->getJson($url)->assertOk()->assertJsonPath('data.overdue_count',1)->assertJsonPath('data.next_task.id',$task['id']);
-        $other=Customer::create(['tenant_id'=>$admin->tenant_id,'code'=>'CARE-OTHER','name'=>'Other','sales_owner_id'=>$admin->id,'status'=>'active']);
+        $other=Customer::create(['tenant_id'=>$admin->tenant_id,'code'=>'CARE-OTHER','name'=>'Other','created_by'=>$admin->id,'sales_owner_id'=>$admin->id,'status'=>'active']);
         $this->withToken($token)->postJson('/api/v1/customers/'.$other->id.'/care/'.$task['id'].'/complete',['outcome'=>'contacted','note'=>'Wrong customer'])->assertNotFound();
         $this->assertDatabaseHas('tasks',['id'=>$task['id'],'status'=>'new']);
     }

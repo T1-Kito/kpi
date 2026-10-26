@@ -13,7 +13,9 @@ class AdditiveDatabaseUpgradeTest extends TestCase
         $db->getSchemaBuilder()->create('migrations',fn($t)=>[$t->increments('id'),$t->string('migration'),$t->integer('batch')]);
         $db->getSchemaBuilder()->create('service_tickets',fn($t)=>[$t->increments('id'),$t->string('subject')]);
         $db->table('service_tickets')->insert(['subject'=>'Customer data retained']);
-        $db->getSchemaBuilder()->create('customers',fn($t)=>[$t->increments('id'),$t->string('name')]);
+        $db->getSchemaBuilder()->create('customers',fn($t)=>[$t->increments('id'),$t->unsignedBigInteger('tenant_id')->default(1),$t->string('name')]);
+        $db->getSchemaBuilder()->create('skus',fn($t)=>[$t->increments('id'),$t->unsignedBigInteger('tenant_id')->default(1)]);
+        $db->getSchemaBuilder()->create('deals',fn($t)=>[$t->increments('id'),$t->string('name')]);
         $db->table('customers')->insert(['name'=>'Existing customer retained']);
         return [$db,$path];
     }
@@ -29,6 +31,7 @@ class AdditiveDatabaseUpgradeTest extends TestCase
         $this->assertTrue($db->getSchemaBuilder()->hasTable('ticket_attachments'));
         foreach(['import_sources','import_source_users','import_batches'] as $table)$this->assertTrue($db->getSchemaBuilder()->hasTable($table));
         $this->assertTrue($db->getSchemaBuilder()->hasTable('import_record_links'));
+        $this->assertTrue($db->getSchemaBuilder()->hasTable('crm_intake_rows'));
         foreach(['business_segment','customer_group','customer_audience'] as $column)$this->assertTrue($db->getSchemaBuilder()->hasColumn('customers',$column));
         $this->assertSame('Existing customer retained',$db->table('customers')->value('name'));
         $this->assertSame([],$service->pending($db,$required));

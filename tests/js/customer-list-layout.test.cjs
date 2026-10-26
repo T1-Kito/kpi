@@ -6,6 +6,7 @@ function render({page=1,total=2,extra=false,canManage=true}={}){
  const root={innerHTML:''};const context=vm.createContext({window:{VKLayout:{hasPermission:()=>canManage}},document:{getElementById:()=>root,querySelector:()=>null},customerState:{pageSize:20,extraColumns:extra,meta:{page,last_page:Math.max(1,Math.ceil(total/20)),total},rows:[{id:1,code:'CUS-00001',name:'<img src=x>',customer_type:'organization',phone:'0901234567',email:'a@example.test',address:'Địa chỉ',sales_owner:{name:'Admin'}}]}});
  context.document.addEventListener=()=>{};
  vm.runInContext(fs.readFileSync('public/assets/js/table.js','utf8'),context);context.VKTable=context.window.VKTable;
+ vm.runInContext(fs.readFileSync('public/assets/js/catalog-sharing.js','utf8'),context);context.VKCatalogSharing=context.window.VKCatalogSharing;
  const code=fs.readFileSync('public/assets/js/features/customers.js','utf8');
  vm.runInContext(code.slice(code.indexOf('function renderCustomerTable('),code.indexOf('async function openCustomerModal(')),context);
  vm.runInContext(code.slice(code.indexOf('function renderCustomers('),code.indexOf('async function loadCustomerDuplicates(')),context);

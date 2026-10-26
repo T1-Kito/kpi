@@ -57,7 +57,7 @@ class CustomerContactConsistencyTest extends TestCase
     {
         $this->seed();
         $actor = User::where('email', 'sales@vk-kpi.local')->firstOrFail();
-        $customer = Customer::create(['tenant_id' => $actor->tenant_id, 'code' => 'CONTACT-MATCH', 'name' => 'Organization', 'customer_type' => 'organization', 'status' => 'active', 'sales_owner_id' => $actor->id]);
+        $customer = Customer::create(['tenant_id' => $actor->tenant_id, 'code' => 'CONTACT-MATCH', 'name' => 'Organization', 'customer_type' => 'organization', 'status' => 'active', 'created_by'=>$actor->id,'sales_owner_id' => $actor->id]);
         $customer->contacts()->create(['name' => 'Secondary', 'phone' => '0912 000 456', 'is_primary' => false]);
         $service = app(LeadService::class);
         $lead = $service->create($actor, ['name' => 'Secondary', 'phone' => '+84 912000456']);

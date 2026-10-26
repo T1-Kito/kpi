@@ -8,6 +8,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Sku extends Model
 {
     use \App\Models\Concerns\CastsDatabaseIdentifiers;
+    use \App\Models\Concerns\HasCatalogSharing;
+
+    protected $casts = ['is_shared' => 'boolean'];
+    protected $attributes = ['is_shared' => false];
+    protected $appends = ['can_manage_sharing'];
 
     protected $fillable = [
         'tenant_id',
@@ -22,6 +27,8 @@ class Sku extends Model
         'sale_price',
         'cost_price',
         'status',
+        'created_by',
+        'is_shared',
     ];
 
     public function product(): BelongsTo

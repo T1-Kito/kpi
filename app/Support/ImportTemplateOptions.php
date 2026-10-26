@@ -12,6 +12,21 @@ final class ImportTemplateOptions
     public function build(string $template,User $actor,string $kind):string
     {
         $product=$kind==='skus';
+        $groupLevels=[collect(),collect(),collect()];
+        if($kind==='customers'){
+            $all=\App\Models\CustomerGroup::where('tenant_id',$actor->tenant_id)->get()->keyBy('id');
+            foreach($all as $group){
+                $cursor=$group;$depth=0;$valid=true;$seen=[];
+                while($cursor){
+                    if(!$cursor->is_active || isset($seen[$cursor->id]) || ++$depth>3){$valid=false;break;}
+                    $seen[$cursor->id]=true;
+                    if($cursor->parent_id && !isset($all[$cursor->parent_id])){$valid=false;break;}
+                    $cursor=$cursor->parent_id?($all[$cursor->parent_id] ?? null):null;
+                }
+                if($valid)$groupLevels[$depth-1]->push($group->name);
+            }
+            foreach($groupLevels as $i=>$values)$groupLevels[$i]=$values->unique()->sort()->values();
+        }
         $users=$product?\App\Models\ProductCategory::where('tenant_id',$actor->tenant_id)->where('status','active')->orderBy('name')->get()->map(fn($v)=>(object)['email'=>'crm:'.$v->name,'name'=>$v->name]):User::where('tenant_id',$actor->tenant_id)->where('is_active',true)->orderBy('email')->get(['email','name']);
         $customers=$product?\App\Models\ProductBrand::where('tenant_id',$actor->tenant_id)->where('status','active')->orderBy('name')->get()->map(fn($v)=>(object)['code'=>$v->name,'name'=>$v->name]):($kind!=='customers' && $actor->hasPermission('customer.manage')
             ? Customer::where('tenant_id',$actor->tenant_id)->where('customer_type','organization')->where('status','active')->whereNull('merged_into_id')->orderBy('code')->get(['code','name']) : collect());
@@ -43,7 +58,24 @@ final class ImportTemplateOptions
                 $rows=[['Email người quản lý','Họ tên','Mã phòng ban','Tên phòng ban','Mã chức vụ','Tên chức vụ']];
                 for($i=0;$i<max($users->count(),$customers->count(),$positions->count());$i++)$rows[]=[$users[$i]->email ?? '',$users[$i]->name ?? '',isset($customers[$i])?'crm:'.$customers[$i]->code:'',$customers[$i]->name ?? '',isset($positions[$i])?'crm:'.$positions[$i]->code:'',$positions[$i]->name ?? ''];
             }
-            $reference='<worksheet xmlns="'.self::NS.'"><sheetViews><sheetView workbookViewId="0"/></sheetViews><cols><col min="1" max="'.(in_array($kind,['users','departments'],true)?'6':'4').'" width="35" customWidth="1"/></cols><sheetData>';
+            if($kind==='customers'){
+                $rows[0]=array_merge($rows[0],array_values(CustomerGroupReference::LABELS));
+                $count=max(count($rows)-1,...array_map(fn($v)=>$v->count(),$groupLevels));
+                for($i=0;$i<$count;$i++){
+                    $rows[$i+1]=array_pad($rows[$i+1] ?? [],4,'');
+                    foreach($groupLevels as $level=>$names)$rows[$i+1][]=$names[$i] ?? '';
+                }
+                // Extend the template and its example without touching existing columns or values.
+                $this->groupColumns($sheet);
+                $example=$zip->getFromName('xl/worksheets/sheet3.xml');
+                if($example!==false){$exampleXml=$this->xml($zip,'xl/worksheets/sheet3.xml');$this->groupColumns($exampleXml);$zip->addFromString('xl/worksheets/sheet3.xml',$exampleXml->asXML());}
+                $guide=$this->xml($zip,'xl/worksheets/sheet2.xml');
+                $guideData=$guide->children(self::NS)->sheetData;
+                $r=$guideData->addChild('row',null,self::NS);$r->addAttribute('r','8');
+                foreach(['Phân nhóm khách hàng','Nhập danh mục nhóm trước. Điền tên nhóm từ cấp 1 đến cấp chi tiết, không bỏ cấp. Xem đường dẫn đầy đủ trong trang Nhóm khách hàng. Không có nhóm thì để trống; khi cập nhật, để trống cả 3 cột để giữ nhóm hiện tại. Muốn đổi nhánh thì điền lại đường dẫn đầy đủ.'] as $i=>$text){$c=$r->addChild('c',null,self::NS);$c->addAttribute('r',chr(65+$i).'8');$c->addAttribute('t','inlineStr');$is=$c->addChild('is',null,self::NS);$is->addChild('t',htmlspecialchars($text,ENT_XML1|ENT_QUOTES,'UTF-8'),self::NS);}
+                $zip->addFromString('xl/worksheets/sheet2.xml',$guide->asXML());
+            }
+            $reference='<worksheet xmlns="'.self::NS.'"><sheetViews><sheetView workbookViewId="0"/></sheetViews><cols><col min="1" max="'.($kind==='customers'?'7':(in_array($kind,['users','departments'],true)?'6':'4')).'" width="35" customWidth="1"/></cols><sheetData>';
             foreach($rows as $r=>$values){$reference.='<row r="'.($r+1).'">';foreach($values as $c=>$value)$reference.='<c r="'.chr(65+$c).($r+1).'" t="inlineStr"><is><t>'.htmlspecialchars($value,ENT_XML1|ENT_QUOTES,'UTF-8').'</t></is></c>';$reference.='</row>';}
             $reference.='</sheetData></worksheet>';
             $sheetNode=dom_import_simplexml($sheet);$doc=$sheetNode->ownerDocument;
@@ -56,10 +88,29 @@ final class ImportTemplateOptions
             if($users->isNotEmpty() && $kind!=='contacts')$this->validation($validations,match($kind){'users'=>'F2:F301','departments'=>'D2:D301','skus'=>'F2:F301','customers'=>'N2:N301','warehouses'=>'D2:D301','locations'=>'B2:B301',default=>'G2:G301'},'A',$users->count());
             if($customers->isNotEmpty())$this->validation($validations,match($kind){'users'=>'D2:D301','departments'=>'C2:C301','skus'=>'G2:G301','contacts'=>'B2:B301',default=>'H2:H301'},'C',$customers->count());
             if($positions->isNotEmpty())$this->validation($validations,'E2:E301','E',$positions->count());
+            if($kind==='customers')foreach($groupLevels as $i=>$names)if($names->isNotEmpty())$this->validation($validations,chr(79+$i).'2:'.chr(79+$i).'301',chr(69+$i),$names->count());
             $validations->setAttribute('count',(string)$validations->getElementsByTagNameNS(self::NS,'dataValidation')->length);
             foreach(['xl/workbook.xml'=>$book->asXML(),'xl/_rels/workbook.xml.rels'=>$rels->asXML(),'[Content_Types].xml'=>$types->asXML(),'xl/worksheets/sheet1.xml'=>$sheet->asXML(),'xl/worksheets/sheet100.xml'=>$reference] as $name=>$bytes)if(!$zip->addFromString($name,$bytes))throw new \RuntimeException('Không hoàn tất được file mẫu.');
             $zip->close();return $path;
         }catch(\Throwable $e){$zip->close();@unlink($path);throw $e;}
+    }
+    private function groupColumns(\SimpleXMLElement $sheet):void
+    {
+        $main=$sheet->children(self::NS);
+        foreach($main->sheetData->row as $row){
+            $line=(int)$row->attributes()['r'];
+            $style='';
+            foreach(dom_import_simplexml($row)->childNodes as $cell){
+                if($cell instanceof \DOMElement && $cell->localName==='c' && $cell->getAttribute('r')==='N'.$line){$style=$cell->getAttribute('s');break;}
+            }
+            foreach(array_values(CustomerGroupReference::LABELS) as $i=>$label){
+                $cell=$row->addChild('c',null,self::NS);$cell->addAttribute('r',chr(79+$i).$line);$cell->addAttribute('t','inlineStr');if($style!=='')$cell->addAttribute('s',$style);
+                $text=$cell->addChild('is',null,self::NS);$text->addChild('t',$line===1?$label:'',self::NS);
+            }
+        }
+        if(isset($main->cols)){$col=$main->cols->addChild('col',null,self::NS);foreach(['min'=>'15','max'=>'17','width'=>'28','customWidth'=>'1'] as $k=>$v)$col->addAttribute($k,$v);}
+        if(isset($main->dimension))$main->dimension->attributes()['ref']='A1:Q301';
+        if(isset($main->autoFilter))$main->autoFilter->attributes()['ref']='A1:Q301';
     }
     private function validation(\DOMElement $parent,string $range,string $column,int $count):void
     {

@@ -38,7 +38,7 @@ class CrmInheritanceTest extends TestCase
     {
         $this->seed();
         $actor = User::where('email', 'sales@vk-kpi.local')->firstOrFail();
-        $customer = Customer::create(['tenant_id' => $actor->tenant_id, 'code' => 'CUS-NORMALIZED', 'name' => 'Existing', 'phone' => '0912 345 678', 'status' => 'active', 'customer_type' => 'organization', 'sales_owner_id' => $actor->id]);
+        $customer = Customer::create(['tenant_id' => $actor->tenant_id, 'code' => 'CUS-NORMALIZED', 'name' => 'Existing', 'phone' => '0912 345 678', 'status' => 'active', 'customer_type' => 'organization', 'created_by'=>$actor->id,'sales_owner_id' => $actor->id]);
         $service = app(LeadService::class);
         $lead = $service->create($actor, ['name' => 'New contact', 'phone' => '+84 912-345-678']);
         $this->assertSame($customer->id, $service->qualify($lead, $actor, [])['customer']->id);

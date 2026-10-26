@@ -20,6 +20,7 @@ class CustomerDuplicateReviewController extends Controller
         $this->requireCompanyScope($request);
         $status = $request->validate(['status' => ['nullable', Rule::in(['open', 'merged', 'not_duplicate'])]])['status'] ?? 'open';
         $rows = CustomerDuplicateReview::query()->where('tenant_id', $request->user()->tenant_id)
+            ->whereHas('firstCustomer')->whereHas('secondCustomer')
             ->where('status', $status)
             ->with(['firstCustomer:id,code,name,customer_type,tax_code,phone,email,status,merged_into_id',
                 'secondCustomer:id,code,name,customer_type,tax_code,phone,email,status,merged_into_id', 'reviewer:id,name'])

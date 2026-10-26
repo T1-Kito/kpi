@@ -72,7 +72,7 @@ class ChecklistFindingVerificationTest extends TestCase {
     }
     public function test_f06_mismatched_contract_sources_and_milestone_totals_are_rejected(): void {
         $token=$this->token();$order=SalesOrder::firstOrFail();$quote=Quotation::where('customer_id','!=',$order->customer_id)->firstOrFail();
-        $c=Customer::create(['tenant_id'=>$order->tenant_id,'code'=>'VERIFY-C3','name'=>'Third customer','status'=>'active']);
+        $c=Customer::create(['tenant_id'=>$order->tenant_id,'code'=>'VERIFY-C3','name'=>'Third customer','status'=>'active','created_by'=>User::where('email','sales@vk-kpi.local')->value('id')]);
         $this->withToken($token)->postJson('/api/v1/contracts',['name'=>'Conflicting sources','customer_id'=>$c->id,'sales_order_id'=>$order->id,'quotation_id'=>$quote->id])->assertUnprocessable();
         $this->withToken($token)->postJson('/api/v1/contracts',['name'=>'Wrong total','sales_order_id'=>$order->id,'milestones'=>[['name'=>'Wrong amount','amount'=>1]]])->assertUnprocessable();
         $this->assertDatabaseMissing('contracts',['name'=>'Conflicting sources']);

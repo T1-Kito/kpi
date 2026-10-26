@@ -5,7 +5,7 @@ using System.Text.Json;
 // Only updates code against an already-compatible schema. Never initializes a database.
 internal static class SoftwareUpdate
 {
-    internal const string Version = "0.8.9";
+    internal const string Version = "0.8.10";
     internal sealed record Change(string Name, string Hash, bool Existed, string? Before);
     internal sealed record Journal(string State, List<Change> Files);
     internal static void ValidateJournal(Journal journal)

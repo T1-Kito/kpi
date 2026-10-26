@@ -23,6 +23,8 @@ document.addEventListener('click', event => {
     const addLine = event.target.closest('[data-deal-add-line]');
     const removeLine = event.target.closest('[data-deal-remove-line]');
     if (create) openDealModal();
+    if(event.target.closest('[data-crm-intake]'))window.VKCrmIntake?.open(loadDeals);
+    const needs=event.target.closest('[data-deal-needs]');if(needs)openDealNeeds(needs.dataset.dealNeeds);
     if (transition) openTransitionModal(transition.dataset.transitionDeal, transition._dealRow);
     if (detail) openDealDetail(detail.dataset.dealDetail);
     if (quotation) {
@@ -37,6 +39,7 @@ document.addEventListener('click', event => {
 async function loadDeals() {
     const root = document.getElementById('dealsRoot');
     if (!root) return;
+    await window.VKDealServices?.load();
     const response = await VKApi.request('/deals?page_size=100');
     if (document.getElementById('dealsRoot') !== root) return;
     dealState.rows = response.data || [];
@@ -58,6 +61,7 @@ function renderDeals(total = dealState.rows.length) {
         subtitle: 'Mỗi cơ hội có người phụ trách, giá trị dự kiến, giai đoạn và bước tiếp theo.',
         meta: `${VKTable.money(rows.length)} / ${VKTable.money(total)} cơ hội`,
         filters: VKTable.filterBar({
+            actions: (canManage && window.VKLayout?.hasPermission('customer.manage') && window.VKLayout?.hasPermission('master.view')?'<button class="btn" type="button" data-crm-intake>Nhập danh sách tổng hợp</button>':'')+(window.VKDealServices?.canManage?'<button class="btn" type="button" data-manage-deal-services>Danh mục dịch vụ</button>':''),
             searchPlaceholder: 'Tìm mã, tên cơ hội hoặc khách hàng...',
             extra: `<select data-deal-stage><option value="">Tất cả giai đoạn</option>${stages.map(item => `<option value="${item.value}">${item.label}</option>`).join('')}</select>`,
         }),
@@ -80,7 +84,9 @@ function renderDeals(total = dealState.rows.length) {
 }
 
 async function openDealModal() {
-    const [customers, leads, me, masterData] = await Promise.all([VKApi.request('/customers?page_size=100'), VKApi.request('/leads?page_size=100'), VKApi.request('/me'), VKApi.request('/sales-master-data')]);
+    await window.VKDealServices?.load();
+    const allRows=async endpoint=>{const data=[];for(let page=1;;page++){const response=await VKApi.request(`${endpoint}?page_size=100&page=${page}`,{cache:false});data.push(...(response.data || []));if(!response.data?.length || data.length>=(response.meta?.total ?? data.length))return {data};}};
+    const [customers, leads, me, masterData, owners] = await Promise.all([allRows('/customers'), allRows('/leads'), VKApi.request('/me'), VKApi.request('/sales-master-data'), VKApi.request('/lookups/deal-users')]);
     const sources = (masterData.data?.opportunity_sources || []).filter(row => row.is_active).map(row => ({ value: row.code, label: row.name }));
     VKModal.open('Tạo cơ hội bán hàng', `
         <div class="form-grid">
@@ -91,16 +97,30 @@ async function openDealModal() {
             ${VKModal.field('amount', 'Giá trị dự kiến', 'number', '0')}
             ${VKModal.field('expected_close_date', 'Ngày dự kiến chốt', 'date')}
             ${VKModal.field('next_activity_at', 'Hoạt động tiếp theo', 'datetime-local')}
-            ${VKModal.select('owner_id', 'Người phụ trách', [{ value: me.data.id, label: me.data.name }])}
+            ${VKModal.select('owner_id', 'Người phụ trách', [...new Map([{id:me.data.id,name:me.data.name},...(owners.data || [])].map(u=>[String(u.id),u])).values()].map(u=>({value:u.id,label:u.name})))}
             <div class="field full"><label for="description">Nhu cầu / ghi chú cơ hội</label><textarea id="description" name="description" rows="3" placeholder="Sản phẩm quan tâm, yêu cầu của khách hoặc thông tin cần lưu ý..."></textarea></div>
+            ${dealNeedsFields()}
         </div>
     `, async form => {
         const data = Object.fromEntries(new FormData(form));
         ['customer_id', 'lead_id', 'owner_id'].forEach(key => { data[key] = data[key] ? Number(data[key]) : null; });
         data.amount = VKMoney.parse(data.amount || 0);
+        data.needs=readDealNeeds(form);
+        delete data.need_service;
+        Object.keys(data).filter(k=>k.startsWith('need_')).forEach(k=>delete data[k]);
         await VKApi.request('/deals', { method: 'POST', body: JSON.stringify(data) });
         VKModal.close(); VKModal.toast('Đã tạo cơ hội bán hàng.', 'success'); loadDeals();
-    }, { submitText: 'Tạo cơ hội' });
+    }, { submitText: 'Tạo cơ hội',className:'deal-needs-modal' });
+    const form=document.getElementById('modalForm');
+    const hint=document.createElement('div');hint.className='dns-contact-hint';hint.setAttribute('role','status');form.querySelector('.form-grid')?.prepend(hint);
+    let suggestedOwner=null;
+    form.elements.owner_id.onchange=()=>{suggestedOwner=null;};
+    form.elements.customer_id.onchange=()=>{
+        const customer=(customers.data || []).find(c=>String(c.id)===form.elements.customer_id.value);
+        hint.textContent=customer?[customer.contact_name,customer.phone,customer.email].filter(Boolean).join(' · '):'';
+        if(customer && !form.elements.name.value.trim())form.elements.name.value='Nhu cầu của '+customer.name;
+        if(customer?.sales_owner_id && Array.from(form.elements.owner_id.options).some(o=>String(o.value)===String(customer.sales_owner_id)) && (suggestedOwner!==null || String(form.elements.owner_id.value)===String(me.data.id))){form.elements.owner_id.value=String(customer.sales_owner_id);suggestedOwner=customer.sales_owner_id;}
+    };
 }
 
 function openTransitionModal(id, sourceRow = null) {
@@ -127,12 +147,34 @@ function openDealDetail(id) {
         root: '#dealsRoot', type: 'deal', id, path: `/deals/${id}`, preview,
         onBack: () => renderDeals(),
         actions: row => canManage && row.status === 'open' ? `
+            <button class="btn secondary" type="button" data-deal-needs="${row.id}">Nhu cầu khách hàng</button>
             <button class="btn secondary" type="button" data-deal-add-activity="${row.id}">+ Chăm sóc</button>
             <button class="btn secondary" type="button" data-deal-edit-items="${row.id}">Hàng hóa</button>
             <button class="btn secondary" type="button" data-deal-create-quotation="${row.id}">Tạo báo giá</button>
             <button class="btn primary" type="button" data-transition-deal="${row.id}">Chuyển giai đoạn</button>
         ` : (row.status === 'open' ? '' : '<span class="badge muted">Cơ hội đã kết thúc</span>'),
     });
+}
+
+function dealNeedsFields(needs={}){
+    const field=(key,label,type='text')=>VKModal.field('need_'+key,label,type,needs[key] ?? '');
+    return `<section class="deal-needs-panel full"><div class="deal-needs-heading"><strong>Nhu cầu khách hàng</strong><span>Thông tin cho lần mua / chương trình này</span></div><div class="deal-needs-grid">${field('purpose','Mục đích')}${field('group_size','Quy mô nhóm')}${field('guest_count','Số khách dự kiến','number')}${field('service_date','Ngày sử dụng dịch vụ','date')}${field('budget','Ngân sách dự kiến','number')}${window.VKDealServices?.picker(needs) || ''}<div class="field full"><label>Yêu cầu đặc biệt</label><textarea name="need_special_requests" rows="3" maxlength="2000" placeholder="Ví dụ: xe đưa đón, suất ăn riêng, hướng dẫn viên…">${VKTable.escapeHtml(needs.special_requests || '')}</textarea></div></div><small>Ngày sử dụng dịch vụ được lưu riêng, không thay đổi ngày dự kiến chốt.</small></section>`;
+}
+function readDealNeeds(form){
+    const value=key=>form.elements['need_'+key]?.value?.trim() || null;
+    const ids=Array.from(form.querySelectorAll('[name="need_service"]:checked')).map(c=>Number(c.value));
+    return {...(ids.length || !form.dataset.legacyInterests?{service_ids:ids}:{}),purpose:value('purpose'),group_size:value('group_size'),guest_count:value('guest_count')?Number(value('guest_count')):null,service_date:value('service_date'),budget:value('budget')?VKMoney.parse(value('budget')):null,special_requests:value('special_requests'),interests:form.dataset.legacyInterests?JSON.parse(form.dataset.legacyInterests):[]};
+}
+async function openDealNeeds(id){
+    try{
+        await window.VKDealServices?.load();
+        const row=(await VKApi.request(`/deals/${id}`,{cache:false})).data;
+        VKModal.open('Nhu cầu · '+row.code,dealNeedsFields(row.needs || {}),async form=>{
+            await VKApi.request(`/deals/${id}/needs`,{method:'PUT',body:JSON.stringify({needs:readDealNeeds(form),version:row.version})});
+            VKModal.close();VKModal.toast('Đã lưu nhu cầu khách hàng.');await reloadDealDetail(id);
+        },{className:'deal-needs-modal',submitText:'Lưu nhu cầu'});
+        const form=document.getElementById('modalForm');if(!row.needs?.service_ids?.length && row.needs?.interests?.length)form.dataset.legacyInterests=JSON.stringify(row.needs.interests);
+    }catch(e){VKModal.toast(e.message,'danger');}
 }
 
 async function openDealItemsModal(id) {

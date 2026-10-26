@@ -53,7 +53,7 @@ class CustomerImportController extends Controller
                     $wanted[$key][] = $row['row'];
                 }
             }
-            Customer::where('tenant_id',$request->user()->tenant_id)
+            Customer::withoutGlobalScope('catalog_visibility')->where('tenant_id',$request->user()->tenant_id)
                 ->select(['id','customer_type','phone','email','tax_code','identity_number'])
                 ->chunkById(500,function ($existing) use (&$errors,&$wanted) {
                     foreach ($existing as $customer) foreach ($this->keys($customer->toArray()) as $key) {

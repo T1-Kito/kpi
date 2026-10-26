@@ -1,0 +1,45 @@
+VK CRM 0.8.10 — BẢN CẬP NHẬT THỬ NGHIỆM
+
+CÁCH CẬP NHẬT
+1. Giải nén ZIP ra một thư mục riêng, nằm ngoài thư mục VK CRM đang dùng.
+2. Đề nghị người dùng ngừng thao tác, đóng trình quản lý/máy chủ VK CRM.
+3. Chạy Setup.exe mới, chọn “Cập nhật bản đã cài”.
+4. Chọn đúng thư mục bản cũ (nơi có VK CRM.exe, .env và vk-crm-installed.json).
+5. Đợi thông báo cập nhật thành công rồi mở lại VK CRM.
+
+Không gỡ bản cũ, không xóa database, không chép .env từ máy khác.
+Không chọn “cài mới” vào thư mục đang có dữ liệu.
+Nếu dùng nút cập nhật trong trình quản lý cũ, hãy chọn Setup.exe mới,
+không chọn file ZIP. File Update-Source.zip chỉ dành cho kỹ thuật.
+
+ĐÃ BỔ SUNG
+- Dùng chung / riêng tư cho khách hàng và sản phẩm.
+- Nhóm khách hàng dạng cây, nhập danh mục, liên kết nhóm vào mẫu khách.
+- Nhu cầu riêng cho từng cơ hội, danh mục dịch vụ và việc chăm sóc theo lịch.
+- Cơ hội bán hàng → Nhập danh sách tổng hợp: đọc trang PHÂN NGUỒN DỮ LIỆU
+  theo cấu trúc 34 cột, xem trước, xác nhận, chống nhập trùng và lịch sử nhập.
+- Giữ mã trong file làm mã đối chiếu; mã khách trong CRM vẫn tự sinh.
+
+TRƯỚC KHI NHẬP FILE TỔNG HỢP
+- Chuẩn bị danh mục nhóm khách và dịch vụ bằng chức năng nhập danh mục đã có.
+- Điền tên khách/tên đơn vị thật và email người phụ trách đang có trong CRM.
+- Kiểm tra công thức phân loại rồi dán giá trị đúng; không lấy dữ liệu mẫu
+  hoặc mã số thuế toàn số 0 làm dữ liệu thật.
+- Giữ cùng tên nguồn danh sách khi nhập lại. Xem từng lỗi/lưu ý trước khi xác nhận.
+- Không tự xác nhận bán thành công, tạo báo giá/đơn hàng hay gửi tin từ Excel.
+
+BẢO TOÀN DỮ LIỆU
+Bộ cập nhật giữ cấu hình, khóa ứng dụng, tài khoản và file người dùng.
+Trước khi bổ sung cấu trúc dữ liệu, bộ cập nhật yêu cầu sao lưu và kiểm chứng.
+Với SQL Server, cần quyền BACKUP/VERIFY và quyền ghi của dịch vụ SQL vào
+thư mục backup trên máy SQL. Tài khoản Windows quản trị không đồng nghĩa
+với tài khoản kết nối SQL có các quyền này. Không dùng sa hoặc tự cấp sysadmin.
+Nếu báo không sao lưu được: giữ nguyên thư mục, dữ liệu và thông báo lỗi;
+không bỏ qua bước kiểm tra hoặc tự chạy lại dưới dạng cài mới.
+
+GIỚI HẠN
+Đây là bản để cập nhật thử, chưa ký số, chưa nghiệm thu production hay toàn bộ
+nghiệp vụ SQL Server/máy khách sạch. Runtime PHP kèm theo là runtime đánh giá cũ,
+không dùng để công bố Internet hoặc vận hành dữ liệu thật.
+Chưa có xác nhận trực quan cho giao diện nhập tổng hợp trên trình duyệt.
+Không tắt phần mềm bảo mật để chạy bộ cài.

@@ -78,13 +78,27 @@ Route::prefix('v1')->group(function () {
         Route::post('/chat/{id}/messages', [\App\Http\Controllers\Api\V1\ChatController::class, 'send'])->whereNumber('id')->middleware('throttle:120,1');
         Route::post('/chat/{id}/read', [\App\Http\Controllers\Api\V1\ChatController::class, 'read'])->whereNumber('id');
         Route::get('/me', [MeController::class, 'show']);
+        Route::get('/service-interests',[\App\Http\Controllers\Api\V1\ServiceInterestController::class,'index'])->middleware('permission:sales.deal.view');
+        Route::post('/crm-intake/preview',[\App\Http\Controllers\Api\V1\CrmIntakeController::class,'preview'])->middleware(['permission:sales.deal.manage','throttle:10,1']);
+        Route::post('/crm-intake/commit',[\App\Http\Controllers\Api\V1\CrmIntakeController::class,'commit'])->middleware(['permission:sales.deal.manage','throttle:10,1']);
+        Route::get('/crm-intake/history',[\App\Http\Controllers\Api\V1\CrmIntakeController::class,'history'])->middleware('permission:sales.deal.manage');
+        Route::post('/service-interests/import',[\App\Http\Controllers\Api\V1\ServiceInterestController::class,'import'])->middleware(['permission:sales.deal.manage','throttle:10,1']);
+        Route::post('/service-interests',[\App\Http\Controllers\Api\V1\ServiceInterestController::class,'save'])->middleware('permission:sales.deal.manage');
+        Route::put('/service-interests/{id}',[\App\Http\Controllers\Api\V1\ServiceInterestController::class,'save'])->whereNumber('id')->middleware('permission:sales.deal.manage');
         Route::get('/dashboard/summary', DashboardSummaryController::class);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/lookups/users', [LookupController::class, 'users']);
         Route::get('/lookups/sales-users', [LookupController::class, 'salesUsers']);
+        Route::get('/lookups/deal-users', [LookupController::class, 'dealUsers'])->middleware('permission:sales.deal.view');
         Route::get('/lookups/departments', [LookupController::class, 'departments']);
 
         Route::middleware('permission:master.view')->group(function () {
+            Route::get('/customer-groups', [\App\Http\Controllers\Api\V1\CustomerGroupController::class, 'index']);
+            Route::get('/customer-groups/template', [\App\Http\Controllers\Api\V1\CustomerGroupController::class, 'template']);
+            Route::post('/customer-groups/preview', [\App\Http\Controllers\Api\V1\CustomerGroupController::class, 'preview'])->middleware('throttle:10,1');
+            Route::post('/customer-groups/commit', [\App\Http\Controllers\Api\V1\CustomerGroupController::class, 'commit'])->middleware('throttle:10,1');
+            Route::post('/customer-groups', [\App\Http\Controllers\Api\V1\CustomerGroupController::class, 'save']);
+            Route::put('/customer-groups/{id}', [\App\Http\Controllers\Api\V1\CustomerGroupController::class, 'save'])->whereNumber('id');
             Route::get('/customers', [CustomerController::class, 'index']);
             Route::get('/customer-contacts', [CustomerController::class, 'contacts']);
             Route::get('/customers/duplicates', [CustomerController::class, 'duplicates']);
@@ -96,6 +110,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/suppliers', [SupplierController::class, 'index']);
             Route::get('/suppliers/{supplier}', [SupplierController::class, 'show']);
             Route::get('/skus', [SkuController::class, 'index']);
+            Route::put('/catalog-sharing/{catalog}/{id}', [\App\Http\Controllers\Api\V1\CatalogSharingController::class, 'update'])->whereIn('catalog', ['customers', 'skus'])->whereNumber('id');
             Route::get('/skus/{sku}', [SkuController::class, 'show']);
             Route::get('/product-categories', [ProductCatalogController::class, 'categories']);
             Route::get('/product-brands', [ProductCatalogController::class, 'brands']);
@@ -282,6 +297,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/deals', [DealController::class, 'store']);
             Route::post('/deals/{deal}/transition', [DealController::class, 'transition']);
             Route::put('/deals/{deal}/items', [DealController::class, 'syncItems']);
+            Route::put('/deals/{deal}/needs', [DealController::class, 'updateNeeds']);
             Route::post('/deals/{deal}/activities', [DealController::class, 'addActivity']);
             Route::post('/deals/{deal}/activities/{task}/complete', [DealController::class, 'completeActivity']);
         });

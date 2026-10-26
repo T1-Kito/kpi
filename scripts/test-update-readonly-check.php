@@ -2,6 +2,7 @@
 declare(strict_types=1);
 // Synthetic SQLite fixture only. Never loads the workspace .env or a client connection.
 $source = dirname(__DIR__);
+require $source.'/vendor/autoload.php';
 $fixture = sys_get_temp_dir().'/VkCrmUpdateGate-'.bin2hex(random_bytes(8));
 $stage = $fixture.'/stage';
 mkdir($stage, 0700, true);
@@ -31,8 +32,10 @@ if($sql) {
 $db->exec($sql ? 'CREATE TABLE migrations (id INT IDENTITY PRIMARY KEY, migration VARCHAR(255) NOT NULL, batch INTEGER NOT NULL)' : 'CREATE TABLE migrations (id INTEGER PRIMARY KEY, migration TEXT NOT NULL, batch INTEGER NOT NULL)');
 $db->exec('CREATE TABLE customer_fixture (id INTEGER PRIMARY KEY, name TEXT NOT NULL)');
 $db->exec('CREATE TABLE service_tickets (id BIGINT PRIMARY KEY, subject VARCHAR(200) NOT NULL)');
-$db->exec('CREATE TABLE customers (id BIGINT PRIMARY KEY, name VARCHAR(200) NOT NULL)');
-$db->exec("INSERT INTO customers VALUES (1,'Existing customer retained')");
+$db->exec('CREATE TABLE customers (id BIGINT PRIMARY KEY, tenant_id BIGINT NOT NULL, name VARCHAR(200) NOT NULL)');
+$db->exec('CREATE TABLE skus (id BIGINT PRIMARY KEY, tenant_id BIGINT NOT NULL)');
+$db->exec('CREATE TABLE deals (id BIGINT PRIMARY KEY, name VARCHAR(200) NOT NULL)');
+$db->exec("INSERT INTO customers VALUES (1,1,'Existing customer retained')");
 $db->exec("INSERT INTO customer_fixture VALUES (1,'Synthetic customer only')");
 file_put_contents($stage.'/database/migrations/2026_01_01_000000_fixture.php','<?php // not executed');
 $db->exec($sql ? "INSERT INTO migrations (migration,batch) VALUES ('2026_01_01_000000_fixture',1)" : "INSERT INTO migrations VALUES (1,'2026_01_01_000000_fixture',1)");
@@ -60,7 +63,7 @@ $result=$run();
 $assert($result === [1,'','MIGRATION_REQUIRED'],'pending migration refused without running migration');
 $assert($sql || hash_file('sha256',$dbPath)===$before,'pending migration rejected before DDL');
 unlink($stage.'/database/migrations/2026_01_02_000000_pending.php');
-foreach(['2026_10_20_100000_add_customer_feedback_details','2026_10_20_110000_link_feedback_documents','2026_10_20_120000_create_ticket_attachments','2026_10_22_100000_create_import_batch_tables','2026_10_22_110000_create_import_record_links','2026_10_22_120000_add_customer_business_classification'] as $migration)
+foreach(array_keys(\App\Support\AdditiveDatabaseUpgrade::STEPS) as $migration)
     file_put_contents($stage.'/database/migrations/'.$migration.'.php','<?php throw new RuntimeException("MUST_NOT_EXECUTE_ARBITRARY_MIGRATION");');
 $assert($run()===[0,'VK_UPDATE_ADDITIVE_REQUIRED',''],'reviewed additions detected without database writes');
 $assert($run(true)===[1,'','UPGRADE_MAINTENANCE'],'upgrade requires maintenance marker');

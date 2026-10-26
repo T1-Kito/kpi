@@ -98,7 +98,7 @@ class KpiReportWorkbook
             $number = $index + 1;
             $xml .= '<row r="'.$number.'">';
             foreach ($row as $column => $value) {
-                $ref = chr(65 + $column).$number;
+                $ref = $this->columnName($column + 1).$number;
                 $dateOnly = is_array($value) && ($value['date_only'] ?? false);
                 $date = $value instanceof \DateTimeInterface ? $value : (is_array($value) && isset($value['excel_date']) ? new \DateTimeImmutable($value['excel_date']) : null);
                 if ($date) {
@@ -115,7 +115,7 @@ class KpiReportWorkbook
             }
             $xml .= '</row>';
         }
-        $lastColumn = chr(64 + count($rows[$header - 1]));
+        $lastColumn = $this->columnName(count($rows[$header - 1]));
 
         return $xml.'</sheetData><autoFilter ref="A'.$header.':'.$lastColumn.max($header, count($rows)).'"/></worksheet>';
     }
@@ -123,6 +123,13 @@ class KpiReportWorkbook
     private function status(string $value): string
     {
         return ['new'=>'Chưa bắt đầu','in_progress'=>'Đang thực hiện','completed'=>'Hoàn thành','overdue'=>'Quá hạn','cancelled'=>'Đã hủy','pending'=>'Chờ duyệt','approved'=>'Đã duyệt','rejected'=>'Từ chối','active'=>'Đang theo dõi','locked'=>'Đã chốt'][$value] ?? $value;
+    }
+
+    private function columnName(int $number): string
+    {
+        $name='';
+        do {$number--;$name=chr(65+$number%26).$name;$number=intdiv($number,26);}while($number>0);
+        return $name;
     }
 
     public function dateCell(?string $value, bool $dateOnly = true): array|string

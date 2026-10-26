@@ -32,7 +32,19 @@ class ImportTemplateOptionsTest extends TestCase
                 $this->assertSame($before,hash_file('sha256',$template));
                 $original=new \ZipArchive;$original->open($template);
                 $this->assertSame($original->getFromName('xl/styles.xml'),$zip->getFromName('xl/styles.xml'));
-                $this->assertSame($original->getFromName('xl/worksheets/sheet2.xml'),$zip->getFromName('xl/worksheets/sheet2.xml'));
+                if($kind==='customers'){
+                    // The customer guide now adds one group instruction row. Existing cells/styles must remain intact.
+                    $oldGuide=new \DOMDocument;$oldGuide->loadXML($original->getFromName('xl/worksheets/sheet2.xml'));
+                    $newGuide=new \DOMDocument;$newGuide->loadXML($zip->getFromName('xl/worksheets/sheet2.xml'));
+                    $oldXp=new \DOMXPath($oldGuide);$newXp=new \DOMXPath($newGuide);
+                    foreach($oldXp->query('//*[local-name()="c"]') as $cell){
+                        $same=$newXp->query('//*[local-name()="c" and @r="'.$cell->getAttribute('r').'"]')->item(0);
+                        $this->assertNotNull($same);
+                        $this->assertSame($cell->textContent,$same->textContent);
+                        $this->assertSame($cell->getAttribute('s'),$same->getAttribute('s'));
+                    }
+                    $this->assertSame('Phân nhóm khách hàng',$newXp->query('//*[local-name()="c" and @r="A8"]')->item(0)->textContent);
+                }else $this->assertSame($original->getFromName('xl/worksheets/sheet2.xml'),$zip->getFromName('xl/worksheets/sheet2.xml'));
                 $original->close();
             }finally{$zip->close();unlink($path);}
         }

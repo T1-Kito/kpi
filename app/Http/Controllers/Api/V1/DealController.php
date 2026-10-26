@@ -72,11 +72,42 @@ class DealController extends Controller
             'description' => ['nullable', 'string', 'max:2000'],
             'amount' => ['nullable', 'numeric', 'min:0'],
             'expected_close_date' => ['nullable', 'date'],
-            'next_activity_at' => ['nullable', 'date'],
+            'next_activity_at' => ['nullable', 'date', 'after:now'],
             'stage' => ['nullable', Rule::in(array_keys(DealService::stages((int) $tenantId)))],
         ]);
 
-        return response()->json(['data' => $this->deals->create($request->user(), $data)->load(['customer:id,code,name', 'lead:id,code,name', 'owner:id,name'])], 201);
+        $data += \App\Support\DealNeeds::validate($request);
+        $actor=$request->user();
+        if(!empty($data['owner_id'])){
+            $owner=\App\Models\User::where('tenant_id',$tenantId)->where('is_active',true)->find($data['owner_id']);
+            abort_unless($owner && $owner->hasPermission('sales.deal.view'),422,'Người phụ trách phải đang hoạt động và có quyền cơ hội.');
+            abort_unless($actor->dataScope()==='company' || (int)$owner->id===(int)$actor->id || ($actor->dataScope()==='department' && $actor->department_id && (int)$owner->department_id===(int)$actor->department_id),403,'Không được phân công ngoài phạm vi quản lý.');
+        }
+        return DB::transaction(function()use($request,$data){
+            $deal=$this->deals->create($request->user(), $data);
+            if(!empty($data['next_activity_at'])){
+                $this->tasks->create($request->user(),['module'=>'sales','task_type'=>'deal_follow_up','priority'=>'normal','title'=>'Theo dõi cơ hội '.$deal->code,'source_type'=>'Deal','source_id'=>$deal->id,'assignee_id'=>$deal->owner_id,'due_at'=>$data['next_activity_at']]);
+            }
+            return response()->json(['data'=>$deal->load(['customer:id,code,name','lead:id,code,name','owner:id,name'])],201);
+        });
+    }
+
+    public function updateNeeds(Request $request, Deal $deal):JsonResponse
+    {
+        abort_unless($deal->tenant_id===$request->user()->tenant_id && DataScope::owned(Deal::whereKey($deal->id),$request->user(),'owner_id','owner')->exists(),404);
+        $data=\App\Support\DealNeeds::validate($request);
+        $request->validate(['version'=>['required','integer','min:1'],'needs'=>['required','array']]);
+        return DB::transaction(function()use($request,$deal,$data){
+            $deal=Deal::whereKey($deal->id)->lockForUpdate()->firstOrFail();
+            abort_unless($deal->status==='open',409,'Cơ hội đã kết thúc. Không thể sửa nhu cầu.');
+            abort_unless((int)$deal->version===(int)$request->input('version'),409,'Cơ hội đã thay đổi. Vui lòng tải lại.');
+            $old=$deal->toArray();
+            $needs=$data['needs'];
+            if(isset($deal->needs['intake']))$needs['intake']=$deal->needs['intake'];
+            $deal->update(['needs'=>$needs,'version'=>$deal->version+1]);
+            app(\App\Support\AuditLogger::class)->record('deal',$deal->id,'update_deal_needs',$request->user(),$old,$deal->fresh()->toArray(),$request);
+            return response()->json(['data'=>$deal->fresh()]);
+        });
     }
 
     public function transition(Request $request, Deal $deal): JsonResponse

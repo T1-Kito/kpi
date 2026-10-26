@@ -10,6 +10,11 @@ internal static class Program
     private static int Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
+        if(args.Length==1 && args[0]=="--verify-package")
+        {
+            try { VerifyEmbeddedPayload(); return 0; }
+            catch(Exception ex) { Console.Error.WriteLine(ex.Message); return 1; }
+        }
         if(args.Length==2 && args[0]=="--update") { Application.Run(new UpdateForm(args[1])); return 0; }
         if(args.Length==4 && args[0]=="--update" && args[2]=="--wait-for" && int.TryParse(args[3],out var managerPid) && managerPid>0) { Application.Run(new UpdateForm(args[1],managerPid));return 0; }
         if(args.Length==2&&args[0]=="--test-utf8")
@@ -27,6 +32,27 @@ internal static class Program
         }
         Application.Run(new SetupForm(args.Contains("--sql-trial"),args.Contains("--open")));
         return 0;
+    }
+
+    private static void VerifyEmbeddedPayload()
+    {
+        var assembly=Assembly.GetExecutingAssembly();
+        using var source=assembly.GetManifestResourceStream("crm.zip") ?? throw new IOException("Missing source payload");
+        using var archive=new ZipArchive(source,ZipArchiveMode.Read);
+        using var manifest=JsonDocument.Parse((archive.GetEntry("PACKAGE-MANIFEST.json") ?? throw new IOException("Missing source manifest")).Open());
+        if(manifest.RootElement.GetProperty("release_version").GetString()!=SoftwareUpdate.Version)throw new IOException("Embedded release version mismatch");
+        foreach(var file in manifest.RootElement.GetProperty("files").EnumerateObject())
+        {
+            if(!SoftwareUpdate.Allowed(file.Name))throw new IOException("Unexpected embedded source file");
+            using var stream=(archive.GetEntry(file.Name) ?? throw new IOException("Missing embedded source file")).Open();
+            if(Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant()!=file.Value.GetString())throw new IOException("Embedded source checksum mismatch");
+        }
+        foreach(var name in new[]{"app/Support/CrmIntakeImport.php","public/assets/js/crm-intake.js","database/migrations/2026_10_26_120000_create_crm_intake_rows.php"})
+            if(archive.GetEntry(name) is null)throw new IOException("Missing new intake component");
+        using var runtime=assembly.GetManifestResourceStream("portable.zip") ?? throw new IOException("Missing runtime payload");
+        using var checksum=new StreamReader(assembly.GetManifestResourceStream("portable.sha256") ?? throw new IOException("Missing runtime checksum"));
+        if(Convert.ToHexString(SHA256.HashData(runtime)).ToLowerInvariant()!=checksum.ReadToEnd().Trim())throw new IOException("Embedded runtime checksum mismatch");
+        Console.WriteLine("PASS embedded source, version and runtime checksums; no installed database accessed.");
     }
 }
 

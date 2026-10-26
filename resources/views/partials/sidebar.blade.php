@@ -66,6 +66,7 @@
                     <a data-permission="master.view" href="/customers">Danh sách khách hàng</a>
                     <a data-permission="sales.lead.view" href="/leads">Khách hàng tiềm năng</a>
                     <a data-permission="master.view" href="/customer-contacts">Người liên hệ</a>
+                    <a data-permission="master.view" href="/customer-groups">Nhóm khách hàng</a>
                 </div>
             </div>
             <div class="nav-group" data-nav-group data-nav-key="dashboard-products">
@@ -141,6 +142,7 @@
             <a class="nav-link" data-permission="master.view" href="/customers"><span class="nav-icon profile" aria-hidden="true"></span><span>Danh sách khách hàng</span></a>
             <a class="nav-link" data-permission="sales.lead.view" href="/leads"><span class="nav-icon profile" aria-hidden="true"></span><span>Khách hàng tiềm năng</span></a>
             <a class="nav-link" data-permission="master.view" href="/customer-contacts"><span class="nav-icon profile" aria-hidden="true"></span><span>Người liên hệ</span></a>
+            <a class="nav-link" data-permission="master.view" href="/customer-groups"><span class="nav-icon profile" aria-hidden="true"></span><span>Nhóm khách hàng</span></a>
         </div>
         <div data-module-section="product" hidden>
             <a class="nav-link" data-permission="master.view" href="/skus"><span class="nav-icon product" aria-hidden="true"></span><span>Sản phẩm và mã hàng</span></a>

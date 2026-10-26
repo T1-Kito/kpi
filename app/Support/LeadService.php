@@ -96,6 +96,7 @@ class LeadService
             if (! $customer) {
                 $customer = Customer::create([
                     'tenant_id' => $lead->tenant_id,
+                    'created_by' => $actor->id,
                     'code' => $this->codes->next('customers', 'code', 'CUS-', fn ($query) => $query->where('tenant_id', $lead->tenant_id)),
                     'name' => $data['customer_name'] ?? $lead->name,
                     'customer_type' => $data['customer_type'] ?? 'person',
@@ -164,7 +165,7 @@ class LeadService
     {
         $phone = self::normalizedPhone($lead->phone);
         $email = strtolower(trim((string) $lead->email));
-        $matches = Customer::where('tenant_id', $lead->tenant_id)->whereNull('merged_into_id')->get()
+        $matches = Customer::withoutGlobalScope('catalog_visibility')->where('tenant_id', $lead->tenant_id)->whereNull('merged_into_id')->get()
             ->load('contacts')
             ->filter(fn ($customer) => ($phone !== '' && self::normalizedPhone($customer->phone) === $phone)
                 || ($email !== '' && strtolower(trim((string) $customer->email)) === $email)

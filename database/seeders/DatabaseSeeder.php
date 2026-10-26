@@ -238,6 +238,8 @@ class DatabaseSeeder extends Seeder
             ['tenant_id' => $tenant->id, 'code' => 'CUS-001'],
             [
                 'name' => 'Công ty Minh An',
+                'created_by' => $salesUser?->id,
+                'is_shared' => true,
                 'contact_name' => 'Anh Minh',
                 'phone' => '0901000001',
                 'email' => 'minhan@example.com',
@@ -250,6 +252,8 @@ class DatabaseSeeder extends Seeder
             ['tenant_id' => $tenant->id, 'code' => 'CUS-002'],
             [
                 'name' => 'Công ty Hòa Phát Demo',
+                'created_by' => $salesUser?->id,
+                'is_shared' => true,
                 'contact_name' => 'Chị Hòa',
                 'phone' => '0901000002',
                 'email' => 'hoaphat.demo@example.com',
@@ -282,6 +286,8 @@ class DatabaseSeeder extends Seeder
             [
                 'product_id' => $product->id,
                 'name' => 'Máy in mã vạch VK-100',
+                'created_by' => $adminUser?->id,
+                'is_shared' => true,
                 'barcode' => '893000000001',
                 'unit' => 'pcs',
                 'min_stock' => 5,
@@ -297,6 +303,8 @@ class DatabaseSeeder extends Seeder
             [
                 'product_id' => $product->id,
                 'name' => 'Ribbon in tem 110x300',
+                'created_by' => $adminUser?->id,
+                'is_shared' => true,
                 'barcode' => '893000000002',
                 'unit' => 'roll',
                 'min_stock' => 20,

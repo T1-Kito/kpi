@@ -1,6 +1,8 @@
 <?php
 // Source-only allowlist. Never bundle customer data, secrets or local runtimes.
 $root=dirname(__DIR__);
+$releaseVersion=$argv[1] ?? '0.8.10';
+if(!preg_match('/^[0-9]+\.[0-9]+\.[0-9]+$/D',$releaseVersion))throw new RuntimeException('Invalid release version');
 $output=$root.'/storage/app/private/release-packages';
 if (!is_dir($output) && !mkdir($output,0700,true)) throw new RuntimeException('Cannot create output directory');
 $name='vk-crm-uat-source-'.gmdate('Ymd-His').'-'.bin2hex(random_bytes(3)).'.zip';
@@ -27,7 +29,7 @@ try {
         if ($file->isFile()) $add($file->getPathname(),str_replace('\\','/',substr($file->getPathname(),strlen($root)+1)));
     }
     foreach (['bootstrap/cache','storage/app/private','storage/app/public','storage/framework/cache/data','storage/framework/sessions','storage/framework/views','storage/logs'] as $directory) $zip->addEmptyDir($directory);
-    $zip->addFromString('PACKAGE-MANIFEST.json',json_encode(['type'=>'UAT_SOURCE_NOT_INSTALLER','release_version'=>'0.8.9','sqlserver_certified'=>false,'files'=>$manifest],JSON_PRETTY_PRINT|JSON_THROW_ON_ERROR));
+    $zip->addFromString('PACKAGE-MANIFEST.json',json_encode(['type'=>'UAT_SOURCE_NOT_INSTALLER','release_version'=>$releaseVersion,'sqlserver_certified'=>false,'files'=>$manifest],JSON_PRETTY_PRINT|JSON_THROW_ON_ERROR));
 } finally {$zip->close();}
 $check=new ZipArchive();$check->open($output.'/'.$name);
 foreach ($manifest as $relative=>$hash) if (!hash_equals($hash,hash('sha256',$check->getFromName($relative)))) throw new RuntimeException('Package verification failed: '.$relative);

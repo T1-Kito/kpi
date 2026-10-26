@@ -7,6 +7,11 @@ use Illuminate\Database\Connection;
 final class AdditiveDatabaseUpgrade
 {
     public const STEPS=[
+        '2026_10_26_120000_create_crm_intake_rows'=>['@crm_intake'=>'crm_intake_rows'],
+        '2026_10_26_110000_create_service_interests'=>['@service_interests'=>'service_interests'],
+        '2026_10_26_100000_add_deal_needs'=>['@deal_needs'=>'needs'],
+        '2026_10_25_100000_create_customer_groups'=>['@customer_groups'=>'customer_groups'],
+        '2026_10_24_100000_add_catalog_sharing'=>['@catalog_sharing'=>'catalog_visibility'],
         '2026_10_20_100000_add_customer_feedback_details'=>['related_document'=>'string120','customer_confirmation'=>'string30'],
         '2026_10_20_110000_link_feedback_documents'=>['document_type'=>'string20','document_id'=>'bigint'],
         '2026_10_20_120000_create_ticket_attachments'=>['@new_table'=>'ticket_attachments'],
@@ -22,9 +27,26 @@ final class AdditiveDatabaseUpgrade
         $pending=array_values(array_diff($required,$applied));
         if(array_diff($pending,array_keys(self::STEPS))) throw new \RuntimeException('UPGRADE_BASELINE');
         if($pending && !$db->getSchemaBuilder()->hasTable('service_tickets')) throw new \RuntimeException('UPGRADE_BASELINE');
-        foreach($pending as $name) foreach(self::STEPS[$name] as $column=>$type) {
+        foreach($pending as $name) {
+            if(isset(self::STEPS[$name]['@deal_needs'])){
+                if(!$db->getSchemaBuilder()->hasTable('deals') || $db->getSchemaBuilder()->hasColumn('deals','needs'))throw new \RuntimeException('UPGRADE_SCHEMA_CONFLICT');
+                continue;
+            }
+            if (isset(self::STEPS[$name]['@customer_groups'])) {
+                if (!$db->getSchemaBuilder()->hasTable('customers') || $db->getSchemaBuilder()->hasTable('customer_groups') || $db->getSchemaBuilder()->hasColumn('customers','customer_group_id')) throw new \RuntimeException('UPGRADE_SCHEMA_CONFLICT');
+                continue;
+            }
+            if (isset(self::STEPS[$name]['@catalog_sharing'])) {
+                foreach (['customers', 'skus'] as $table) {
+                    if (!$db->getSchemaBuilder()->hasTable($table)) throw new \RuntimeException('UPGRADE_BASELINE');
+                    foreach (['created_by', 'is_shared'] as $column) if ($db->getSchemaBuilder()->hasColumn($table, $column)) throw new \RuntimeException('UPGRADE_SCHEMA_CONFLICT');
+                }
+                continue;
+            }
+            foreach(self::STEPS[$name] as $column=>$type) {
             if(str_starts_with($column,'@')) { if($db->getSchemaBuilder()->hasTable($type))throw new \RuntimeException('UPGRADE_SCHEMA_CONFLICT'); }
             elseif($db->getSchemaBuilder()->hasColumn(str_contains($name,'customer_business_classification')?'customers':'service_tickets',$column)) throw new \RuntimeException('UPGRADE_SCHEMA_CONFLICT');
+        }
         }
         if(in_array('2026_10_22_120000_add_customer_business_classification',$pending,true) && !$db->getSchemaBuilder()->hasTable('customers'))throw new \RuntimeException('UPGRADE_BASELINE');
         return $pending;
@@ -35,7 +57,21 @@ final class AdditiveDatabaseUpgrade
         $db->transaction(function()use($db,$pending,$fault){
             $batch=(int)$db->table('migrations')->max('batch')+1;
             foreach($pending as $name) {
-                if(isset(self::STEPS[$name]['@batches'])) {
+                if(isset(self::STEPS[$name]['@crm_intake'])){
+                    $db->getSchemaBuilder()->create('crm_intake_rows',fn($t)=>CrmIntakeImport::schema($t));
+                }elseif(isset(self::STEPS[$name]['@service_interests'])){
+                    $db->getSchemaBuilder()->create('service_interests',function($t){$t->id();$t->unsignedBigInteger('tenant_id');$t->unsignedBigInteger('parent_id')->nullable();$t->string('name',150);$t->boolean('is_active')->default(true);$t->timestamps();$t->index(['tenant_id','parent_id']);});
+                }elseif(isset(self::STEPS[$name]['@deal_needs'])){
+                    $db->getSchemaBuilder()->table('deals',fn($t)=>$t->text('needs')->nullable());
+                } elseif (isset(self::STEPS[$name]['@customer_groups'])) {
+                    $db->getSchemaBuilder()->create('customer_groups', function ($t) {
+                        $t->id(); $t->unsignedBigInteger('tenant_id'); $t->unsignedBigInteger('parent_id')->nullable();
+                        $t->string('name',100); $t->boolean('is_active')->default(true); $t->timestamps(); $t->index(['tenant_id','parent_id']);
+                    });
+                    $db->getSchemaBuilder()->table('customers', fn($t) => $t->unsignedBigInteger('customer_group_id')->nullable()->index());
+                } elseif (isset(self::STEPS[$name]['@catalog_sharing'])) {
+                    CatalogSharingSchema::up($db);
+                } elseif(isset(self::STEPS[$name]['@batches'])) {
                     self::importSchema($db);
                 } elseif((self::STEPS[$name]['@new_table'] ?? '')==='import_record_links') {
                     $db->getSchemaBuilder()->create('import_record_links',function($t){
