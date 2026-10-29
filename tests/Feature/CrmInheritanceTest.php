@@ -112,7 +112,7 @@ class CrmInheritanceTest extends TestCase
         $this->completeSalesQuotation($quotation->id);
         $quotation->refresh();
         $admin = User::where('email', 'admin@vk-kpi.local')->firstOrFail();
-        $order = app(SalesOrderService::class)->createFromQuotation($quotation, $admin);
+        $order = $quotation->salesOrders()->where('status','draft')->sole();
         $this->assertSame($owner->id, $order->sales_owner_id);
         $this->assertSame($quotation->total_amount, $order->total_amount);
     }

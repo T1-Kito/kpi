@@ -10,5 +10,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/goods-issues.js?v=20261012-auto-flow1"></script>
+<script src="/assets/js/features/goods-issues.js?v=20261028-template-picker1"></script>
 @endpush

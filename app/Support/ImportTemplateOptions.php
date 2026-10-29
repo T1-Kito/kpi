@@ -27,7 +27,7 @@ final class ImportTemplateOptions
             }
             foreach($groupLevels as $i=>$values)$groupLevels[$i]=$values->unique()->sort()->values();
         }
-        $users=$product?\App\Models\ProductCategory::where('tenant_id',$actor->tenant_id)->where('status','active')->orderBy('name')->get()->map(fn($v)=>(object)['email'=>'crm:'.$v->name,'name'=>$v->name]):User::where('tenant_id',$actor->tenant_id)->where('is_active',true)->orderBy('email')->get(['email','name']);
+        $users=$product?\App\Models\ProductCategory::where('tenant_id',$actor->tenant_id)->where('status','active')->orderBy('name')->get()->filter(fn($v)=>ProductCategoryTree::active($v))->map(fn($v)=>(object)['email'=>'crm:'.ProductCategoryTree::path($v),'name'=>ProductCategoryTree::path($v)]):User::where('tenant_id',$actor->tenant_id)->where('is_active',true)->orderBy('email')->get(['email','name']);
         $customers=$product?\App\Models\ProductBrand::where('tenant_id',$actor->tenant_id)->where('status','active')->orderBy('name')->get()->map(fn($v)=>(object)['code'=>$v->name,'name'=>$v->name]):($kind!=='customers' && $actor->hasPermission('customer.manage')
             ? Customer::where('tenant_id',$actor->tenant_id)->where('customer_type','organization')->where('status','active')->whereNull('merged_into_id')->orderBy('code')->get(['code','name']) : collect());
         if($kind==='warehouses')$customers=collect();

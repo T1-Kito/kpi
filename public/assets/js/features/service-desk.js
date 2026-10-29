@@ -52,20 +52,24 @@
     }
 
     function renderTickets(rows) {
-        const body = rows.length ? rows.map(row => `<tr><td><button class="btn small" type="button" data-ticket-open="${escape(row.id)}">${escape(row.code)}</button></td><td>${escape(row.customer?.name || '—')}</td><td>${escape(row.subject)}</td><td>${escape(row.category)}</td><td><span class="badge ${['high','urgent'].includes(row.priority)?'danger':'info'}">${escape(row.priority)}</span></td><td>${formatDate(row.resolution_due_at,true)}</td><td><span class="badge ${['resolved','closed'].includes(row.status)?'success':'warning'}">${escape(row.status)}</span></td></tr>`).join('') : '<tr><td colspan="7"><div class="empty-state"><strong>Chưa có ticket</strong><span>Tạo ticket khi khách hàng cần hỗ trợ hoặc bảo hành.</span></div></td></tr>';
-        return `<section class="module-panel"><div class="panel-head"><div><h2>Hàng đợi dịch vụ</h2><span>Ticket đang mở, đang xử lý và chờ phản hồi khách hàng.</span></div><span class="badge info">${rows.length} ticket</span></div><div class="table-wrap"><table class="list-table"><thead><tr><th>Mã</th><th>Khách hàng</th><th>Tiêu đề</th><th>Loại</th><th>Ưu tiên</th><th>SLA xử lý</th><th>Trạng thái</th></tr></thead><tbody>${body}</tbody></table></div></section>`;
+        const body = rows.length ? rows.map(row => `<tr><td><button class="btn small" type="button" data-ticket-open="${escape(row.id)}">${escape(row.code)}</button></td><td>${escape(row.customer?.name || '—')}</td><td>${escape(row.subject)}</td><td>${escape(row.category)}</td><td><span class="badge ${['high','urgent'].includes(row.priority)?'danger':'info'}">${escape(row.priority)}</span></td><td>${formatDate(row.resolution_due_at,true)}</td><td><span class="badge ${['resolved','closed'].includes(row.status)?'success':'warning'}">${escape(row.status)}</span></td></tr>`).join('') : '<tr><td colspan="7"><div class="empty-state"><strong>Chưa có yêu cầu hỗ trợ</strong><span>Tiếp nhận yêu cầu khi khách hàng cần hỗ trợ hoặc bảo hành.</span></div></td></tr>';
+        return `<section class="module-panel"><div class="panel-head"><div><h2>Danh sách yêu cầu hỗ trợ</h2><span>Theo dõi tiếp nhận, người xử lý và thời hạn hỗ trợ.</span></div><span class="badge info">${rows.length} yêu cầu</span></div><div class="table-wrap"><table class="list-table"><thead><tr><th>Mã</th><th>Khách hàng</th><th>Tiêu đề</th><th>Loại</th><th>Ưu tiên</th><th>Hạn xử lý</th><th>Trạng thái</th></tr></thead><tbody>${body}</tbody></table></div></section>`;
     }
     function ticketControls(root,meta) {
-        const controls=document.createElement('section');controls.className='module-panel';
+        const controls=document.createElement('section');controls.className='ticket-list-filters';
         const statuses={open:'Mới',in_progress:'Đang xử lý',pending_customer:'Chờ thông tin khách',resolved:'Đã xử lý / chờ xác nhận',closed:'Đã đóng',cancelled:'Đã hủy'};
         controls.innerHTML=`<div class="form-grid"><div class="field"><label>Tìm mã / tiêu đề</label><input data-ticket-filter="search"></div><div class="field"><label>Trạng thái</label><select data-ticket-filter="status"><option value="">Tất cả</option>${Object.entries(statuses).map(([key,label])=>`<option value="${key}">${label}</option>`).join('')}</select></div><div class="field"><label>Người phụ trách</label><select data-ticket-filter="assignee_id"><option value="">Tất cả</option>${data().users.map(u=>`<option value="${escape(u.id)}">${escape(u.name)}</option>`).join('')}</select></div><div class="field"><label>Hạn xử lý</label><select data-ticket-filter="overdue"><option value="0">Tất cả</option><option value="1">Đang quá hạn</option></select></div></div><button class="btn" type="button" data-ticket-search>Lọc danh sách</button>`;
-        root.prepend(controls);
+        const panel=root.querySelector('.module-panel');
+        panel.classList.add('ticket-list-panel');
+        panel.querySelector('.panel-head').after(controls);
         controls.querySelectorAll('[data-ticket-filter]').forEach(input=>input.value=ticketFilters[input.dataset.ticketFilter]);
+        controls.querySelector('[data-ticket-filter="search"]').placeholder='Tìm mã hoặc tiêu đề yêu cầu...';
+        controls.querySelector('[data-ticket-filter="search"]').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();controls.querySelector('[data-ticket-search]').click();}});
         controls.querySelector('[data-ticket-search]').addEventListener('click',()=>{controls.querySelectorAll('[data-ticket-filter]').forEach(input=>ticketFilters[input.dataset.ticketFilter]=input.value);ticketFilters.page=1;loadPage(true);});
-        const pager=document.createElement('div');pager.className='pagination';
+        const pager=document.createElement('div');pager.className='ticket-list-pagination';
         const last=Math.max(1,Math.ceil((meta.total || 0)/(meta.page_size || 20)));
         pager.innerHTML=`<button type="button" class="btn small" data-ticket-prev ${ticketFilters.page<=1?'disabled':''}>Trang trước</button><span>Trang ${escape(ticketFilters.page)} / ${last} · ${escape(meta.total || 0)} yêu cầu</span><button type="button" class="btn small" data-ticket-next ${ticketFilters.page>=last?'disabled':''}>Trang sau</button>`;
-        root.appendChild(pager);
+        panel.appendChild(pager);
         pager.querySelector('[data-ticket-prev]').addEventListener('click',()=>{ticketFilters.page--;loadPage(true);});pager.querySelector('[data-ticket-next]').addEventListener('click',()=>{ticketFilters.page++;loadPage(true);});
     }
 

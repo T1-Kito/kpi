@@ -180,9 +180,16 @@ function renderTaskStats() {
 }
 
 function taskStat(label, value, note, tone) {
+    const paths = {
+        danger: '<circle cx="12" cy="12" r="9"/><path d="M12 7v6m0 4h.01"/>',
+        warning: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18m-13 4h3v3H8z"/>',
+        info: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18m-13 4h8m-8 3h5"/>',
+        success: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 12 3 3 5-6"/>',
+        neutral: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+    };
     return `
         <section class="task-stat-card ${tone}">
-            <span class="task-stat-icon"></span>
+            <span class="task-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${paths[tone] || paths.neutral}</svg></span>
             <div>
                 <span>${label}</span>
                 <strong>${VKTable.money(value)}</strong>
@@ -348,8 +355,15 @@ async function openTaskModal() {
     const defaultType = taskTypes[0];
 
     VKModal.open('Tạo công việc', `
-        <div class="form-grid">
-            ${VKModal.field('title', 'Tiêu đề')}
+        <div class="task-create-layout">
+            <section class="task-create-section"><h3>Nội dung công việc</h3>
+            ${VKModal.field('title', 'Tiêu đề công việc')}
+            <div class="field"><label for="description">Mô tả</label><textarea id="description" name="description" placeholder="Nội dung cần thực hiện, yêu cầu hoặc kết quả mong muốn..."></textarea></div>
+            <div class="form-grid">
+            ${VKModal.select('module', 'Phân hệ xử lý', taskModules, defaultType.module)}
+            ${VKModal.select('task_type', 'Nghiệp vụ công việc', taskTypesForModule(defaultType.module), defaultType.value)}
+            </div></section>
+            <section class="task-create-section"><h3>Phân công & thời hạn</h3>
             ${VKModal.select('assignee_id', 'Người phụ trách', [
                 { value: '', label: 'Chưa phân công' },
                 ...users.data.map(user => ({ value: user.id, label: `${user.name} - ${user.email}` })),
@@ -358,16 +372,15 @@ async function openTaskModal() {
                 { value: '', label: 'Chưa gắn phòng ban' },
                 ...departments.data.map(department => ({ value: department.id, label: `${department.code} - ${department.name}` })),
             ])}
+            <div class="form-grid">
             ${VKModal.select('priority', 'Ưu tiên', [
                 { value: 'low', label: 'Thấp' },
                 { value: 'normal', label: 'Bình thường' },
                 { value: 'high', label: 'Cao' },
                 { value: 'urgent', label: 'Khẩn cấp' },
             ], defaultType.priority)}
-            ${VKModal.select('module', 'Phân hệ xử lý', taskModules, defaultType.module)}
-            ${VKModal.select('task_type', 'Nghiệp vụ công việc', taskTypesForModule(defaultType.module), defaultType.value)}
             ${VKModal.field('due_at', 'Hạn xử lý', 'datetime-local')}
-            <div class="field full"><label for="description">Mô tả</label><textarea id="description" name="description"></textarea></div>
+            </div></section>
         </div>
     `, async (form) => {
         const data = Object.fromEntries(new FormData(form));
@@ -383,7 +396,7 @@ async function openTaskModal() {
         VKModal.toast('Đã tạo công việc.');
         VKModal.close();
         loadTasks();
-    });
+    }, {className:'task-create-modal',submitText:'Tạo công việc'});
 }
 
 async function updateTaskStatus(id, status) {

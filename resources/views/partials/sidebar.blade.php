@@ -36,7 +36,7 @@
         <div data-module-section="work">
             <a class="nav-link" href="/dashboard"><span class="nav-icon home" aria-hidden="true"></span><span>Tổng quan</span></a>
             <a class="nav-link" data-permission="task.view" href="/tasks"><span class="nav-icon tasks" aria-hidden="true"></span><span>Công việc</span><span class="nav-badge" data-sidebar-task-count>0</span></a>
-            <a class="nav-link" data-permission="task.approve" href="/approvals"><span class="nav-icon approval" aria-hidden="true"></span><span>Phê duyệt</span></a>
+            <a class="nav-link" data-permission="task.approve|sales.margin.approve|sales.quotation.approve_any" href="/approvals"><span class="nav-icon approval" aria-hidden="true"></span><span>Phê duyệt</span></a>
             <a class="nav-link" data-permission="alert.view" href="/alerts"><span class="nav-icon alert" aria-hidden="true"></span><span>Cảnh báo</span><span class="nav-badge danger" data-sidebar-alert-count>0</span></a>
         </div>
 
@@ -46,7 +46,7 @@
                 <div class="nav-sub">
                     <a href="/dashboard">Tổng quan</a>
                     <a data-permission="task.view" href="/tasks">Công việc</a>
-                    <a data-permission="task.approve" href="/approvals">Phê duyệt</a>
+                    <a data-permission="task.approve|sales.margin.approve|sales.quotation.approve_any" href="/approvals">Phê duyệt</a>
                     <a data-permission="alert.view" href="/alerts">Cảnh báo</a>
                 </div>
             </div>

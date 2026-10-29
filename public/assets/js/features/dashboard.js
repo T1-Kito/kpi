@@ -1,3 +1,4 @@
+function dashboardActivityAction(action) { const label = VKTable.translateAction(action); return label && label !== action ? label : 'Thao tác nghiệp vụ đã ghi nhận'; }
 (function () {
 let dashboardLoadVersion = 0;
 let dashboardRefreshing = false;
@@ -280,7 +281,7 @@ function renderExecutiveDashboard(executive, data) {
             </div>
             <div class="executive-section-title"><h3>Vận hành gần đây</h3><p>Việc cần xử lý và dấu vết hoạt động của hệ thống</p></div>
             <section class="executive-panel"><div class="executive-panel-head"><div><h3>Việc cần xử lý của tôi</h3><p>Theo quyền và phạm vi của người đang đăng nhập</p></div><a href="/tasks">Mở công việc</a></div>${renderPrimaryWork(getDashboardProfile(), data, data.tasks.data.filter(row => ['new', 'assigned', 'in_progress', 'overdue'].includes(row.status)))}</section>
-            <section class="executive-panel executive-activity" data-executive-panel="work"><div class="executive-panel-head"><div><h3>Hoạt động gần đây</h3><p>Thao tác được ghi nhận trong nhật ký hệ thống</p></div><a href="/audit-logs">Xem nhật ký</a></div>${executive.activity.length ? `<div class="executive-activity-list">${executive.activity.map(row=>`<div><span>${VKTable.escapeHtml(row.user_name || 'Hệ thống')}</span><strong>${VKTable.escapeHtml(String(row.action || '').replaceAll('_',' '))}</strong><small>${VKTable.escapeHtml(String(row.created_at || '').slice(0,16))}</small></div>`).join('')}</div>` : '<p class="executive-empty">Chưa có hoạt động được ghi nhận.</p>'}</section>
+            <section class="executive-panel executive-activity" data-executive-panel="work"><div class="executive-panel-head"><div><h3>Hoạt động gần đây</h3><p>Thao tác được ghi nhận trong nhật ký hệ thống</p></div><a href="/audit-logs">Xem nhật ký</a></div>${executive.activity.length ? `<div class="executive-activity-list">${executive.activity.map(row=>`<div><span>${VKTable.escapeHtml(row.user_name || 'Hệ thống')}</span><strong>${VKTable.escapeHtml(dashboardActivityAction(row.action))}</strong><small>${VKTable.escapeHtml(String(row.created_at || '').slice(0,16))}</small></div>`).join('')}</div>` : '<p class="executive-empty">Chưa có hoạt động được ghi nhận.</p>'}</section>
         </div>`;
 }
 

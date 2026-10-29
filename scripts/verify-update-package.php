@@ -15,11 +15,16 @@ for($i=0;$i<$zip->numFiles;$i++){
     $allowed=preg_match('~^(app/|config/|routes/|resources/|database/migrations/|deployment/windows/|public/assets/)~D',$name) || in_array($name,['artisan','composer.json','composer.lock','bootstrap/app.php','bootstrap/providers.php','public/index.php','public/.htaccess','public/robots.txt','public/favicon.ico'],true);
     if(!$allowed || str_contains($name,'..') || str_contains($name,'\\') || ($name!=='deployment/windows/.env.uat.example' && preg_match('~(^|/)(\.env(?:\..*)?|database\.sqlite|node_modules|\.git|logs|sessions|backups)(/|$)|\.(?:sqlite|bak|pdb)$|\.inspect\.ndjson$~i',$name)))throw new RuntimeException('Forbidden payload entry: '.$name);
     if(!isset($manifest['files'][$name]) || !hash_equals($manifest['files'][$name],hash('sha256',$zip->getFromName($name))))throw new RuntimeException('File checksum mismatch: '.$name);
+    if(str_starts_with($name,'database/migrations/') && is_file($root.'/'.$name) && !hash_equals(hash_file('sha256',$root.'/'.$name),hash('sha256',$zip->getFromName($name))))throw new RuntimeException('Migration bytes were transformed during packaging: '.$name);
 }
 foreach($manifest['files'] as $name=>$hash)if(!isset($seen[$name]))throw new RuntimeException('Missing manifest entry');
 foreach(['app/Support/CrmIntakeImport.php','app/Support/CrmIntakeWorkbook.php','app/Http/Controllers/Api/V1/CrmIntakeController.php','app/Support/CatalogAccess.php','app/Support/CustomerGroupReference.php','public/assets/js/crm-intake.js','public/assets/css/crm-intake.css','public/assets/js/features/deals.js','resources/views/layouts/app.blade.php','database/migrations/2026_10_24_100000_add_catalog_sharing.php','database/migrations/2026_10_25_100000_create_customer_groups.php','database/migrations/2026_10_26_100000_add_deal_needs.php','database/migrations/2026_10_26_110000_create_service_interests.php','database/migrations/2026_10_26_120000_create_crm_intake_rows.php'] as $required)
     if(!isset($manifest['files'][$required]))throw new RuntimeException('Missing updated component: '.$required);
-$zip->close();echo 'PASS source manifest, '.count($manifest['files']).' checksums, required modules and no local data/configuration.'.PHP_EOL;
+if(isset($manifest['files']['deployment/windows/default-accounts.json'])) {
+    $profile=json_decode($zip->getFromName('deployment/windows/default-accounts.json'),true,512,JSON_THROW_ON_ERROR);
+    if(($profile['format'] ?? 0)!==1 || count($profile['accounts'] ?? [])!==2)throw new RuntimeException('Invalid authorized installation account profile');
+}
+$zip->close();echo 'PASS source manifest, '.count($manifest['files']).' checksums and required modules; excludes local database and environment files.'.PHP_EOL;
 if($zip->open($payload,ZipArchive::RDONLY)!==true)throw new RuntimeException('Runtime ZIP unreadable');
 foreach(['runtime/php.exe','runtime/php.ini','runtime/ext/php_opcache.dll','vendor/autoload.php','initialize-uat.php'] as $required)if($zip->locateName($required)===false)throw new RuntimeException('Missing runtime component');
 if(!str_contains($zip->getFromName('runtime/php.ini'),'opcache.validate_timestamps=1'))throw new RuntimeException('OPcache must detect updates');

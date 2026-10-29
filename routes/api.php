@@ -137,7 +137,12 @@ Route::prefix('v1')->group(function () {
             Route::post('/skus', [SkuController::class, 'store'])->middleware('permission:product.manage');
             Route::put('/skus/{sku}', [SkuController::class, 'update'])->middleware('permission:product.manage');
             Route::post('/product-categories', [ProductCatalogController::class, 'storeCategory'])->middleware('permission:product.manage');
+            Route::post('/product-categories/import-tree', [ProductCatalogController::class, 'importTree'])->middleware('permission:product.manage');
             Route::post('/product-brands', [ProductCatalogController::class, 'storeBrand'])->middleware('permission:product.manage');
+            Route::put('/product-categories/{id}', [ProductCatalogController::class, 'updateCategory'])->whereNumber('id')->middleware('permission:product.manage');
+            Route::delete('/product-categories/{id}', [ProductCatalogController::class, 'deleteCategory'])->whereNumber('id')->middleware('permission:product.manage');
+            Route::put('/product-brands/{id}', [ProductCatalogController::class, 'updateBrand'])->whereNumber('id')->middleware('permission:product.manage');
+            Route::delete('/product-brands/{id}', [ProductCatalogController::class, 'deleteBrand'])->whereNumber('id')->middleware('permission:product.manage');
             Route::post('/warehouses', [WarehouseController::class, 'store'])->middleware('permission:warehouse.manage');
             Route::put('/warehouses/{warehouse}', [WarehouseController::class, 'update'])->middleware('permission:warehouse.manage');
             Route::post('/sales-master-data/stages', [SalesMasterDataController::class, 'storeStage'])->middleware('permission:sales.master.manage');
@@ -259,6 +264,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/positions', [PositionController::class, 'store']);
             Route::put('/positions/{position}', [PositionController::class, 'update']);
             Route::get('/print-templates', [PrintTemplateController::class, 'index']);
+            Route::get('/print-templates/merge-field-guide', [PrintTemplateController::class, 'mergeFieldGuide']);
             Route::get('/print-templates/reference/{module}', [PrintTemplateController::class, 'reference'])
                 ->where('module', 'quotation|sales_order|goods_issue|contract|delivery_acceptance');
             Route::get('/print-templates/{printTemplate}/original', [PrintTemplateController::class, 'original']);
@@ -311,7 +317,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/contracts/{contract}/milestones/{milestone}/accept', [ContractController::class, 'acceptMilestone']);
         });
 
-        Route::middleware('permission:sales.quotation.view|sales.margin.approve')->group(function () {
+        Route::middleware('permission:sales.quotation.view|sales.margin.approve|sales.quotation.approve_any')->group(function () {
             Route::get('/quotations', [QuotationController::class, 'index']);
             Route::get('/quotations/{quotation}', [QuotationController::class, 'show']);
             Route::get('/quotations/{quotation}/word', [QuotationController::class, 'exportWord']);
@@ -320,6 +326,7 @@ Route::prefix('v1')->group(function () {
 
         Route::middleware('permission:sales.quotation.create')->group(function () {
             Route::post('/quotations', [QuotationController::class, 'store']);
+            Route::post('/quotations/preview-draft', [QuotationController::class, 'previewDraft'])->middleware('throttle:20,1');
             Route::post('/quotations/{quotation}/duplicate', [QuotationController::class, 'duplicate']);
             Route::post('/customers/quick', [CustomerController::class, 'quickStore']);
             Route::get('/customers/tax-lookup/{taxCode}', [CustomerController::class, 'lookupTaxCode']);
@@ -334,7 +341,7 @@ Route::prefix('v1')->group(function () {
             Route::delete('/quotations/{quotation}', [QuotationController::class, 'destroy']);
         });
 
-        Route::middleware('permission:sales.margin.approve')->group(function () {
+        Route::middleware('permission:sales.margin.approve|sales.quotation.approve_any')->group(function () {
             Route::post('/quotations/{quotation}/approve', [QuotationController::class, 'approve']);
         });
 

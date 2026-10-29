@@ -18,6 +18,6 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/dashboard.js?v=20261020-chair-care1"></script>
+<script src="/assets/js/features/dashboard.js?v=20261029-activity-vi1"></script>
 <script src="/assets/js/features/my-kpi.js?v=20261013-ui2"></script>
 @endpush

@@ -23,6 +23,7 @@ document.addEventListener('click', (event) => {
     if (tab) { templateState.module = tab.dataset.templateModule; renderPrintTemplates(); }
     const copy = event.target.closest('[data-copy-merge-field]');
     if (copy) copyMergeField(copy.dataset.copyMergeField);
+    if (event.target.closest('[data-download-merge-guide]')) downloadMergeFieldGuide();
     if (event.target.matches('[data-create-print-template]')) openPrintTemplateModal();
     if (event.target.matches('[data-download-merge-template]')) downloadMergeTemplate(event.target.dataset.downloadMergeTemplate || 'quotation');
     if (event.target.matches('[data-edit-print-template]')) {
@@ -79,6 +80,14 @@ function renderPrintTemplates(total = templateState.rows.length) {
         }),
         table: renderTemplateTable(rows),
     });
+    const referenceButton = root.querySelector('[data-download-merge-template]');
+    if (referenceButton) {
+        const actions = document.createElement('div');
+        actions.className = 'template-download-actions';
+        referenceButton.before(actions);
+        actions.innerHTML = '<button class="btn primary" type="button" data-download-merge-guide>Tải bộ trường trộn</button>';
+        actions.append(referenceButton);
+    }
     restoreFilters();
 }
 
@@ -230,6 +239,7 @@ async function previewWord(file, root, caption = 'Mẫu gốc · chưa trộn d�
         await window.docx.renderAsync(file, stage, null, {inWrapper:true, ignoreWidth:false, ignoreHeight:false, renderAltChunks:false});
         if (root.isConnected && root.dataset.previewVersion === token) {
             root.replaceChildren(stage);
+            await window.VKWordPreview.alignPageImages(file, stage);
             const label = document.querySelector('[data-preview-caption]');
             if (label) label.textContent = caption;
         }
@@ -284,6 +294,23 @@ function renderFieldChips(keys = null, module = 'quotation') {
         (groups[group] ||= []).push(field);
     });
     return Object.entries(groups).map(([group, entries]) => `<section class="template-field-group"><h4>${group}</h4>${entries.map(field => `<button class="template-field-entry" type="button" data-merge-field-entry="${VKTable.escapeHtml(`${field.label} ${field.key}`.toLocaleLowerCase('vi'))}" data-copy-merge-field="${VKTable.escapeHtml(field.key)}"><span>${VKTable.escapeHtml(field.label || field.key)}</span><code>{{${VKTable.escapeHtml(field.key)}}}</code></button>`).join('')}</section>`).join('');
+}
+
+async function downloadMergeFieldGuide() {
+    const button = document.querySelector('[data-download-merge-guide]');
+    if (button?.disabled) return;
+    if (button) button.disabled = true;
+    try {
+        const response = await fetch('/api/v1/print-templates/merge-field-guide', {
+            headers: { Authorization: `Bearer ${VKApi.token()}` },
+        });
+        if (!response.ok) throw new Error('Không tải được bộ trường trộn. Vui lòng thử lại.');
+        downloadBlobFile('bo-truong-tron.docx', await response.blob());
+    } catch (error) {
+        VKModal.toast(error.message || 'Không tải được bộ trường trộn.', 'warning');
+    } finally {
+        if (button) button.disabled = false;
+    }
 }
 
 async function downloadMergeTemplate(module = 'quotation') {

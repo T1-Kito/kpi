@@ -146,8 +146,10 @@
             VKModal.toast('Đã nghiệm thu mốc thanh toán.');
             loadContracts();
         }
-        if (print) await openContractPrint(print.dataset.contractPrint);
-        if (word) await downloadContractWord(word.dataset.contractWord);
+        if (print || word) {
+            const id = print?.dataset.contractPrint || word.dataset.contractWord;
+            await window.VKDocumentExport.open({module:'contract', endpoint:`/api/v1/contracts/${encodeURIComponent(id)}/word`, title:'hợp đồng', filename:'hop-dong.docx'});
+        }
     }
 
     async function openContractPrint(id) {

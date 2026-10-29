@@ -219,10 +219,16 @@
         if (state.tab === 'tasks') return renderRelated('Công việc liên quan', row.tasks || []);
         if (state.tab === 'notes') return renderNotes();
 
+        if (state.type === 'deal') {
+            const stage = infoFields('deal',row).find(([label])=>label==='Giai đoạn')?.[1] || 'Chưa cập nhật';
+            const documents = row.related_documents || [];
+            return `<div class="deal-workspace"><main class="deal-workspace-main"><section class="deal-progress-summary"><div><small>Giai đoạn hiện tại</small><strong>${escape(stage)}</strong></div><span>${VKTable.statusBadge(row.status)}</span></section><div class="deal-workspace-sheet">${renderDealInformation(row)}${renderItems(row.items || [])}<section class="record-panel deal-documents"><h3>Báo giá liên quan <span>${documents.length}</span></h3>${documents.length ? `<div class="record-related">${documents.map(doc=>`<div><a class="record-code-text" href="/quotations?open=${encodeURIComponent(String(doc.path || '').split('/').pop())}">${escape(doc.code)}</a>${VKTable.statusBadge(doc.status)}</div>`).join('')}</div>` : '<div class="empty compact">Chưa có báo giá. Bổ sung nhu cầu và hàng hóa rồi bấm “Tạo báo giá”.</div>'}</section></div>${renderDealFollowUps(row)}</main><aside class="deal-workspace-history">${renderFlow(row)}</aside></div>`;
+        }
+
         return `
             ${renderMetrics(state.type, row)}
             ${state.type === 'purchaseOrder' && row.approval_flow?.length ? renderPurchaseApproval(row) : ''}
-            <div class="record-page-grid">
+            <div class="record-page-grid ${state.type==='deal'?'deal-overview-grid':''}">
                 ${renderInfo(state.type, row)}
                 ${renderFlow(row)}
             </div>
@@ -1064,7 +1070,16 @@
         `;
     }
 
+    function renderDealInformation(row) {
+        const fields=infoFields('deal',row);
+        const needs=new Set(['Nhu cầu','Mục đích','Quy mô nhóm','Số khách','Ngày sử dụng dịch vụ','Ngân sách','Dịch vụ quan tâm','Yêu cầu đặc biệt']);
+        const source=new Set(['Mã đối chiếu trong file','Người liên hệ trong file','Kênh tiếp cận','Kênh liên hệ','Sản phẩm quan tâm (mô tả gốc)','Trạng thái CRM trong file','Ngày liên hệ gần nhất trong file']);
+        const group=(title,items)=>`<section class="record-panel deal-information"><h3>${escape(title)}</h3><dl>${items.map(([label,value,html])=>`<div><dt>${escape(label)}</dt><dd class="${/^Mã(?:\s|$)/i.test(label)?'record-code-text':''}">${html?value:escape(value ?? 'Chưa cập nhật')}</dd></div>`).join('')}</dl></section>`;
+        return `<div class="deal-information-stack">${group('Thông tin cơ hội',fields.filter(([label])=>!needs.has(label)&&!source.has(label)))}${group('Nhu cầu khách hàng',fields.filter(([label])=>needs.has(label)))}${row.needs?.intake?group('Thông tin từ danh sách nhập',fields.filter(([label])=>source.has(label))):''}</div>`;
+    }
+
     function renderInfo(type, row) {
+        if(type==='deal')return renderDealInformation(row);
         const fields = infoFields(type, row);
         return `
             <section class="record-panel">
@@ -1106,10 +1121,10 @@
             deal: [
                 ['Khách hàng', row.customer?.name || row.lead?.name || 'Chưa gắn'],
                 ['Người phụ trách', row.owner?.name || '-'],
-                ['Giai đoạn', row.stage || '-'],
+                ['Giai đoạn', ({new:'Mới',qualified:'Đã xác định nhu cầu',proposal:'Đang báo giá',negotiation:'Đang đàm phán',won:'Thắng',lost:'Mất cơ hội'})[row.stage] || row.stage || '-'],
                 ['Giá trị dự kiến', VKTable.money(row.amount || 0)],
                 ['Dự kiến chốt', formatDate(row.expected_close_date)],
-                ['Nguồn', row.source || '-'],
+                ['Nguồn', ({hotline:'Đường dây nóng',website:'Website',referral:'Giới thiệu',facebook:'Facebook'})[row.source] || row.source || '-'],
                 ['Nhu cầu', row.description || '-'],
                 ['Mục đích', row.needs?.purpose || '-'],
                 ['Quy mô nhóm', row.needs?.group_size || '-'],
@@ -1174,7 +1189,7 @@
                             ${item.actor ? `<small>${escape(item.actor)}</small>` : ''}
                             ${item.details ? `<small class="crm-history-note">${escape(item.details)}</small>` : ''}
                         </span>
-                        <em>${escape(VKTable.translateStatus(item.status || '-'))}</em>
+                        <em>${escape(item.status_label || VKTable.translateStatus(item.status || '-'))}</em>
                     </div>
                 `).join('')}
             </div>

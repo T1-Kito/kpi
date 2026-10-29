@@ -7,6 +7,18 @@ use Carbon\CarbonImmutable;
 
 class SalesApprovalAccess
 {
+    public const ANY = 'sales.quotation.approve_any';
+    public function canApproveAny(User $actor): bool
+    {
+        return $actor->is_active && $actor->hasPermission(self::ANY);
+    }
+
+    public function pool(int $tenantId): array
+    {
+        return User::where('tenant_id', $tenantId)->where('is_active', true)
+            ->whereHas('roles', fn ($q) => $q->where('tenant_id', $tenantId)->whereHas('permissions', fn ($p) => $p->where('code', self::ANY)))
+            ->orderBy('id')->pluck('id')->all();
+    }
     public function principals(User $actor): array
     {
         if (! $actor->is_active || ! $actor->hasPermission('sales.margin.approve')) return [];
@@ -25,7 +37,7 @@ class SalesApprovalAccess
             if (collect($quote->approval_steps ?? [])->contains(fn ($step) => $step['status'] === 'approved' && (int) ($step['decided_by'] ?? $step['user_id']) === (int) $actor->id)) return false;
         }
         $step = collect($quote->approval_steps ?? [])->firstWhere('status', 'pending');
-        return $step && in_array((int) $step['user_id'], $this->principals($actor), true);
+        return $step && ($this->canApproveAny($actor) || in_array((int) $step['user_id'], $this->principals($actor), true));
     }
 
     public function recipients(int $tenantId, int $originalId): array

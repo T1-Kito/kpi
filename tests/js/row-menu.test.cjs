@@ -41,9 +41,11 @@ for (const [file, [entity, opener]] of Object.entries(modules)) {
             const calls = [];
             let listener;
             const context = {
-                document: { getElementById: () => ({}), addEventListener: (_type, fn) => { listener = fn; } },
+                document: { getElementById: () => ({}), querySelector: () => null, addEventListener: (_type, fn) => { listener = fn; } },
+                window: {clearTimeout() {}}, customerSearchTimer: null,
                 [opener]: id => calls.push(String(id)),
                 [actions[file][1]]: id => calls.push('action:' + id),
+                syncQuotationContactSearch() {},
             };
             vm.runInNewContext(handler, context);
             const key = entity.replace(/-([a-z])/g, (_, c) => c.toUpperCase()) + 'Detail';

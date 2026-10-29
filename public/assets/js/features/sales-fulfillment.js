@@ -51,7 +51,7 @@
         const invoiceFromDelivery = event.target.closest('[data-delivery-issue-invoice]');
         if (invoiceFromDelivery) openInvoiceFromDeliveryModal(invoiceFromDelivery.dataset.deliveryIssueInvoice);
         const exportAcceptance = event.target.closest('[data-delivery-export-acceptance]');
-        if (exportAcceptance) exportAcceptanceWord(exportAcceptance.dataset.deliveryExportAcceptance);
+        if (exportAcceptance) window.VKDocumentExport.open({module:'delivery_acceptance', endpoint:`/api/v1/delivery-records/${encodeURIComponent(exportAcceptance.dataset.deliveryExportAcceptance)}/word`, title:'biên bản nghiệm thu', filename:'bien-ban-nghiem-thu.docx'});
         const acceptanceFile = event.target.closest('[data-delivery-acceptance-file]');
         if (acceptanceFile) downloadAcceptanceFile(acceptanceFile.dataset.deliveryAcceptanceFile);
         const receive = event.target.closest('[data-worklist-record-payment]');
@@ -396,7 +396,7 @@
 
     async function openPaymentModal(invoiceId) {
         // One key per opened form, retained across network retries and double clicks.
-        const paymentRequestKey = window.crypto.randomUUID();
+        const paymentRequestKey = VKApi.newRequestKey();
         const invoice = states.invoices.rows.find(item => String(item.id) === String(invoiceId))
             || (await VKApi.request(`/sales-invoices/${invoiceId}`)).data;
         VKModal.open('Ghi nhận thanh toán khách hàng', `

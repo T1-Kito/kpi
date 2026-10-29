@@ -29,6 +29,11 @@ class SkuController extends Controller
         $query = Sku::query()
             ->where('tenant_id', $request->user()->tenant_id)
             ->with(['product:id,code,name,category_id,brand_id,image_path,description,technical_specs', 'product.category:id,name', 'product.brand:id,name']);
+        if($category=$request->query('category_id')){
+            $node=\App\Models\ProductCategory::where('tenant_id',$request->user()->tenant_id)->findOrFail($category);
+            $ids=\App\Models\ProductCategory::where('tenant_id',$node->tenant_id)->where('parent_id',$node->id)->pluck('id')->push($node->id);
+            $query->whereHas('product',fn($q)=>$q->whereIn('category_id',$ids));
+        }
 
         if ($search = $request->query('q')) {
             $query->where(fn ($q) => $q
@@ -177,6 +182,10 @@ class SkuController extends Controller
 
     private function productDetails(Request $request, array $data, int $tenantId, ?Product $existing = null): array
     {
+        if(!empty($data['category_id']) && (int)$existing?->category_id!==(int)$data['category_id']) {
+            $category=\App\Models\ProductCategory::where('tenant_id',$tenantId)->findOrFail($data['category_id']);
+            abort_unless(\App\Support\ProductCategoryTree::active($category),422,'Nhóm sản phẩm hoặc nhóm cha đã ngừng sử dụng.');
+        }
         $details = ['category_id' => $data['category_id'] ?? null, 'brand_id' => $data['brand_id'] ?? null, 'description' => $data['description'] ?? null, 'technical_specs' => $this->parseSpecs($data['technical_specs'] ?? null)];
         if ($existing) {
             foreach (array_keys($details) as $field) {

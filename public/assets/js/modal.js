@@ -10,6 +10,7 @@
         const submit = document.getElementById('modalSubmit');
         const cancel = document.querySelector('#modalForm [data-modal-close]');
         const closeButton = document.querySelector('#modalBackdrop .modal-head [data-modal-close]');
+        modal?.querySelectorAll('.qe-subtitle, .qe-preview-button, .qe-header-icon').forEach(node => node.remove());
 
         document.getElementById('modalTitle').textContent = title;
         document.getElementById('modalBody').innerHTML = bodyHtml;
@@ -31,6 +32,7 @@
     }
 
     function close() {
+        const onClose = inlineMount?.onClose;
         if(inlineMount){
             inlineMount.modal.setAttribute('role','dialog');inlineMount.modal.setAttribute('aria-modal','true');
             inlineMount.parent.appendChild(inlineMount.modal);
@@ -52,6 +54,7 @@
         }
         if (cancel) cancel.textContent = 'Hủy';
         submitHandler = null;
+        if (onClose) onClose();
     }
 
     function field(name, label, type = 'text', value = '') {
@@ -129,16 +132,33 @@
         }
     });
 
-    function mountPage(target) {
+    function mountPage(target, onClose = null) {
         const backdrop=document.getElementById('modalBackdrop');
         const modal=backdrop?.querySelector('.modal');
         if(!target || !modal)return;
         const page=document.createElement('section');page.className='customer-editor-page';
-        inlineMount={parent:modal.parentElement,modal,page};
+        inlineMount={parent:modal.parentElement,modal,page,onClose};
         page.appendChild(modal);target.replaceChildren(page);
         modal.setAttribute('role','region');modal.removeAttribute('aria-modal');
         backdrop.classList.remove('open');backdrop.setAttribute('aria-hidden','true');
     }
-    window.VKModal = { open, close, mountPage, field, select, toast, notice, hideToast };
+    function confirm({title='Kiểm tra thông tin', message='', details=[], allowContinue=true, confirmText='Vẫn lưu', cancelText='Quay lại kiểm tra'} = {}) {
+        return new Promise(resolve => {
+            hideToast();
+            const previous=document.activeElement;
+            const node=document.createElement('div');
+            node.className=`toast ${allowContinue ? 'warning' : 'danger'} show`;
+            node.setAttribute('role','alert');
+            node.style.cssText='z-index:10050;max-width:min(640px,calc(100vw - 32px));';
+            const safe=value=>VKTable.escapeHtml(String(value ?? ''));
+            node.innerHTML=`<span class="toast-icon" aria-hidden="true">!</span><span class="toast-message"><strong>${safe(title)}</strong><span style="display:block;margin-top:4px;font-weight:400">${safe(message)}</span>${details.length ? `<span style="display:block;margin-top:6px;font-weight:400">${details.map(safe).join(' · ')}</span>`:''}</span><button class="toast-close" type="button" data-confirm-cancel aria-label="Đóng">${closeIcon}</button><span style="display:flex;justify-content:flex-end;gap:8px;grid-column:1 / -1"><button type="button" class="btn small" data-confirm-cancel>${safe(cancelText)}</button>${allowContinue ? `<button type="button" class="btn primary small" data-confirm-accept>${safe(confirmText)}</button>`:''}</span>`;
+            function finish(value){document.removeEventListener('keydown',keyboard,true);node.remove();if(previous?.isConnected)previous.focus();resolve(value);}
+            function keyboard(event){if(event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();finish(false);}}
+            node.querySelectorAll('[data-confirm-cancel]').forEach(button=>button.addEventListener('click',()=>finish(false)));
+            node.querySelector('[data-confirm-accept]')?.addEventListener('click',()=>finish(true));
+            document.addEventListener('keydown',keyboard,true);document.body.appendChild(node);
+        });
+    }
+    window.VKModal = { open, close, mountPage, field, select, toast, notice, hideToast, confirm };
     document.addEventListener('click',event=>{if(inlineMount && event.target.closest('a[href]'))close();},true);
 })();

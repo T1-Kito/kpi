@@ -23,12 +23,22 @@ class SalesOrderService
 
     public function createFromQuotation(Quotation $quotation, User $actor): SalesOrder
     {
-        return DB::transaction(function () use ($quotation, $actor) {
+        return $this->createLinkedOrder($quotation, $actor, false);
+    }
+
+    public function prepareApprovedQuotation(Quotation $quotation, User $actor): SalesOrder
+    {
+        return $this->createLinkedOrder($quotation, $actor, true);
+    }
+
+    private function createLinkedOrder(Quotation $quotation, User $actor, bool $pendingCustomer): SalesOrder
+    {
+        return DB::transaction(function () use ($quotation, $actor, $pendingCustomer) {
             $quotation = Quotation::where('tenant_id', $actor->tenant_id)->whereKey($quotation->id)->lockForUpdate()->firstOrFail();
-            $allowed = $quotation->workflow_version == 2 ? ['accepted'] : ['ready', 'approved'];
+            $allowed = $pendingCustomer ? ['approved'] : ($quotation->workflow_version == 2 ? ['accepted'] : ['ready', 'approved']);
             abort_if(! in_array($quotation->status, $allowed, true), 422, 'Báo giá cần duyệt, phát hành và ghi nhận khách đồng ý trước khi tạo đơn bán.');
             abort_if($quotation->workflow_version == 2 && (! $quotation->valid_until || $quotation->valid_until->endOfDay()->isPast()), 422, 'Báo giá đã hết hiệu lực.');
-            abort_if($quotation->workflow_version == 2 && ! \App\Models\QuotationIssue::where('quotation_id', $quotation->id)->where('tenant_id', $actor->tenant_id)->where('customer_decision', 'accepted')->whereNotNull('customer_evidence')->exists(), 422, 'Chưa có bản phát hành và bằng chứng khách đồng ý.');
+            abort_if(!$pendingCustomer && $quotation->workflow_version == 2 && ! \App\Models\QuotationIssue::where('quotation_id', $quotation->id)->where('tenant_id', $actor->tenant_id)->where('customer_decision', 'accepted')->whereNotNull('customer_evidence')->exists(), 422, 'Chưa có bản phát hành và bằng chứng khách đồng ý.');
 
             $existing = SalesOrder::where('tenant_id', $actor->tenant_id)
                 ->where('quotation_id', $quotation->id)
@@ -36,6 +46,7 @@ class SalesOrderService
                 ->lockForUpdate()
                 ->first();
             if ($existing) {
+                if ($pendingCustomer) return $existing;
                 abort(422, "Báo giá {$quotation->code} đã tạo đơn bán {$existing->code}. Vui lòng mở đơn bán hiện có để xử lý tiếp.");
             }
 
@@ -50,7 +61,7 @@ class SalesOrderService
                 'total_amount' => $quotation->total_amount,
                 'payment_terms' => $quotation->payment_terms,
                 'stock_status' => 'unchecked',
-                'status' => 'draft',
+                'status' => $pendingCustomer ? 'awaiting_customer' : 'draft',
             ]);
 
             foreach ($quotation->items as $item) {

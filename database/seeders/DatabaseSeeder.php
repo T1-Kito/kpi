@@ -128,6 +128,7 @@ class DatabaseSeeder extends Seeder
             'sales.deal.manage' => 'Quản lý cơ hội bán hàng',
             'sales.contract.manage' => 'Quản lý hợp đồng',
             'sales.margin.approve' => 'Duyệt biên lợi nhuận thấp',
+            'sales.quotation.approve_any' => 'Duyệt mọi báo giá / duyệt thay các cấp',
             'sales.order.view' => 'Xem đơn bán',
             'sales.order.create' => 'Tạo đơn bán',
             'sales.order.edit' => 'Sửa đơn hàng nháp',

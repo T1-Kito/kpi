@@ -16,6 +16,8 @@ class DealNeedsTest extends TestCase
         $b=$this->postJson('/api/v1/deals',['name'=>'Chuyến B','customer_id'=>$customer->id,'needs'=>['guest_count'=>25]])->assertCreated()->json('data.id');
         $this->assertNotEquals($a,$b);
         $this->getJson('/api/v1/deals/'.$a)->assertOk()->assertJsonPath('data.needs.guest_count',10);
+        $stageName=\App\Models\SalesPipelineStage::where('tenant_id',$sales->tenant_id)->where('code','new')->value('name') ?? 'Mới';
+        $this->getJson('/api/v1/deals/'.$a)->assertOk()->assertJsonPath('data.timeline.0.label','Chuyển từ Khởi tạo sang '.$stageName)->assertJsonPath('data.timeline.0.status_label',$stageName);
         $this->getJson('/api/v1/deals/'.$b)->assertOk()->assertJsonPath('data.needs.guest_count',25);
         $this->assertSame(0,\App\Models\Task::where('source_type','Deal')->whereIn('source_id',[$a,$b])->count());
         $this->getJson('/api/v1/lookups/deal-users')->assertOk()->assertJsonCount(1,'data')->assertJsonPath('data.0.id',$sales->id);

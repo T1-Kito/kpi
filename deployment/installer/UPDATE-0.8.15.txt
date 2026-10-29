@@ -1,0 +1,39 @@
+VK CRM 0.8.15 — BẢN CẬP NHẬT THỬ NGHIỆM
+
+CẬP NHẬT
+1. Giải nén ZIP ra thư mục riêng ngoài thư mục CRM đang dùng.
+2. Cho người dùng ngừng thao tác và dừng máy chủ CRM.
+3. Chạy Setup.exe mới → Cập nhật bản đã cài → chọn đúng thư mục cũ.
+   Hoặc chọn Setup.exe mới từ nút Cập nhật phần mềm trên trình quản lý cũ.
+4. Đợi thành công rồi mở lại máy chủ. Không cài mới đè thư mục dữ liệu.
+5. Đăng xuất và đăng nhập lại để nhận quyền tổng quan đã sửa.
+   Trình duyệt đang mở cần Ctrl + F5 một lần để nhận tài nguyên mới.
+
+THAY ĐỔI 0.8.15
+- Sửa thiếu quyền tổng quan trên bản cài: Admin có tổng quan điều hành;
+  Chủ tịch có tổng quan Chủ tịch. Áp dụng cài mới và cập nhật.
+- Chỉ bổ sung vào vai trò hệ thống Admin và Chủ tịch. Không đổi mật khẩu,
+  dữ liệu, phạm vi dữ liệu hoặc quyền của vai trò nhân viên/tùy chỉnh.
+
+GIỮ CÁC SỬA 0.8.14
+- Chọn mẫu, xem trước và tải Word cho các chứng từ đã hỗ trợ.
+- Sửa nhấp nháy trang Phê duyệt; tối ưu tải nhóm và danh sách khách hàng.
+- Quyền duyệt mọi báo giá/duyệt thay các cấp; giữ quy tắc không tự duyệt.
+- Duyệt cuối báo giá tự tạo đơn Chờ khách xác nhận; khách đồng ý thì dùng
+  tiếp đơn đó. Không tự tạo bù các báo giá đã duyệt trước cập nhật.
+- Danh sách đơn hàng cập nhật không cần F5; kết nối mạng nội bộ cổng 8099.
+- Giữ tài khoản mặc định theo cấu hình đã xác nhận, không đặt lại mật khẩu
+  hoặc mở khóa tài khoản đã tồn tại.
+
+LƯU Ý
+- Giữ nguyên .env, tài khoản và dữ liệu. Cập nhật chỉ chạy khi sao lưu và
+  kiểm chứng database thành công. Nếu lỗi, kiểm tra quyền SQL và thư mục
+  backup trên máy SQL Server; không tự cấp sysadmin.
+- Chưa bổ sung nghiệp vụ Đặt dịch vụ đoàn và Nghiệm thu mua vật tư.
+- Bộ cài chưa mã hóa mã nguồn PHP. Không kèm ZIP nguồn rời nhưng mã nhúng
+  trong bộ cài vẫn có thể được trích xuất.
+- Bản thử chưa ký số; runtime thử nghiệm chưa được chứng nhận production.
+  Cần nghiệm thu SQL Server và mạng thực tế của khách.
+- Truy cập khác mạng cần VPN hoặc cổng HTTPS riêng; không cố định IP LAN.
+
+GÓI GỒM: Setup.exe, HUONG-DAN-CAP-NHAT.txt, SHA256SUMS.txt.

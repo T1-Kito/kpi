@@ -109,7 +109,7 @@ class TenantSettingController extends Controller
     public function saveSalesQuotationApproval(Request $request): JsonResponse
     {
         $userRule = ['integer', 'distinct', Rule::exists('users', 'id')->where('tenant_id', $request->user()->tenant_id)->where('is_active', true)];
-        $data = $request->validate(['approvers' => ['required', 'array', 'min:1', 'max:10'], 'approvers.*' => $userRule,
+        $data = $request->validate(['approvers' => ['present', 'array', 'max:10'], 'approvers.*' => $userRule,
             'exception_approvers' => ['present', 'array', 'max:1'], 'exception_approvers.*' => $userRule,
             'minimum_margin' => ['required', 'numeric', 'min:0', 'max:100'], 'maximum_discount' => ['required', 'numeric', 'min:0', 'max:99.99'], 'amount_threshold' => ['nullable', 'numeric', 'min:1'],
             'separation_of_duties' => ['sometimes', 'boolean'],

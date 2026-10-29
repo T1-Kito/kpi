@@ -1,0 +1,30 @@
+VK CRM 0.8.11 — BẢN CẬP NHẬT THỬ NGHIỆM
+
+CÁCH CẬP NHẬT
+1. Giải nén ZIP vào thư mục riêng ngoài thư mục VK CRM đang dùng.
+2. Đề nghị người dùng ngừng thao tác và đóng máy chủ VK CRM.
+3. Chạy Setup.exe mới, chọn Cập nhật bản đã cài và chọn đúng thư mục bản cũ.
+4. Nếu dùng nút Cập nhật phần mềm trong trình quản lý cũ, chọn Setup.exe mới.
+5. Đợi cập nhật thành công rồi mở lại VK CRM. Không chọn cài mới vào bản đang dùng.
+
+THAY ĐỔI
+- Bổ sung nút Tải bộ trường trộn trong Mẫu in: 63 mã trường đang hỗ trợ và
+  phần đối chiếu 9 biểu mẫu Sơn Tiên. Mục Cần bổ sung chưa phải trường hoạt động.
+- Chọn khách hàng khi tạo báo giá hiển thị riêng các thông tin liên hệ,
+  hóa đơn, thanh toán và ngân hàng để dễ kiểm tra.
+- Đồng bộ giao diện nhập danh mục; chỉnh giao diện khách hàng và cơ hội.
+- Sửa điều hướng về cùng trang, mở dòng cơ hội và hiển thị lịch sử giai đoạn.
+
+BẢO TOÀN DỮ LIỆU
+Giữ cấu hình kết nối, khóa ứng dụng, tài khoản và dữ liệu người dùng.
+Không chép .env từ máy khác; không xóa database hay gỡ bản cũ.
+Bộ cập nhật vẫn yêu cầu sao lưu và kiểm chứng trước khi nâng cấp cấu trúc.
+Nếu SQL Server không sao lưu/kiểm chứng được, giữ nguyên dữ liệu và kiểm tra
+tài khoản SQL cùng quyền ghi của dịch vụ SQL vào thư mục backup.
+Update-Source.zip dành cho kỹ thuật; người dùng chọn Setup.exe khi cập nhật.
+
+GIỚI HẠN KIỂM THỬ
+Bản cập nhật thử, chưa ký số và chưa xác nhận trên SQL Server máy khách.
+Runtime PHP đi kèm giữ từ bản đánh giá trước, chưa được phê duyệt vận hành thật.
+Chưa xác nhận trực quan mọi trang của tài liệu Word và mọi giao diện trình duyệt.
+Các nghiệp vụ Sơn Tiên ghi Cần bổ sung chưa được triển khai chỉ bằng tài liệu.

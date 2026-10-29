@@ -31,6 +31,7 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 /.tmp/
+/deployment/windows/default-accounts.json
 /outputs/
 /dist/
 /scripts/setup-local-ordinary-admin.php

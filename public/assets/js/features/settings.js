@@ -31,12 +31,13 @@ document.addEventListener('click', (event) => {
         if (box.children.length < 10) box.insertAdjacentHTML('beforeend', salesApprovalPerson('', box.children.length));
     }
     event.target.closest('[data-remove-sales-approver]')?.closest('[data-sales-approver]')?.remove();
-    if (event.target.closest('[data-add-sales-approver], [data-remove-sales-approver]')) document.querySelectorAll('[data-sales-approver]').forEach((row,index)=>{row.querySelector('label').textContent=`Cấp duyệt ${index+1}`;});
+    if (event.target.closest('[data-add-sales-approver], [data-remove-sales-approver]')) document.querySelectorAll('[data-sales-approver]').forEach((row,index)=>{row.querySelector('label').textContent=`Cấp duyệt ${index+1}`;row.querySelector('.sa-step').textContent=index+1;});
     if (event.target.closest('[data-add-sales-delegation]')) {
         const box = document.querySelector('[data-sales-delegations]');
         if (box.children.length < 20) box.insertAdjacentHTML('beforeend', salesDelegationRow({}));
     }
     event.target.closest('[data-remove-sales-delegation]')?.closest('[data-sales-delegation]')?.remove();
+    if(event.target.closest('[data-add-sales-delegation], [data-remove-sales-delegation]')) syncSalesDelegationEmpty();
     if (event.target.closest('[data-save-work-assignment]')) saveWorkAssignment();
     const addPerson = event.target.closest('[data-add-approval-person]');
     if (addPerson) {
@@ -81,6 +82,10 @@ document.addEventListener('click', (event) => {
 });
 
 async function loadSettings(options = {}) {
+    const approvalCss = '/assets/css/sales-approval-settings.css?v=20261029-approval-unified1';
+    if (!document.querySelector(`link[href="${approvalCss}"]`)) {
+        const css=document.createElement('link');css.rel='stylesheet';css.href=approvalCss;document.head.append(css);
+    }
     const root = document.getElementById('settingsRoot');
     if (!root) return;
     if (!root.querySelector('[data-settings-launcher-layer]')) {
@@ -151,21 +156,22 @@ document.addEventListener('keydown', event => {
 });
 
 function renderApprovalRule(rule) {
-    const ruleKey = ++approvalRuleSequence;
     const approvers = rule.approvers || [];
-    return `<div class="approval-setting-rule"><div class="approval-rule-head"><label>Từ giá trị báo giá (VND)<input type="number" min="0" step="1000" data-approval-minimum value="${VKTable.escapeHtml(rule.minimum_amount)}" placeholder="0 cho luồng mặc định"></label><button class="btn secondary small" type="button" data-remove-approval-rule>Bỏ luồng</button></div><div data-approval-people="quotation" class="form-grid two">${(approvers.length ? approvers : ['']).map((id, index) => approvalPerson('quotation', id, index)).join('')}</div><button type="button" class="btn secondary small" data-add-approval-person>+ Thêm người duyệt</button><p class="form-note">Người cuối danh sách duyệt cuối; những người phía trước duyệt nội bộ song song.</p></div>`;
+    return `<div class="approval-setting-rule"><div class="approval-rule-head"><label>Từ giá trị báo giá (VND)<input type="number" min="0" step="1000" data-approval-minimum value="${VKTable.escapeHtml(rule.minimum_amount)}" placeholder="0 cho luồng mặc định"></label><button class="btn secondary small" type="button" data-remove-approval-rule>Bỏ luồng</button></div><div data-approval-people="quotation" class="approval-people-list">${(approvers.length ? approvers : ['']).map((id, index) => approvalPerson('quotation', id, index)).join('')}</div><button type="button" class="btn secondary small" data-add-approval-person>+ Thêm người duyệt</button><p class="form-note">Người cuối danh sách duyệt cuối; những người phía trước duyệt nội bộ song song.</p></div>`;
 }
 
 function approvalPerson(type, value, index) {
     const users = type === 'quotation' ? procurementApproval.users : operationalApproval?.users?.[type] || [];
     const options = [{value:'', label:'Chọn nhân sự'}, ...users.map(user => ({value:user.id, label:user.name}))];
-    return `<div data-person-row style="display:flex;align-items:end;gap:8px">${VKModal.select(`approval_person_${++approvalRuleSequence}`, `Người duyệt ${index + 1}`, options, value)}<button type="button" class="btn small danger" data-remove-approval-person aria-label="Bỏ người duyệt">Bỏ</button></div>`;
+    return `<div data-person-row class="approval-person-row"><span class="sa-step">${index + 1}</span>${VKModal.select(`approval_person_${++approvalRuleSequence}`, `Cấp duyệt ${index + 1}`, options, value)}<button type="button" class="btn secondary small sa-delete" data-remove-approval-person aria-label="Xóa cấp duyệt" title="Xóa cấp duyệt">${salesApprovalTrash()}</button></div>`;
 }
 
 function renumberApprovalPeople(box) {
     Array.from(box.children).forEach((row, index) => {
         const label = row.querySelector('label');
-        if (label) label.textContent = `Người duyệt ${index + 1}${index === box.children.length - 1 ? ' (duyệt cuối)' : ''}`;
+        if (label) label.textContent = `Cấp duyệt ${index + 1}`;
+        const step = row.querySelector('.sa-step');
+        if (step) step.textContent = index + 1;
     });
 }
 
@@ -173,7 +179,10 @@ function renderOperationalApproval() {
     if (!operationalApproval) return '<p class="form-note">Không tải được cấu hình duyệt đơn mua và nhập kho.</p>';
     return Object.entries({purchase_order:'Duyệt đơn mua', goods_receipt:'Duyệt nhập kho'}).map(([type, title]) => {
         const ids = operationalApproval.data?.[type]?.approvers || [];
-        return `<section class="module-panel settings-section approval-setting-rule"><div class="panel-head"><div><h2>${title}</h2><span>Luồng riêng, duyệt lần lượt theo thứ tự. Chưa lưu cấu hình sẽ chưa áp dụng nhiều cấp. Tối thiểu 2 người; người cuối hoàn tất phiếu.</span></div><button class="btn primary small" data-save-operational-approval="${type}">Lưu luồng</button></div><div data-approval-people="${type}" class="form-grid two">${(ids.length ? ids : ['', '']).map((id, index) => approvalPerson(type, id, index)).join('')}</div><button class="btn secondary small" type="button" data-add-approval-person>+ Thêm người duyệt</button><p class="form-note">${type === 'goods_receipt' ? 'Chỉ cộng tồn và chuyển đơn mua sang Đã nhập kho khi đủ mọi cấp duyệt.' : 'Báo giá duyệt xong tạo đơn mua chờ duyệt; chỉ tạo phiếu nhập khi đơn mua duyệt đủ.'} Khi lưu sẽ cập nhật phiếu nháp chưa ai duyệt. Phiếu đã có lượt duyệt giữ nguyên lịch sử.</p></section>`;
+        return `<section class="module-panel settings-section approval-setting-rule operational-approval-settings">
+            <div class="approval-section-head"><div class="sa-block-title">${salesApprovalIcon('layers')}<div><h3>${title}</h3><p>Duyệt lần lượt từ cấp đầu đến cấp cuối · Tối thiểu 2 người.</p></div></div><button class="btn secondary small" type="button" data-add-approval-person>+ Thêm cấp duyệt</button></div>
+            <div class="sa-level-layout"><div data-approval-people="${type}" class="approval-people-list">${(ids.length ? ids : ['', '']).map((id, index) => approvalPerson(type, id, index)).join('')}</div><aside class="sa-guide"><strong>Quy trình duyệt</strong><ul><li>Người ở cấp sau xử lý khi cấp trước đã duyệt.</li><li>${type === 'goods_receipt' ? 'Chỉ cộng tồn và chuyển đơn mua sang Đã nhập kho khi đủ mọi cấp duyệt.' : 'Đơn mua duyệt đủ mới tạo phiếu nhập kho.'}</li><li>Phiếu đã có lượt duyệt giữ nguyên lịch sử.</li></ul></aside></div>
+            <div class="approval-section-footer"><span>Cấu hình mới cập nhật các phiếu nháp chưa có lượt duyệt.</span><button type="button" class="btn primary small" data-save-operational-approval="${type}">Lưu thiết lập</button></div></section>`;
     }).join('');
 }
 
@@ -194,7 +203,11 @@ async function saveOperationalApproval(button) {
 
 function renderProcurementApproval() {
     const config = procurementApproval.data;
-return `<section class="module-panel settings-section procurement-approval-settings"><div class="panel-head"><div><h2>Luồng duyệt báo giá nhà cung cấp</h2><span>Tự xác định người duyệt khi tạo báo giá, theo tổng giá trị hàng hóa.</span></div><button class="btn primary small" data-save-procurement-approval>Lưu thiết lập</button></div><p class="form-note">Duyệt một người: giữ một ô nhân sự. Duyệt nhiều người: bấm Thêm người duyệt; người cuối danh sách duyệt cuối, đủ lượt nội bộ mới đến người duyệt cuối. Luồng có ngưỡng cao nhất không vượt giá trị báo giá sẽ được áp dụng.</p><div data-approval-rules>${(config.rules.length?config.rules:[{minimum_amount:0,approvers:[]}]).map(renderApprovalRule).join('')}</div><button class="btn secondary small" data-add-approval-rule>+ Thêm luồng theo mức tiền</button><p class="form-note">Cần luồng mặc định từ 0 đồng. Chỉ hiển thị tài khoản đang hoạt động có quyền duyệt mua hàng. Khi lưu, báo giá chưa có lượt duyệt sẽ tự cập nhật theo thiết lập. Báo giá đã có lượt duyệt hoặc đã tạo đơn mua giữ nguyên lịch sử.</p></section>`;
+    return `<section class="module-panel settings-section procurement-approval-settings">
+        <div class="approval-section-head"><div class="sa-block-title">${salesApprovalIcon('document')}<div><h3>Duyệt báo giá nhà cung cấp</h3><p>Thiết lập người duyệt theo giá trị báo giá.</p></div></div><button type="button" class="btn secondary small" data-add-approval-rule>+ Thêm luồng theo mức tiền</button></div>
+        <aside class="sa-guide approval-threshold-guide">Áp dụng luồng có ngưỡng cao nhất không vượt giá trị báo giá. Cần một luồng mặc định từ 0 đồng. Với nhiều người: các cấp nội bộ duyệt song song, người cuối chỉ duyệt sau khi đủ lượt nội bộ.</aside>
+        <div data-approval-rules>${(config.rules.length ? config.rules : [{minimum_amount:0,approvers:[]}]).map(renderApprovalRule).join('')}</div>
+        <div class="approval-section-footer"><span>Báo giá chưa có lượt duyệt tự cập nhật theo thiết lập. Chứng từ đã xử lý giữ nguyên lịch sử.</span><button type="button" class="btn primary small" data-save-procurement-approval>Lưu thiết lập</button></div></section>`;
 }
 
 async function saveProcurementApproval() {
@@ -228,17 +241,33 @@ function renderSalesQuotationApproval() {
     if (!salesQuotationApproval) return '<p class="form-note">Cần quyền quản lý người dùng để tải và thiết lập luồng duyệt.</p>';
     const config = salesQuotationApproval.data || {};
     const options = [{value:'',label:'Chọn người duyệt'},...(salesQuotationApproval.users || []).map(user => ({value:user.id,label:user.name}))];
-    return `<section class="module-panel settings-section sales-approval-settings">
-        <div class="sales-approval-toolbar"><p>Duyệt theo thứ tự; cấp cuối hoàn tất báo giá.</p><button class="btn primary" data-save-sales-approval>Lưu thiết lập</button></div>
-        <section class="sales-approval-block"><div class="sales-approval-block-head"><h3>Các cấp duyệt</h3><button class="btn secondary small" data-add-sales-approver>Thêm cấp duyệt</button></div><div data-sales-people>${(config.approvers?.length ? config.approvers : ['']).map(salesApprovalPerson).join('')}</div></section>
+    const markup = `<section class="module-panel settings-section sales-approval-settings">
+        <div class="sa-breadcrumb">Thiết lập doanh nghiệp <span>›</span> Duyệt báo giá bán hàng</div>
+        <div class="sales-approval-toolbar"><div class="sa-page-title">${salesApprovalIcon('document')}<div><h2>Duyệt báo giá bán hàng</h2><p>Duyệt theo thứ tự; cấp cuối hoàn tất phê duyệt nội bộ.</p></div></div><div class="sa-toolbar-actions"><button type="button" class="btn secondary" data-settings-launcher-open>Tất cả thiết lập</button><button type="button" class="btn primary" data-save-sales-approval>✓ Lưu thiết lập</button></div></div>
+        <section class="sales-approval-block"><div class="sales-approval-block-head"><div class="sa-block-title">${salesApprovalIcon('layers')}<div><h3>Các cấp duyệt</h3><p>Thiết lập người duyệt theo thứ tự từ cấp đầu đến cấp cuối.</p></div></div><button type="button" class="btn secondary small" data-add-sales-approver>+ Thêm cấp duyệt</button></div><div class="sa-level-layout"><div data-sales-people>${(config.approvers?.length ? config.approvers : ['']).map(salesApprovalPerson).join('')}</div><aside class="sa-guide"><strong>ⓘ Hướng dẫn</strong><ul><li>Các cấp duyệt thực hiện theo thứ tự từ 1 đến n.</li><li>Cấp cuối hoàn tất phê duyệt nội bộ, sau đó mới phát hành báo giá.</li><li>Có thể thêm hoặc xóa cấp theo quy trình doanh nghiệp.</li><li>Không chọn cấp: người có quyền Duyệt mọi báo giá cùng xử lý hàng chờ.</li><li>Người có quyền Duyệt mọi báo giá có thể xử lý thay cấp đang chờ.</li></ul></aside></div></section>
         <section class="sales-approval-block"><h3>Chính sách duyệt</h3><div class="form-grid">${VKModal.select('sales_self_approval','Người lập tự duyệt',[{value:'allow',label:'Cho phép khi đúng người và đúng lượt'},{value:'block',label:'Không cho người lập tự duyệt'}],config.separation_of_duties ? 'block' : 'allow')}${VKModal.select('sales_exception_approver','Người duyệt thêm khi vượt ngưỡng',options,config.exception_approvers?.[0] || '')}${VKModal.field('sales_minimum_margin','Biên lợi nhuận tối thiểu (%)','number',config.minimum_margin ?? 15)}${VKModal.field('sales_maximum_discount','Chiết khấu tối đa (%)','number',config.maximum_discount ?? 0)}${VKModal.field('sales_amount_threshold','Giá trị cần duyệt thêm (VND)','number',config.amount_threshold ?? '')}</div><p class="form-note">Để trống mức tiền nếu không áp dụng. Cấu hình mới áp dụng cho lần gửi duyệt sau.</p></section>
         ${salesQuotationApproval.can_manage_delegation ? `<section class="sales-approval-block"><div class="sales-approval-block-head"><h3>Người duyệt thay</h3><button class="btn secondary small" data-add-sales-delegation>Thêm người thay</button></div><p class="form-note">Chỉ được xử lý cấp được giao trong thời hạn. Người duyệt chính vẫn có thể duyệt.</p><div data-sales-delegations>${(config.delegations || []).map(salesDelegationRow).join('')}</div></section>` : '<p class="form-note">Thiết lập người duyệt thay cần quyền Vai trò & phân quyền.</p>'}
     </section>`;
+    const empty=!(config.delegations || []).length ? `<div class="sa-empty" data-sales-delegation-empty>${salesApprovalIcon('people')}<strong>Chưa có người duyệt thay</strong><p>Nhấn “Thêm người thay” để thiết lập.</p></div>` : '';
+    return markup.replace('<h3>Chính sách duyệt</h3>',`<div class="sa-block-title sa-policy-title">${salesApprovalIcon('settings')}<div><h3>Chính sách duyệt</h3><p>Thiết lập điều kiện tự duyệt và các ngưỡng kiểm soát.</p></div></div>`)
+        .replace('<h3>Người duyệt thay</h3>',`<div class="sa-block-title">${salesApprovalIcon('people')}<div><h3>Người duyệt thay</h3><p>Người thay xử lý trong thời hạn được giao; người duyệt chính vẫn có thể duyệt.</p></div></div>`)
+        .replace('<div data-sales-delegations>',empty+'<div data-sales-delegations>');
 }
 
 function salesApprovalPerson(id, index) {
     const options = [{value:'',label:'Chọn người duyệt'},...(salesQuotationApproval.users || []).map(user => ({value:user.id,label:user.name}))];
-    return `<div data-sales-approver>${VKModal.select(`sales_level_${++salesApprovalRowSequence}`,`Cấp duyệt ${index + 1}`,options,id)}<button class="btn secondary small" data-remove-sales-approver>Bỏ cấp</button></div>`;
+    return `<div data-sales-approver><span class="sa-step">${index+1}</span>${VKModal.select(`sales_level_${++salesApprovalRowSequence}`,`Cấp duyệt ${index + 1}`,options,id)}<button type="button" class="btn secondary small sa-delete" title="Xóa cấp duyệt" aria-label="Xóa cấp duyệt" data-remove-sales-approver>${salesApprovalTrash()}</button></div>`;
+}
+
+function salesApprovalTrash(){return '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7"/></svg>';}
+function salesApprovalIcon(kind){
+    const paths={document:'<path d="M6 3h8l4 4v14H6V3zm8 0v5h4M9 12h6m-6 4h6"/>',layers:'<path d="m12 3 10 5-10 5L2 8l10-5zM2 12l10 5 10-5M2 16l10 5 10-5"/>',settings:'<path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.5 5.5l2 2m9 9 2 2m0-13-2 2m-9 9-2 2"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',people:'<circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6m1 3a5 5 0 0 1 4 5v2"/>'};
+    return `<span class="sa-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths[kind]}</svg></span>`;
+}
+function syncSalesDelegationEmpty(){
+    const box=document.querySelector('[data-sales-delegations]');if(!box)return;
+    box.parentElement.querySelector('[data-sales-delegation-empty]')?.remove();
+    if(!box.children.length)box.insertAdjacentHTML('afterend','<div class="sa-empty" data-sales-delegation-empty>'+salesApprovalIcon('people')+'<strong>Chưa có người duyệt thay</strong><p>Nhấn “Thêm người thay” để thiết lập.</p></div>');
 }
 
 function salesDelegationRow(rule) {
@@ -331,6 +360,7 @@ function showSettingsSection(key, updateUrl = false) {
     const root = document.getElementById('settingsRoot');
     if (!root) return;
     if (!['company','appearance','approval','salesApproval','assignment','sla'].includes(key)) key = 'company';
+    root.classList.toggle('settings-sales-approval-active', key === 'salesApproval');
     const title = root.querySelector('[data-settings-current-title]');
     if (title) title.textContent = {company:'Thông tin công ty',appearance:'Giao diện',approval:'Luồng duyệt mua hàng',salesApproval:'Duyệt báo giá bán hàng',assignment:'Tự động phân công',sla:'Thời hạn công việc'}[key];
     root.querySelectorAll('[data-settings-section]').forEach(node => { node.hidden = node.dataset.settingsSection !== key; });

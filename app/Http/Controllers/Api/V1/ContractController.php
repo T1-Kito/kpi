@@ -84,9 +84,7 @@ class ContractController extends Controller
         abort_if($contract->tenant_id !== $request->user()->tenant_id, 404);
         abort_if(! DataScope::owned(Contract::whereKey($contract->id), $request->user(), 'owner_id', 'owner')->exists(), 404);
 
-        $template = PrintTemplate::where('tenant_id', $request->user()->tenant_id)
-            ->where('module', 'contract')->where('status', 'active')
-            ->orderByDesc('is_default')->latest('id')->first();
+        $template = \App\Support\PrintTemplateSelection::resolve($request, 'contract');
         if (! $template || ! $template->file_path) {
             return response()->json(['message' => 'Chưa có file Word cho mẫu Hợp đồng. Vào Mẫu in để tải mẫu Hợp đồng lên và đặt làm mặc định.'], 422);
         }

@@ -1,5 +1,19 @@
 (function () {
 let skuState = { rows: [], categories: [], brands: [], q: '', status: '' };
+skuState.category='';
+function skuCategoryFields(id){
+    const item=skuState.categories.find(x=>String(x.id)===String(id));
+    const parent=item?.parent_id || item?.id || '';
+    const roots=skuState.categories.filter(x=>!x.parent_id && (x.status==='active' || String(x.id)===String(parent)));
+    return VKModal.select('sku_category_root','Nhóm sản phẩm cấp 1',[{value:'',label:'Chọn nhóm cấp 1'},...roots.map(x=>({value:x.id,label:x.name}))],parent)+VKModal.select('category_id','Nhóm sản phẩm cấp 2',skuCategoryChildren(parent),id || '');
+}
+function skuCategoryChildren(parent){return [{value:parent || '',label:parent?'Chưa chọn nhóm chi tiết':'Chọn nhóm cấp 1 trước'},...skuState.categories.filter(x=>String(x.parent_id)===String(parent) && x.status==='active').map(x=>({value:x.id,label:x.name}))];}
+document.addEventListener('change',event=>{
+    if(event.target.matches('[data-sku-category-filter]')){skuState.category=event.target.value;loadSkus();return;}
+    if(event.target.id!=='sku_category_root')return;
+    const field=document.getElementById('category_id');if(!field)return;
+    field.innerHTML=skuCategoryChildren(event.target.value).map(x=>`<option value="${x.value}">${VKTable.escapeHtml(x.label)}</option>`).join('');
+});
 
 document.addEventListener('vk:ready', () => loadSkus());
 document.addEventListener('input', (event) => {
@@ -33,7 +47,7 @@ document.addEventListener('click', (event) => {
 
 async function loadSkus() {
     if (!document.getElementById('skusRoot')) return;
-    const [skus, categories, brands] = await Promise.all([VKApi.request('/skus', {cache:false}), VKApi.request('/product-categories'), VKApi.request('/product-brands')]);
+    const [skus, categories, brands] = await Promise.all([VKApi.request('/skus'+(skuState.category?`?category_id=${encodeURIComponent(skuState.category)}`:''), {cache:false}), VKApi.request('/product-categories'), VKApi.request('/product-brands')]);
     skuState.rows = skus.data || [];
     skuState.categories = categories.data || [];
     skuState.brands = brands.data || [];
@@ -47,6 +61,7 @@ function renderSkus(total = skuState.rows.length) {
         subtitle: 'Quản lý danh mục, hãng, hình ảnh và thông tin kỹ thuật của sản phẩm.',
         meta: `${VKTable.money(rows.length)} / ${VKTable.money(total)} mã hàng`,
         filters: VKTable.filterBar({
+            extra:`<select data-sku-category-filter aria-label="Lọc nhóm sản phẩm"><option value="">Tất cả nhóm sản phẩm</option>${skuState.categories.map(x=>`<option value="${x.id}" ${String(x.id)===String(skuState.category)?'selected':''}>${VKTable.escapeHtml(x.path || x.name)}</option>`).join('')}</select>`,
             searchPlaceholder: 'Tìm SKU, tên hàng, số serial...',
             status: [
                 { value: 'active', label: 'Hoạt động' },
@@ -106,7 +121,7 @@ function openSkuModal(id = null) {
                 <div class="form-grid">
             <div class="field"><label for="product_code">Mã sản phẩm</label><input id="product_code" name="product_code" type="text" maxlength="100" value="${VKTable.escapeHtml(row?.product?.code || '')}" placeholder="Ví dụ: SP-MAY-IN-01"><small>Mã hồ sơ sản phẩm. Để trống ${id ? 'để giữ mã hiện tại' : 'để tự sinh mã'}.</small></div>
             <div class="field"><label for="sku_code">Mã hàng (SKU)</label><input id="sku_code" name="sku_code" type="text" maxlength="100" value="${VKTable.escapeHtml(row?.sku_code || '')}" placeholder="Ví dụ: MAY-IN-VK100"><small>Mã dùng trong kho và báo giá. Để trống ${id ? 'để giữ mã hiện tại' : 'để tự sinh mã'}.</small></div>
-${VKModal.field('product_name', 'Tên sản phẩm', 'text', row?.product?.name || '')}${VKModal.field('name', 'Tên mã hàng', 'text', row?.name || '')}${VKModal.select('category_id', 'Danh mục sản phẩm', [{value:'',label:'Chọn danh mục'}, ...skuState.categories.filter(x=>x.status==='active').map(x=>({value:x.id,label:x.name}))], row?.product?.category_id || '')}${VKModal.select('brand_id', 'Hãng / thương hiệu', [{value:'',label:'Chọn hãng'}, ...skuState.brands.filter(x=>x.status==='active').map(x=>({value:x.id,label:x.name}))], row?.product?.brand_id || '')}</div>
+${VKModal.field('product_name', 'Tên sản phẩm', 'text', row?.product?.name || '')}${VKModal.field('name', 'Tên mã hàng', 'text', row?.name || '')}${skuCategoryFields(row?.product?.category_id)}${VKModal.select('brand_id', 'Hãng / thương hiệu', [{value:'',label:'Chọn hãng'}, ...skuState.brands.filter(x=>x.status==='active').map(x=>({value:x.id,label:x.name}))], row?.product?.brand_id || '')}</div>
             </div>
         </div></div>
         <div class="product-form-step active"><div class="form-grid">

@@ -1,0 +1,36 @@
+VK CRM 0.8.16 — BẢN CẬP NHẬT THỬ NGHIỆM
+
+CẬP NHẬT
+1. Giải nén ZIP ra thư mục riêng ngoài thư mục CRM đang dùng.
+2. Cho người dùng ngừng thao tác và dừng máy chủ CRM.
+3. Chạy Setup.exe mới → Cập nhật bản đã cài → chọn đúng thư mục cũ.
+   Hoặc chọn Setup.exe mới từ nút Cập nhật phần mềm trên trình quản lý cũ.
+4. Đợi thành công rồi mở lại máy chủ. Không cài mới đè thư mục dữ liệu.
+5. Trình duyệt đang mở cần Ctrl + F5 một lần để nhận tài nguyên mới.
+
+THAY ĐỔI 0.8.16
+- Danh mục sản phẩm cấp 1–2: thêm, sửa, xóa có kiểm tra liên kết;
+  nhập cây danh mục từ file phân loại, kiểm tra trước khi xác nhận.
+- Danh mục trình bày dạng bảng gọn, nhóm con dưới nhóm cha,
+  các nút thao tác ở cuối bên phải.
+- Chọn danh mục cấp 1–2 khi tạo sản phẩm; lọc sản phẩm theo nhóm;
+  mẫu nhập sản phẩm hiển thị đường dẫn nhóm cha / nhóm con.
+- Đồng bộ danh mục đã lưu với danh mục dịch vụ dùng cho nhu cầu cơ hội.
+- Sửa lỗi nút tạo khách hàng tiềm năng khi truy cập HTTP qua mạng nội bộ
+  trên trình duyệt không hỗ trợ crypto.randomUUID.
+- Thu gọn và sắp xếp thông tin cơ hội; chỉnh khoảng cách phần chăm sóc.
+- Chỉnh bố cục công nợ trong báo giá; ẩn xem trước ở biểu mẫu tạo/sửa.
+  Vẫn có xem trước chứng từ báo giá đã lưu.
+- Giữ các chức năng cập nhật trước: quyền tổng quan, duyệt báo giá,
+  tự tạo đơn chờ khách xác nhận, chọn mẫu Word và truy cập mạng nội bộ.
+
+LƯU Ý
+- Giữ nguyên .env, tài khoản và dữ liệu. Chỉ cập nhật khi sao lưu và
+  kiểm chứng database thành công; kiểm tra quyền SQL nếu bước này lỗi.
+- Tài khoản mặc định chỉ tạo khi chưa có, không đặt lại mật khẩu cũ.
+- Chưa bổ sung nghiệp vụ Đặt dịch vụ đoàn và Nghiệm thu mua vật tư.
+- Bộ cài chưa mã hóa mã nguồn PHP; mã nhúng vẫn có thể được trích xuất.
+- Bản thử chưa ký số; cần nghiệm thu SQL Server và mạng thực tế của khách.
+- Truy cập khác mạng cần VPN hoặc cổng HTTPS riêng; không cố định IP LAN.
+
+GÓI GỒM: Setup.exe, HUONG-DAN-CAP-NHAT.txt, SHA256SUMS.txt.

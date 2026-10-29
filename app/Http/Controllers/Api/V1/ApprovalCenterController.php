@@ -21,8 +21,9 @@ class ApprovalCenterController extends Controller
         $pending = collect();
         $recent = collect();
 
-        if ($user->hasPermission('sales.margin.approve')) {
+        if ($user->hasPermission('sales.margin.approve') || app(\App\Support\SalesApprovalAccess::class)->canApproveAny($user)) {
             $assigned = Approval::where('tenant_id', $user->tenant_id)->where('source_type', 'Quotation')->whereIn('approver_id', app(\App\Support\SalesApprovalAccess::class)->principals($user))->pluck('source_id');
+            if (app(\App\Support\SalesApprovalAccess::class)->canApproveAny($user)) $assigned = Quotation::where('tenant_id', $user->tenant_id)->pluck('id');
             $current = Quotation::where('tenant_id', $user->tenant_id)->whereIn('id', $assigned)->where('status', 'pending_approval')->get()->filter(fn ($quote) => app(\App\Support\SalesApprovalAccess::class)->canApprove($quote, $user))->pluck('id');
             $pending = $pending->concat($this->quotations($user->tenant_id, ['pending_approval'], true, $current));
             $recent = $recent->concat($this->quotations($user->tenant_id, ['approved', 'rejected'], false, $assigned));

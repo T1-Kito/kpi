@@ -130,12 +130,7 @@ class SalesOrderController extends Controller
         abort_if($salesOrder->tenant_id !== $request->user()->tenant_id, 404);
         abort_if(! DataScope::owned(SalesOrder::whereKey($salesOrder->id), $request->user(), 'sales_owner_id', 'salesOwner')->exists(), 404);
 
-        $template = PrintTemplate::where('tenant_id', $request->user()->tenant_id)
-            ->where('module', 'sales_order')
-            ->where('status', 'active')
-            ->orderByDesc('is_default')
-            ->latest('id')
-            ->first();
+        $template = \App\Support\PrintTemplateSelection::resolve($request, 'sales_order');
         if (! $template || ! $template->file_path) {
             return response()->json(['message' => 'Chưa có file Word cho mẫu Đơn hàng. Vào Mẫu in để tải mẫu Đơn hàng lên và đặt làm mặc định.'], 422);
         }

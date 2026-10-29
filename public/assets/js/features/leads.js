@@ -102,6 +102,7 @@ function renderLeads() {
     const root=document.getElementById('leadsRoot');
     root.querySelector('.lead-workbench')?.classList.add('customer-lead-summary');
     const list=root.querySelector('.list-page');
+    list?.querySelector('.list-page-head')?.remove();
     const pager=root.querySelector('.lead-pagination');
     if(list && pager){
         list.classList.add('customer-list-workspace','customer-lead-workspace');
@@ -169,7 +170,7 @@ function renderContact(row) {
 }
 
 async function openLeadModal() {
-    const requestKey = crypto.randomUUID();
+    const requestKey = VKApi.newRequestKey();
     const me = await VKApi.request('/me');
     const users = await VKApi.request('/lookups/sales-users');
     const canAssignOthers = me.data.data_scope === 'company';

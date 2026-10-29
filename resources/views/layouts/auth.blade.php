@@ -14,7 +14,7 @@
 
     <div id="toast" class="toast" role="status"></div>
 
-    <script src="/assets/js/services/api.js?v=20260615-2"></script>
+    <script src="/assets/js/services/api.js?v=20261028-http-uuid1"></script>
     <script src="/assets/js/modal.js?v=20260615-2"></script>
     <script src="/assets/js/app.js"></script>
     @stack('scripts')

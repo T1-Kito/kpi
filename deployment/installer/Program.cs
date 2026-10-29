@@ -10,6 +10,19 @@ internal static class Program
     private static int Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
+        if(args.Length==2 && args[0]=="--license-preview")
+        {
+            try{
+                var target=Path.GetFullPath(args[1]);Directory.CreateDirectory(target);
+                using var owner=new Form();
+                if(InstallationLicense.EnsureActivated(owner,target))MessageBox.Show("Đã kích hoạt bản quyền thử thành công. Trang local vẫn hoạt động bình thường.","Bản quyền VK CRM",MessageBoxButtons.OK,MessageBoxIcon.Information);
+                return 0;
+            }catch(Exception ex){MessageBox.Show(ex.Message,"Không mở được kích hoạt bản quyền");return 1;}
+        }
+        if(args.Length==1 && args[0]=="--test-license")
+        {
+            try{InstallationLicense.SelfTest();return 0;}catch{return 1;}
+        }
         if(args.Length==1 && args[0]=="--verify-package")
         {
             try { VerifyEmbeddedPayload(); return 0; }
@@ -289,8 +302,9 @@ sealed partial class SetupForm : Form
             var target=Path.GetFullPath(destination.Text.Trim());
             RequireRuntime(target);
             SoftwareUpdate.EnsureReadyToStart(target);
+            if(!InstallationLicense.EnsureActivated(this,target))return;
             if(!File.Exists(Path.Combine(target,".env")))throw new Exception("Vui lòng hoàn tất thiết lập cơ sở dữ liệu trước khi khởi động.");
-            var listener=new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback,8099);
+            var listener=new System.Net.Sockets.TcpListener(System.Net.IPAddress.Any,8099);
             try{listener.Start();}
             catch(System.Net.Sockets.SocketException){throw new Exception("Cổng 8099 đang được ứng dụng khác sử dụng. Đóng bản CRM đang chạy rồi thử lại. Không cần tải hoặc cài thêm thành phần.");}
             finally{listener.Stop();}
@@ -302,7 +316,7 @@ sealed partial class SetupForm : Form
                 }
                 foreach(var setting in new[]{"opcache.enable=1","opcache.enable_cli=1","opcache.validate_timestamps=1","opcache.revalidate_freq=0"}){info.ArgumentList.Add("-d");info.ArgumentList.Add(setting);}
             }
-            foreach(var arg in new[]{"-c",Path.Combine(target,"runtime","php.ini"),"-d","extension_dir="+Path.Combine(target,"runtime","ext"),"-S","127.0.0.1:8099","-t",Path.Combine(target,"public"),Path.Combine(target,"vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php")})info.ArgumentList.Add(arg);
+            foreach(var arg in new[]{"-c",Path.Combine(target,"runtime","php.ini"),"-d","extension_dir="+Path.Combine(target,"runtime","ext"),"-S","0.0.0.0:8099","-t",Path.Combine(target,"public"),Path.Combine(target,"vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php")})info.ArgumentList.Add(arg);
             server=Process.Start(info) ?? throw new Exception("PHP không khởi động được.");
             using var client=new HttpClient { Timeout=TimeSpan.FromSeconds(2) };
             var ready=false;
@@ -312,7 +326,8 @@ sealed partial class SetupForm : Form
                 await Task.Delay(300);
             }
             if(!ready){StopUat();throw new Exception("Server không vượt kiểm tra sức khỏe. Chưa mở trình duyệt.");}
-            status.Text="Máy chủ đang hoạt động tại http://127.0.0.1:8099. Đóng trình quản lý sẽ dừng máy chủ.";
+            var firewallReady=await LanAccess.EnsureFirewall(target);
+            status.Text="Máy chủ đang chạy. Máy con cùng mạng truy cập: "+LanAccess.Addresses()+". Đóng trình quản lý sẽ dừng máy chủ."+(firewallReady?"":" Chưa mở được tường lửa; khởi động lại và chấp nhận yêu cầu quyền quản trị Windows để cho máy con truy cập.");
             Process.Start(new ProcessStartInfo("http://127.0.0.1:8099"){UseShellExecute=true});
         }catch(Exception ex){status.Text="Không mở được: "+ex.Message;}
         finally {start.Enabled=true;}

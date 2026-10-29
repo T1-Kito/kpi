@@ -28,7 +28,7 @@ class SpAdminBoundaryTest extends TestCase
         $this->withToken($token)->postJson('/api/v1/users/'.$chair->id.'/status',['is_active'=>false])->assertForbidden();
         $this->withToken($token)->postJson('/api/v1/users/'.$chair->id.'/organization',['department_id'=>null])->assertForbidden();
         $this->withToken($token)->getJson('/api/v1/users/'.$chair->id.'/handover')->assertForbidden();
-        $this->postJson('/api/v1/auth/login',['email'=>'admin','password'=>'Test-Chairman-Password'])->assertOk()->assertJsonPath('data.user.is_spadmin',true);
+        $this->postJson('/api/v1/auth/login',['email'=>$chair->email,'password'=>'Test-Chairman-Password'])->assertOk()->assertJsonPath('data.user.is_spadmin',true);
         $this->assertTrue($chair->fresh()->is_active);
     }
 }

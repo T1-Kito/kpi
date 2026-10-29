@@ -13,5 +13,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/deals.js?v=20261025-intake1"></script>
+<script src="/assets/js/features/deals.js?v=20261028-workspace1"></script>
 @endpush

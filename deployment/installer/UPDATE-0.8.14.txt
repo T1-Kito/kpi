@@ -1,0 +1,42 @@
+VK CRM 0.8.14 — BẢN CẬP NHẬT THỬ NGHIỆM
+
+CẬP NHẬT
+1. Giải nén ZIP ra thư mục riêng ngoài thư mục VK CRM đang sử dụng.
+2. Cho người dùng ngừng thao tác và dừng máy chủ CRM.
+3. Chạy Setup.exe mới → Cập nhật bản đã cài → chọn đúng thư mục cũ.
+   Hoặc chọn Setup.exe mới từ nút Cập nhật phần mềm trong trình quản lý cũ.
+4. Đợi thành công rồi khởi động lại máy chủ. Không cài mới đè dữ liệu.
+5. Trình duyệt đang mở cần Ctrl + F5 một lần để nhận giao diện mới.
+
+THAY ĐỔI
+- Chọn mẫu, xem trước và tải Word cho báo giá, hợp đồng, đơn bán,
+  phiếu xuất kho và biên bản nghiệm thu. Báo giá đã phát hành dùng bản lưu.
+- Thông báo trùng khách hàng đồng bộ giao diện, giữ nguyên dữ liệu nhập.
+- Sửa lỗi tải lại trang/nhấp nháy khi chuyển vào Phê duyệt.
+- Tải danh sách khách hàng và nhóm song song; giảm tải trước menu.
+- Thêm quyền Duyệt mọi báo giá / duyệt thay các cấp trong vai trò.
+  Admin và Chủ tịch được cấp quyền này; quy tắc không tự duyệt vẫn áp dụng.
+  Không chọn cấp duyệt: người có quyền duyệt chung xử lý hàng chờ.
+- Duyệt cuối báo giá tự tạo đơn Chờ khách xác nhận; khi khách đồng ý
+  dùng tiếp đơn đó. Chưa giữ tồn, giao hàng hay ghi nhận thanh toán tự động.
+  Không tự tạo bù đơn cho báo giá đã duyệt trước cập nhật.
+- Danh sách đơn hàng tự làm mới khi có thay đổi tại máy và kiểm tra mỗi
+  20 giây khi đang mở danh sách, không cần tải lại trang.
+- Máy chủ nhận kết nối cổng 8099 trên mạng nội bộ. Chấp nhận yêu cầu
+  Windows mở tường lửa khi khởi động; máy con dùng IP hiện tại của máy chủ.
+- Giữ hai tài khoản mặc định theo cấu hình khách đã xác nhận; không đặt
+  lại mật khẩu hoặc mở khóa tài khoản đã tồn tại.
+
+LƯU Ý
+- Giữ nguyên .env, dữ liệu và tài khoản hiện có. Cập nhật cần sao lưu và
+  kiểm chứng database thành công; nếu thất bại, kiểm tra quyền SQL và
+  thư mục sao lưu trên máy SQL Server. Không tự cấp sysadmin.
+- Chưa bổ sung nghiệp vụ Đặt dịch vụ đoàn và Nghiệm thu mua vật tư.
+- Bộ cài chưa mã hóa mã nguồn PHP. Không kèm ZIP nguồn rời nhưng mã
+  nhúng trong bộ cài vẫn có thể được trích xuất.
+- Bản thử chưa ký số; runtime thử nghiệm chưa được chứng nhận triển khai
+  production. Cần nghiệm thu trên SQL Server/mạng thực tế của khách.
+- Quy tắc tường lửa chỉ cho mạng nội bộ; truy cập khác mạng cần cấu hình
+  VPN hoặc cổng truy cập HTTPS riêng. Không cố định IP 192.168.1.11.
+
+GÓI GỒM: Setup.exe, HUONG-DAN-CAP-NHAT.txt, SHA256SUMS.txt.

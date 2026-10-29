@@ -35,51 +35,51 @@
 
     const features = {
         'import-center':['import-center.js?v=20261023-organization1','loadImportCenter'],
-        dashboard: ['dashboard.js?v=20261014-kpilink1', 'loadDashboard'],
-        leads: ['leads.js?v=20261023-list-audit2', 'loadLeads'],
-        deals: ['deals.js?v=20261025-intake1', 'loadDeals'],
+        dashboard: ['dashboard.js?v=20261029-activity-vi1', 'loadDashboard'],
+        leads: ['leads.js?v=20261029-compact2', 'loadLeads'],
+        deals: ['deals.js?v=20261028-workspace1', 'loadDeals'],
         'sales-master-data': ['sales-master-data.js?v=20260923-1', 'loadSalesMasterData'],
-        contracts: ['contracts.js?v=20260923-6', 'loadContracts'],
-        quotations: ['quotations.js?v=20261016-cost1', 'loadQuotations'],
-        'sales-orders': ['sales-orders.js?v=20261008-menu1', 'loadSalesOrders'],
-        deliveries: ['sales-fulfillment.js?v=20261019-safety1', 'loadDeliveries'],
-        'sales-invoices': ['sales-fulfillment.js?v=20261019-safety1', 'loadSalesInvoices'],
+        contracts: ['contracts.js?v=20261028-template-picker1', 'loadContracts'],
+        quotations: ['quotations.js?v=20261029-workflow-soft1', 'loadQuotations'],
+        'sales-orders': ['sales-orders.js?v=20261028-auto-order2', 'loadSalesOrders'],
+        deliveries: ['sales-fulfillment.js?v=20261028-http-uuid1', 'loadDeliveries'],
+        'sales-invoices': ['sales-fulfillment.js?v=20261028-http-uuid1', 'loadSalesInvoices'],
         'customer-receivables': ['customer-receivables.js?v=20260617-1', 'loadCustomerReceivables'],
-        'customer-payments': ['sales-fulfillment.js?v=20261019-safety1', 'loadCustomerPayments'],
-        customers: ['customers.js?v=20261025-groups3', 'loadCustomers'],
+        'customer-payments': ['sales-fulfillment.js?v=20261028-http-uuid1', 'loadCustomerPayments'],
+        customers: ['customers.js?v=20261028-perf2', 'loadCustomers'],
         'customer-groups': ['customer-groups-page.js?v=20261025-4', 'loadCustomerGroupsPage'],
         'customer-contacts': ['customer-contacts.js?v=20261023-list-audit2', 'loadCustomerContacts'],
         suppliers: ['suppliers.js?v=20261023-procurement1', 'loadSuppliers'],
-        skus: ['skus.js?v=20261024-sharing1', 'loadSkus'],
-        'product-categories': ['product-catalog.js?v=20261023-products1', 'loadProductCatalog'],
-        'product-brands': ['product-catalog.js?v=20261023-products1', 'loadProductCatalog'],
+        skus: ['skus.js?v=20261028-category-tree4', 'loadSkus'],
+        'product-categories': ['product-catalog.js?v=20261028-table6', 'loadProductCatalog'],
+        'product-brands': ['product-catalog.js?v=20261028-table6', 'loadProductCatalog'],
         inventory: ['inventory.js?v=20260615-3', 'loadInventory'],
         'inventory-transactions': ['inventory.js?v=20260615-3', 'loadInventory'],
         warehouses: ['warehouses.js?v=20261023-procurement1', 'loadWarehouses'],
         'purchase-requests': ['purchase-requests.js?v=20261013-quick2', 'loadPurchaseRequests'],
-        'supplier-quotations': ['supplier-quotations.js?v=20261013-modal2', 'loadSupplierQuotations'],
+        'supplier-quotations': ['supplier-quotations.js?v=20261028-template-picker1', 'loadSupplierQuotations'],
         'purchase-orders': ['purchase-orders.js?v=20261009-workflow1', 'loadPurchaseOrders'],
         'goods-receipts': ['goods-receipts.js?v=20261008-menu1', 'loadGoodsReceipts'],
-        'goods-issues': ['goods-issues.js?v=20261008-menu1', 'loadGoodsIssues'],
+        'goods-issues': ['goods-issues.js?v=20261028-template-picker1', 'loadGoodsIssues'],
         'stock-takes': ['stock-takes.js?v=20260619-1', 'loadStockTakes'],
-        tasks: ['tasks.js?v=20261009-codes1', 'loadTasks'],
-        approvals: ['approvals.js?v=20261011-2', 'loadApprovals'],
+        tasks: ['tasks.js?v=20261029-create2', 'loadTasks'],
+        approvals: ['approvals.js?v=20261028-pjax3', 'loadApprovals'],
         alerts: ['alerts.js?v=20260615-2', 'loadAlerts'],
         kpi: ['kpi.js?v=20261011-scope1', 'loadKpi'],
-        'kpi-reports': ['kpi-reports.js?v=20261013-permissions1', 'loadKpiReports'],
+        'kpi-reports': ['kpi-reports.js?v=20261029-compact1', 'loadKpiReports'],
         'business-reports': ['business-reports.js?v=20261013-permissions1', 'loadBusinessReports'],
         'my-kpi': ['my-kpi.js?v=20261011-assign2', 'loadMyKpi'],
         'kpi-adjustments': ['kpi-adjustments.js?v=20261019-safety1', 'loadKpiAdjustments'],
-        'kpi-settings': ['kpi-settings.js?v=20261013-fields2', 'loadKpiSettings'],
+        'kpi-settings': ['kpi-settings.js?v=20261029-confirm2', 'loadKpiSettings'],
         workflows: ['workflows.js?v=20260618-2', 'loadWorkflows'],
         users: ['users.js?v=20261023-organization1', 'loadUsers'],
         roles: ['roles.js?v=20261008-1', 'loadRoles'],
         organization: ['organization.js?v=20261011-master1', 'loadOrganization'],
-        'print-templates': ['print-templates.js?v=20261010-workspace2', 'loadPrintTemplates'],
-        'audit-logs': ['audit-logs.js', 'loadAuditLogs'],
-        'service-tickets': ['service-desk.js?v=20261019-safety1', 'loadServiceTickets'],
-        'warranty-claims': ['service-desk.js?v=20261019-safety1', 'loadWarrantyClaims'],
-        settings: ['settings.js?v=20261013-policy-ui2', 'loadSettings'],
+        'print-templates': ['print-templates.js?v=20261027-shared-preview10', 'loadPrintTemplates'],
+        'audit-logs': ['audit-logs.js?v=20261029-scroll2', 'loadAuditLogs'],
+        'service-tickets': ['service-desk.js?v=20261029-list2', 'loadServiceTickets'],
+        'warranty-claims': ['service-desk.js?v=20261029-list2', 'loadWarrantyClaims'],
+        settings: ['settings.js?v=20261029-approval-unified1', 'loadSettings'],
     };
     const routePrefetch = {
         '/dashboard': ['dashboard', [
@@ -160,7 +160,7 @@
     const prefetchingPages = new Set();
 
     function hasPermission(code) {
-        return !code || window.VKUser?.permissions?.includes(code);
+        return !code || code.split('|').some(item => window.VKUser?.permissions?.includes(item));
     }
 
     async function bootLayout() {
@@ -272,7 +272,7 @@
         pending.src = url;
     }
 
-    function applyNavigation() {
+    function applyNavigation(pathname = window.location.pathname) {
         document.querySelectorAll('#mainNav a, [data-module-toolbar] a, [data-module-card]').forEach((link) => {
             const permission = link.dataset.permission || '';
             if (!hasPermission(permission)) {
@@ -293,7 +293,7 @@
             }
         });
 
-        setActiveUrl(window.location.pathname);
+        setActiveUrl(pathname);
         applySidebarIcons();
         document.querySelector('[data-app-switcher]')?.dispatchEvent(new CustomEvent('vk:apps:refresh'));
     }
@@ -521,11 +521,15 @@
             navigatePjax(link.href);
         });
 
+        let hoverTimer;
         document.addEventListener('mouseover', (event) => {
+            window.clearTimeout(hoverTimer);
             const link = event.target.closest('a[href]');
             if (!link || !shouldUsePjax(link)) return;
-            prefetchPage(link.href);
+            if (window.navigator?.connection?.saveData || pjaxBusy) return;
+            hoverTimer = window.setTimeout(() => { if (!pjaxBusy && link.isConnected) prefetchPage(link.href); }, 180);
         });
+        document.addEventListener('mouseout', () => window.clearTimeout(hoverTimer));
 
         window.addEventListener('popstate', () => {
             navigatePjax(window.location.href, { push: false });
@@ -545,7 +549,7 @@
         const target = new URL(href, window.location.origin);
         const push = options.push !== false;
         if (pjaxBusy) return;
-        if (target.pathname === window.location.pathname && target.search === window.location.search && push) return;
+        const sameLocation = target.pathname === window.location.pathname && target.search === window.location.search;
 
         pjaxBusy = true;
         document.body.classList.add('pjax-loading');
@@ -558,7 +562,7 @@
             const doc = new DOMParser().parseFromString(html, 'text/html');
             const page = swapPage(doc, target.pathname);
 
-            if (push) {
+            if (push && !sameLocation) {
                 history.pushState({}, '', target.href);
             }
 
@@ -643,7 +647,7 @@
         replaceHtml('[data-pjax-actions]', actions?.innerHTML || '');
         replaceHtml('[data-pjax-module-nav]', moduleNav?.innerHTML || '');
         replaceHtml('[data-pjax-content]', content.innerHTML);
-        applyNavigation();
+        applyNavigation(pathname);
         return page;
     }
 

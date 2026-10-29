@@ -34,6 +34,13 @@ document.addEventListener('click', event => {
     if (addActivity) openDealActivityModal(addActivity.dataset.dealAddActivity);
     if (addLine) addDealItemLine();
     if (removeLine) removeLine.closest('[data-deal-item-line]')?.remove();
+    const row=event.target.closest('tr[data-deal-row]');
+    if(row && !event.target.closest('button,a,input,select,textarea,summary,.row-action-menu'))openDealDetail(row.dataset.dealRow);
+});
+
+document.addEventListener('keydown',event=>{
+    if(!document.getElementById('dealsRoot') || !event.target.matches('tr[data-deal-row]') || !['Enter',' '].includes(event.key))return;
+    event.preventDefault();openDealDetail(event.target.dataset.dealRow);
 });
 
 async function loadDeals() {
@@ -77,7 +84,7 @@ function renderDeals(total = dealState.rows.length) {
                 canManage && ['qualified', 'proposal', 'negotiation'].includes(row.stage) ? VKTable.smallButton('Tạo báo giá', `data-deal-create-quotation="${row.id}"`) : '',
                 canManage ? VKTable.smallButton('Chuyển giai đoạn', `data-transition-deal="${row.id}"`, 'primary') : '',
             ].filter(Boolean)) : VKTable.statusBadge(row.status) },
-        ], rows, 'Chưa có cơ hội bán hàng'),
+        ], rows, 'Chưa có cơ hội bán hàng', {rowAttr:row=>`data-deal-row="${Number(row.id)}" tabindex="0" aria-label="Mở cơ hội ${VKTable.escapeHtml(row.name || row.code || '')}"`}),
     }));
     const search = document.querySelector('[data-list-search]'); if (search && document.activeElement !== search) search.value = dealState.q;
     const stage = document.querySelector('[data-deal-stage]'); if (stage) stage.value = dealState.stage;
@@ -150,30 +157,30 @@ function openDealDetail(id) {
             <button class="btn secondary" type="button" data-deal-needs="${row.id}">Nhu cầu khách hàng</button>
             <button class="btn secondary" type="button" data-deal-add-activity="${row.id}">+ Chăm sóc</button>
             <button class="btn secondary" type="button" data-deal-edit-items="${row.id}">Hàng hóa</button>
-            <button class="btn secondary" type="button" data-deal-create-quotation="${row.id}">Tạo báo giá</button>
-            <button class="btn primary" type="button" data-transition-deal="${row.id}">Chuyển giai đoạn</button>
+            <button class="btn secondary" type="button" data-transition-deal="${row.id}">Chuyển giai đoạn</button>
+            <button class="btn primary" type="button" data-deal-create-quotation="${row.id}">Tạo báo giá</button>
         ` : (row.status === 'open' ? '' : '<span class="badge muted">Cơ hội đã kết thúc</span>'),
     });
 }
 
 function dealNeedsFields(needs={}){
     const field=(key,label,type='text')=>VKModal.field('need_'+key,label,type,needs[key] ?? '');
-    return `<section class="deal-needs-panel full"><div class="deal-needs-heading"><strong>Nhu cầu khách hàng</strong><span>Thông tin cho lần mua / chương trình này</span></div><div class="deal-needs-grid">${field('purpose','Mục đích')}${field('group_size','Quy mô nhóm')}${field('guest_count','Số khách dự kiến','number')}${field('service_date','Ngày sử dụng dịch vụ','date')}${field('budget','Ngân sách dự kiến','number')}${window.VKDealServices?.picker(needs) || ''}<div class="field full"><label>Yêu cầu đặc biệt</label><textarea name="need_special_requests" rows="3" maxlength="2000" placeholder="Ví dụ: xe đưa đón, suất ăn riêng, hướng dẫn viên…">${VKTable.escapeHtml(needs.special_requests || '')}</textarea></div></div><small>Ngày sử dụng dịch vụ được lưu riêng, không thay đổi ngày dự kiến chốt.</small></section>`;
+    return `<section class="deal-needs-panel full"><div class="deal-needs-heading"><strong>Nhu cầu khách hàng</strong><span>Thông tin cho lần mua / chương trình này</span></div><div class="deal-needs-grid">${field('purpose','Mục đích')}${field('group_size','Quy mô nhóm')}${field('guest_count','Số khách dự kiến','number')}${field('service_date','Ngày sử dụng dịch vụ','date')}${field('budget','Ngân sách dự kiến','number')}<div class="field full"><label>Yêu cầu đặc biệt</label><textarea name="need_special_requests" rows="3" maxlength="2000" placeholder="Ví dụ: xe đưa đón, suất ăn riêng, hướng dẫn viên…">${VKTable.escapeHtml(needs.special_requests || '')}</textarea></div></div><small>Ngày sử dụng dịch vụ được lưu riêng, không thay đổi ngày dự kiến chốt.</small></section>`;
 }
 function readDealNeeds(form){
     const value=key=>form.elements['need_'+key]?.value?.trim() || null;
     const ids=Array.from(form.querySelectorAll('[name="need_service"]:checked')).map(c=>Number(c.value));
-    return {...(ids.length || !form.dataset.legacyInterests?{service_ids:ids}:{}),purpose:value('purpose'),group_size:value('group_size'),guest_count:value('guest_count')?Number(value('guest_count')):null,service_date:value('service_date'),budget:value('budget')?VKMoney.parse(value('budget')):null,special_requests:value('special_requests'),interests:form.dataset.legacyInterests?JSON.parse(form.dataset.legacyInterests):[]};
+    return {...(form.dataset.preservedServices?JSON.parse(form.dataset.preservedServices):{service_ids:ids,interests:[]}),purpose:value('purpose'),group_size:value('group_size'),guest_count:value('guest_count')?Number(value('guest_count')):null,service_date:value('service_date'),budget:value('budget')?VKMoney.parse(value('budget')):null,special_requests:value('special_requests')};
 }
 async function openDealNeeds(id){
     try{
-        await window.VKDealServices?.load();
         const row=(await VKApi.request(`/deals/${id}`,{cache:false})).data;
         VKModal.open('Nhu cầu · '+row.code,dealNeedsFields(row.needs || {}),async form=>{
             await VKApi.request(`/deals/${id}/needs`,{method:'PUT',body:JSON.stringify({needs:readDealNeeds(form),version:row.version})});
             VKModal.close();VKModal.toast('Đã lưu nhu cầu khách hàng.');await reloadDealDetail(id);
         },{className:'deal-needs-modal',submitText:'Lưu nhu cầu'});
-        const form=document.getElementById('modalForm');if(!row.needs?.service_ids?.length && row.needs?.interests?.length)form.dataset.legacyInterests=JSON.stringify(row.needs.interests);
+        const form=document.getElementById('modalForm');
+        form.dataset.preservedServices=JSON.stringify({...(row.needs?.service_ids?.length?{service_ids:row.needs.service_ids}:{}),interests:row.needs?.interests || []});
     }catch(e){VKModal.toast(e.message,'danger');}
 }
 

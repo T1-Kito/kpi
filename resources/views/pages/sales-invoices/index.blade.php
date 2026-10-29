@@ -10,5 +10,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/sales-fulfillment.js?v=20261020-money1"></script>
+<script src="/assets/js/features/sales-fulfillment.js?v=20261028-http-uuid1"></script>
 @endpush

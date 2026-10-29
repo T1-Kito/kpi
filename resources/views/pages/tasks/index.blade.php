@@ -13,5 +13,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/tasks.js?v=20261009-codes1"></script>
+<script src="/assets/js/features/tasks.js?v=20261029-create2"></script>
 @endpush

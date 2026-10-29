@@ -23,6 +23,7 @@ class QuotationService
     {
         return DB::transaction(function () use ($actor, $data) {
             $customer = \App\Models\Customer::where('tenant_id', $actor->tenant_id)->findOrFail($data['customer_id']);
+            abort_if(! empty($data['contact_id']) && ! $customer->contacts()->whereKey($data['contact_id'])->exists(), 422, 'Người liên hệ không thuộc khách hàng đã chọn.');
             abort_if($customer->status !== 'active' || $customer->merged_into_id, 422, 'Chỉ được lập báo giá mới cho khách hàng đang hoạt động.');
             $defaultTerm = \App\Models\SalesPaymentTerm::where('tenant_id', $actor->tenant_id)
                 ->where('is_active', true)->where('is_default', true)->orderBy('id')->first();
@@ -36,7 +37,7 @@ class QuotationService
                 'tenant_id' => $actor->tenant_id,
                 'workflow_version' => 2,
                 'created_by' => $actor->id,
-                'contact_id' => $customer->contacts()->where('is_primary', true)->value('id'),
+                'contact_id' => array_key_exists('contact_id', $data) ? $data['contact_id'] : $customer->contacts()->where('is_primary', true)->value('id'),
                 'code' => $this->codes->next('quotations', 'code', 'QUO-', fn ($query) => $query->where('tenant_id', $actor->tenant_id)),
                 'customer_id' => $data['customer_id'],
                 'lead_id' => $data['lead_id'] ?? null,
@@ -49,6 +50,7 @@ class QuotationService
                     : $actor->id,
                 'valid_until' => $data['valid_until'] ?? null,
                 'payment_terms' => $data['payment_terms'] ?? $customer->payment_terms ?? $defaultTerm?->name,
+                'payment_plan' => $data['payment_plan'] ?? null,
                 'discount_percent' => $data['discount_percent'] ?? $defaultPrice?->discount_percent ?? 0,
                 'delivery_terms' => $data['delivery_terms'] ?? null,
                 'note' => $data['note'] ?? null,
@@ -77,6 +79,7 @@ class QuotationService
             abort_if($quotation->status === 'approved', 422, 'Bao gia da duyet nen khong the sua.');
             abort_if($quotation->salesOrders()->exists(), 422, 'Bao gia da tao don ban nen khong the sua.');
             $customer = \App\Models\Customer::where('tenant_id', $actor->tenant_id)->where('status', 'active')->whereNull('merged_into_id')->findOrFail($data['customer_id']);
+            abort_if(! empty($data['contact_id']) && ! $customer->contacts()->whereKey($data['contact_id'])->exists(), 422, 'Người liên hệ không thuộc khách hàng đã chọn.');
             $term = ! empty($data['payment_term_id']) ? \App\Models\SalesPaymentTerm::where('tenant_id', $actor->tenant_id)->where('is_active', true)->findOrFail($data['payment_term_id']) : $quotation->paymentTerm;
             $priceBook = array_key_exists('price_book_id', $data) ? (! empty($data['price_book_id']) ? \App\Models\SalesPriceBook::where('tenant_id', $actor->tenant_id)->where('is_active', true)->findOrFail($data['price_book_id']) : null) : $quotation->priceBook;
             abort_if($priceBook && (($priceBook->effective_from && $priceBook->effective_from->startOfDay()->isFuture()) || ($priceBook->effective_to && $priceBook->effective_to->endOfDay()->isPast())), 422, 'Chính sách giá chưa hoặc hết hiệu lực.');
@@ -84,13 +87,14 @@ class QuotationService
             $old = $quotation->load('items')->toArray();
             $quotation->update([
                 'customer_id' => $data['customer_id'],
-                'contact_id' => \App\Models\CustomerContact::where('customer_id', $data['customer_id'])->where('is_primary', true)->value('id'),
+                'contact_id' => array_key_exists('contact_id', $data) ? $data['contact_id'] : ((int) $quotation->customer_id === (int) $data['customer_id'] ? $quotation->contact_id : $customer->contacts()->where('is_primary', true)->value('id')),
                 'lead_id' => $data['lead_id'] ?? $quotation->lead_id,
                 'deal_id' => $data['deal_id'] ?? $quotation->deal_id,
                 'price_book_id' => $priceBook?->id,
                 'payment_term_id' => $data['payment_term_id'] ?? $quotation->payment_term_id,
                 'valid_until' => $data['valid_until'] ?? null,
                 'payment_terms' => $data['payment_terms'] ?? $customer->payment_terms ?? $term?->name,
+                'payment_plan' => array_key_exists('payment_plan',$data) ? $data['payment_plan'] : $quotation->payment_plan,
                 'delivery_terms' => $data['delivery_terms'] ?? null,
                 'note' => $data['note'] ?? null,
                 'discount_percent' => $data['discount_percent'] ?? ($priceBook?->id !== $quotation->price_book_id ? ($priceBook?->discount_percent ?? 0) : $quotation->discount_percent),
@@ -252,9 +256,29 @@ class QuotationService
         return bcadd($value, bccomp($value, '0', 6) >= 0 ? '0.005' : '-0.005', 2);
     }
 
-    private function calculateDraft(Quotation $quote, User $actor, array $items): array
+    public function preview(User $actor, array $data): Quotation
     {
-        $quote->items()->delete();
+        $customer = \App\Models\Customer::where('tenant_id', $actor->tenant_id)->findOrFail($data['customer_id']);
+        abort_if($customer->status !== 'active' || $customer->merged_into_id, 422, 'Khách hàng không còn hoạt động.');
+        abort_if(! empty($data['contact_id']) && ! $customer->contacts()->whereKey($data['contact_id'])->exists(), 422, 'Người liên hệ không thuộc khách hàng đã chọn.');
+        $quote = new Quotation(collect($data)->except(['items'])->all());
+        if (empty($data['payment_terms'])) {
+            $term = \App\Models\SalesPaymentTerm::where('tenant_id',$actor->tenant_id)->where('is_active',true);
+            if (!empty($data['payment_term_id'])) $term->whereKey($data['payment_term_id']);
+            else $term->where('is_default',true);
+            $quote->payment_terms = $customer->payment_terms ?? $term->orderBy('id')->value('name');
+        }
+        $quote->forceFill(['tenant_id'=>$actor->tenant_id,'code'=>'BẢN NHÁP','status'=>'draft','created_at'=>now(),'discount_percent'=>$data['discount_percent'] ?? 0]);
+        $quote->setRelation('customer',$customer);
+        $quote->setRelation('salesOwner',$actor);
+        $this->calculateDraft($quote,$actor,$data['items'],false);
+        return $quote;
+    }
+
+    private function calculateDraft(Quotation $quote, User $actor, array $items, bool $persist = true): array
+    {
+        if ($persist) $quote->items()->delete();
+        $previewItems = collect();
         $subtotal = $net = $tax = $cost = '0.00';
         $factor = bcdiv(bcsub('100', (string) $quote->discount_percent, 4), '100', 6);
         foreach ($items as $line) {
@@ -267,17 +291,21 @@ class QuotationService
             $taxLine = $this->money(bcdiv(bcmul($base, $vat, 6), '100', 6));
             $costLine = $this->money(bcmul($qty, (string) $sku->cost_price, 6));
             abort_if(bccomp(bcadd($base, $taxLine, 2), '9999999999999999.99', 2) > 0 || bccomp($costLine, '9999999999999999.99', 2) > 0, 422, 'Giá trị hàng hóa vượt giới hạn lưu trữ.');
-            $quote->items()->create(['sku_id' => $sku->id, 'sku_code' => $sku->sku_code, 'name' => $sku->name, 'unit' => $sku->unit ?: '-',
+            $values = ['sku_id' => $sku->id, 'sku_code' => $sku->sku_code, 'name' => $sku->name, 'unit' => $sku->unit ?: '-',
                 'quantity' => $qty, 'list_unit_price' => $list, 'unit_price' => $price, 'unit_cost' => $sku->cost_price,
-                'line_subtotal' => $base, 'vat_rate' => $vat, 'vat_amount' => $taxLine, 'line_total' => bcadd($base, $taxLine, 2), 'line_cost' => $costLine]);
+                'line_subtotal' => $base, 'vat_rate' => $vat, 'vat_amount' => $taxLine, 'line_total' => bcadd($base, $taxLine, 2), 'line_cost' => $costLine];
+            if ($persist) $quote->items()->create($values);
+            else { $item = new \App\Models\QuotationItem($values); $item->setRelation('sku',$sku); $previewItems->push($item); }
             $subtotal = bcadd($subtotal, $this->money(bcmul($qty, $list, 6)), 2);
             $net = bcadd($net, $base, 2); $tax = bcadd($tax, $taxLine, 2); $cost = bcadd($cost, $costLine, 2);
         }
         $total = bcadd($net, $tax, 2);
         abort_if(bccomp($total, '9999999999999999.99', 2) > 0 || bccomp($subtotal, '9999999999999999.99', 2) > 0, 422, 'Tổng giá trị báo giá vượt giới hạn lưu trữ.');
         $margin = bccomp($net, '0', 2) > 0 ? $this->money(bcmul(bcdiv(bcsub($net, $cost, 2), $net, 8), '100', 6)) : '0.00';
-        $quote->update(['subtotal_amount' => $subtotal, 'discount_amount' => bcsub($subtotal, $net, 2), 'tax_amount' => $tax,
-            'total_amount' => $total, 'total_cost' => $cost, 'margin_percent' => $margin, 'status' => 'draft']);
+        $totals = ['subtotal_amount' => $subtotal, 'discount_amount' => bcsub($subtotal, $net, 2), 'tax_amount' => $tax,
+            'total_amount' => $total, 'total_cost' => $cost, 'margin_percent' => $margin, 'status' => 'draft'];
+        if ($persist) $quote->update($totals);
+        else { $quote->fill($totals); $quote->setRelation('items',$previewItems); }
         return ['subtotal' => $subtotal, 'tax' => $tax, 'total' => $total, 'cost' => $cost, 'margin' => (float) $margin];
     }
 }

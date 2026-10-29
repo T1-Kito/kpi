@@ -18,7 +18,7 @@
         ['service-tickets', 'Chăm sóc khách hàng', 'Ticket, hỗ trợ, phản hồi, SLA', 'service.ticket.view', 'support', 'blue'],
         ['warranty-claims', 'Bảo hành', 'Tiếp nhận, xử lý bảo hành', 'service.ticket.view', 'warranty', 'teal'],
         ['tasks', 'Công việc', 'Việc cần làm, nhiệm vụ', 'task.view', 'tasks', 'sky'],
-        ['approvals', 'Phê duyệt', 'Duyệt yêu cầu, chứng từ', 'task.approve', 'approval', 'indigo'],
+        ['approvals', 'Phê duyệt', 'Duyệt yêu cầu, chứng từ', 'task.approve|sales.margin.approve|sales.quotation.approve_any', 'approval', 'indigo'],
         ['sales-invoices', 'Hóa đơn', 'Hóa đơn bán hàng', 'finance.invoice.view', 'invoice', 'amber'],
         ['customer-receivables', 'Công nợ', 'Công nợ khách hàng', 'finance.payment.view', 'finance', 'teal'],
         ['kpi', 'KPI', 'Chỉ tiêu, hiệu suất', '', 'kpi', 'indigo'],

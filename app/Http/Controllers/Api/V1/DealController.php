@@ -46,7 +46,10 @@ class DealController extends Controller
         $deal->load(['customer:id,code,name,contact_name,phone,email', 'lead:id,code,name,phone,email', 'owner:id,name,email', 'stageHistory.changedBy:id,name', 'items.sku:id,sku_code,name,unit']);
         $quotations = Quotation::where('tenant_id', $deal->tenant_id)->where('deal_id', $deal->id)->latest('id')->get(['id', 'code', 'status', 'total_amount']);
         $tasks = Task::where('tenant_id', $deal->tenant_id)->where('source_type', 'Deal')->where('source_id', $deal->id)->with(['assignee:id,name', 'history.changedBy:id,name'])->latest('id')->get();
-        $timeline = $deal->stageHistory->map(fn ($item) => ['label' => 'Chuyển từ '.($item->from_stage ?: 'Khởi tạo').' sang '.$item->to_stage, 'status' => $item->to_stage, 'at' => $item->changed_at, 'details' => $item->reason]);
+        $stageNames=\App\Models\SalesPipelineStage::where('tenant_id',$deal->tenant_id)->pluck('name','code')->all();
+        $stageNames+=['new'=>'Mới','qualified'=>'Đã xác định nhu cầu','proposal'=>'Đang báo giá','negotiation'=>'Đang đàm phán','won'=>'Thắng','lost'=>'Mất cơ hội'];
+        $stageName=fn($code)=>$stageNames[$code] ?? 'Giai đoạn đã ngừng sử dụng';
+        $timeline = $deal->stageHistory->map(fn ($item) => ['label' => 'Chuyển từ '.($item->from_stage ? $stageName($item->from_stage) : 'Khởi tạo').' sang '.$stageName($item->to_stage), 'status' => $item->to_stage,'status_label'=>$stageName($item->to_stage), 'at' => $item->changed_at, 'details' => $item->reason]);
         foreach ($tasks as $task) {
             foreach ($task->history->where('to_status', 'completed') as $entry) {
                 $timeline->push(['label' => $task->title, 'status' => 'completed', 'at' => $entry->created_at, 'details' => $entry->reason, 'actor' => $entry->changedBy?->name]);

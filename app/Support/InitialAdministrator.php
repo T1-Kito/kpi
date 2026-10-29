@@ -13,6 +13,7 @@ final class InitialAdministrator
             'email'=>'required|email|max:255|unique:users,email',
             'password'=>'required|string|min:8|max:128',
         ])->validate();
+        DashboardPermissions::install(\Illuminate\Support\Facades\DB::connection());
         $role=Role::firstOrCreate(['tenant_id'=>$tenantId,'code'=>'ROLE-ADMIN'],['name'=>'Quản trị hệ thống','data_scope'=>'company']);
         $role->permissions()->sync(Permission::where('code','!=',SystemAccount::PERMISSION)->pluck('id'));
         $user=User::create(['tenant_id'=>$tenantId,'name'=>'Quản trị viên','email'=>$email,'password'=>Hash::make($password),'is_active'=>true]);

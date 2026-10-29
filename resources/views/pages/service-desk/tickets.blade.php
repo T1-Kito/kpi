@@ -8,4 +8,4 @@
 <div class="service-desk-page" data-service-desk-page="tickets">
 <section class="module-panel"><p class="form-note">Đang tải hàng đợi dịch vụ…</p></section></div>
 @endsection
-@push('scripts')<script src="/assets/js/features/service-desk.js?v=20261020-service-sla1"></script>@endpush
+@push('scripts')<script src="/assets/js/features/service-desk.js?v=20261029-list2"></script>@endpush

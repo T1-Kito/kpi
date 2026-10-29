@@ -7,6 +7,13 @@ use Illuminate\Database\Connection;
 final class AdditiveDatabaseUpgrade
 {
     public const STEPS=[
+        '2026_10_28_160000_link_product_category_services'=>['@category_service'=>'service_interest_id'],
+        '2026_10_28_150000_add_product_category_parent'=>['@category_parent'=>'parent_id'],
+        '2026_10_28_140000_repair_installed_dashboard_permissions'=>['@dashboard_permissions'=>'permission'],
+        '2026_10_28_130000_add_universal_quotation_approval_permission'=>['@approval_permission'=>'permission'],
+        '2026_10_28_110000_provision_sontien_login_accounts'=>['@default_accounts'=>'installation'],
+        '2026_10_28_100000_provision_installation_default_accounts'=>['@default_accounts'=>'installation'],
+        '2026_10_27_160000_add_quotation_payment_plan'=>['@quotation_payment_plan'=>'payment_plan'],
         '2026_10_26_120000_create_crm_intake_rows'=>['@crm_intake'=>'crm_intake_rows'],
         '2026_10_26_110000_create_service_interests'=>['@service_interests'=>'service_interests'],
         '2026_10_26_100000_add_deal_needs'=>['@deal_needs'=>'needs'],
@@ -28,6 +35,26 @@ final class AdditiveDatabaseUpgrade
         if(array_diff($pending,array_keys(self::STEPS))) throw new \RuntimeException('UPGRADE_BASELINE');
         if($pending && !$db->getSchemaBuilder()->hasTable('service_tickets')) throw new \RuntimeException('UPGRADE_BASELINE');
         foreach($pending as $name) {
+            if(isset(self::STEPS[$name]['@category_service'])){
+                if(!$db->getSchemaBuilder()->hasTable('product_categories') || $db->getSchemaBuilder()->hasColumn('product_categories','service_interest_id'))throw new \RuntimeException('UPGRADE_SCHEMA_CONFLICT');
+                continue;
+            }
+            if(isset(self::STEPS[$name]['@category_parent'])){
+                if(!$db->getSchemaBuilder()->hasTable('product_categories') || $db->getSchemaBuilder()->hasColumn('product_categories','parent_id'))throw new \RuntimeException('UPGRADE_SCHEMA_CONFLICT');
+                continue;
+            }
+            if(isset(self::STEPS[$name]['@approval_permission']) || isset(self::STEPS[$name]['@dashboard_permissions'])) {
+                foreach(['permissions','roles','role_permissions'] as $table) if(!$db->getSchemaBuilder()->hasTable($table)) throw new \RuntimeException('UPGRADE_BASELINE');
+                continue;
+            }
+            if(isset(self::STEPS[$name]['@default_accounts'])) {
+                if(!$db->getSchemaBuilder()->hasTable('users') || !$db->getSchemaBuilder()->hasTable('roles'))throw new \RuntimeException('UPGRADE_BASELINE');
+                continue;
+            }
+            if(isset(self::STEPS[$name]['@quotation_payment_plan'])) {
+                if(!$db->getSchemaBuilder()->hasTable('quotations') || $db->getSchemaBuilder()->hasColumn('quotations','payment_plan'))throw new \RuntimeException('UPGRADE_SCHEMA_CONFLICT');
+                continue;
+            }
             if(isset(self::STEPS[$name]['@deal_needs'])){
                 if(!$db->getSchemaBuilder()->hasTable('deals') || $db->getSchemaBuilder()->hasColumn('deals','needs'))throw new \RuntimeException('UPGRADE_SCHEMA_CONFLICT');
                 continue;
@@ -57,7 +84,19 @@ final class AdditiveDatabaseUpgrade
         $db->transaction(function()use($db,$pending,$fault){
             $batch=(int)$db->table('migrations')->max('batch')+1;
             foreach($pending as $name) {
-                if(isset(self::STEPS[$name]['@crm_intake'])){
+                if(isset(self::STEPS[$name]['@category_service'])){
+                    $db->getSchemaBuilder()->table('product_categories',fn($t)=>$t->unsignedBigInteger('service_interest_id')->nullable());
+                }elseif(isset(self::STEPS[$name]['@category_parent'])){
+                    $db->getSchemaBuilder()->table('product_categories',fn($t)=>$t->unsignedBigInteger('parent_id')->nullable()->index());
+                }elseif(isset(self::STEPS[$name]['@dashboard_permissions'])){
+                    DashboardPermissions::install($db);
+                }elseif(isset(self::STEPS[$name]['@approval_permission'])){
+                    QuotationApprovalPermission::install($db);
+                }elseif(isset(self::STEPS[$name]['@default_accounts'])){
+                    InstallationDefaultAccounts::provision($db);
+                }elseif(isset(self::STEPS[$name]['@quotation_payment_plan'])){
+                    $db->getSchemaBuilder()->table('quotations',fn($t)=>$t->text('payment_plan')->nullable());
+                }elseif(isset(self::STEPS[$name]['@crm_intake'])){
                     $db->getSchemaBuilder()->create('crm_intake_rows',fn($t)=>CrmIntakeImport::schema($t));
                 }elseif(isset(self::STEPS[$name]['@service_interests'])){
                     $db->getSchemaBuilder()->create('service_interests',function($t){$t->id();$t->unsignedBigInteger('tenant_id');$t->unsignedBigInteger('parent_id')->nullable();$t->string('name',150);$t->boolean('is_active')->default(true);$t->timestamps();$t->index(['tenant_id','parent_id']);});

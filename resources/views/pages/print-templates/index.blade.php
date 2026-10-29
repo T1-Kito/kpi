@@ -13,5 +13,5 @@
 @endsection
 
 @push('scripts')
-    <script src="/assets/js/features/print-templates.js?v=20261012-enterprise-docx"></script>
+    <script src="/assets/js/features/print-templates.js?v=20261027-shared-preview10"></script>
 @endpush

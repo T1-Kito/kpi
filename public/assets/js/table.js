@@ -28,6 +28,7 @@
             confirmed: 'Đã xác nhận',
             completed: 'Hoàn thành',
             awaiting_delivery: 'Chờ giao hàng',
+            awaiting_customer: 'Chờ khách xác nhận',
             delivered: 'Đã giao hàng',
             delivered_pending_acceptance: 'Chờ nghiệm thu',
             acceptance_rejected: 'Nghiệm thu không đạt',
@@ -158,6 +159,7 @@
             'sales.deal.manage': 'Quản lý cơ hội bán hàng',
             'sales.contract.manage': 'Quản lý hợp đồng',
             'sales.margin.approve': 'Duyệt biên lợi nhuận thấp',
+            'sales.quotation.approve_any': 'Duyệt mọi báo giá / duyệt thay các cấp',
             'sales.order.view': 'Xem đơn bán',
             'sales.order.create': 'Tạo đơn bán',
             'sales.order.edit': 'Sửa đơn hàng nháp',
@@ -241,6 +243,22 @@
     function translateAction(value) {
         const map = {
             create_lead: 'Tạo khách hàng tiềm năng',
+            standard_kpi_setup: 'Thiết lập bộ KPI chuẩn',
+            customer_quotation_response: 'Ghi nhận phản hồi của khách về báo giá',
+            issue_quotation: 'Phát hành báo giá',
+            update_quotation: 'Cập nhật báo giá',
+            submit_quotation: 'Gửi duyệt báo giá',
+            submit_quotation_approval: 'Gửi duyệt báo giá',
+            revise_quotation: 'Tạo phiên bản báo giá mới',
+            create_quotation_revision: 'Tạo phiên bản báo giá mới',
+            approve_quotation_step: 'Duyệt một cấp báo giá',
+            reject_quotation: 'Từ chối báo giá',
+            activate_contract: 'Kích hoạt hợp đồng',
+            create_contract: 'Tạo hợp đồng',
+            update_deal_needs: 'Cập nhật nhu cầu khách hàng',
+            create_deal: 'Tạo cơ hội bán hàng',
+            transition_deal: 'Chuyển giai đoạn cơ hội',
+            qualify_lead: 'Chuyển khách tiềm năng thành cơ hội',
             assign_lead: 'Giao khách hàng tiềm năng',
             create_role: 'Tạo vai trò',
             sync_role_permissions: 'Cập nhật quyền vai trò',
@@ -443,6 +461,7 @@
             menu.classList.remove('drop-up');
             menu.style.removeProperty('--row-menu-top');
             menu.style.removeProperty('--row-menu-left');
+            menu.style.removeProperty('--row-menu-max-height');
             return;
         }
 
@@ -453,21 +472,19 @@
         window.requestAnimationFrame(() => {
             const list = menu.querySelector('.row-action-menu-list');
             const summary = menu.querySelector('summary');
-            if (!list || !summary) return;
+            if (!menu.open || !list || !summary) return;
 
             const summaryRect = summary.getBoundingClientRect();
             const width = list.offsetWidth || 132;
-            const height = list.offsetHeight || 40;
-            const container = menu.closest('.list-page, .record-panel, .task-board-panel, .table-wrap, .list-table-wrap');
-            const containerBottom = container ? container.getBoundingClientRect().bottom : window.innerHeight;
-            const boundaryBottom = Math.min(window.innerHeight, containerBottom);
-            const shouldDropUp = summaryRect.bottom + height + 8 > boundaryBottom && summaryRect.top > height + 8;
-            const top = shouldDropUp ? summaryRect.top - height - 4 : summaryRect.bottom + 4;
+            // Always open below the trigger, independent of the table's height.
+            // A short viewport gets a scrollable menu rather than an upward flip.
+            const top = summaryRect.bottom + 4;
             const left = Math.max(8, Math.min(summaryRect.right - width, window.innerWidth - width - 8));
 
-            menu.classList.toggle('drop-up', shouldDropUp);
+            menu.classList.remove('drop-up');
             menu.style.setProperty('--row-menu-top', `${Math.max(8, top)}px`);
             menu.style.setProperty('--row-menu-left', `${left}px`);
+            menu.style.setProperty('--row-menu-max-height', `${Math.max(0, window.innerHeight - top - 8)}px`);
         });
     }, true);
 })();

@@ -9,4 +9,4 @@
     <section class="module-panel"><p class="form-note">Đang tải dữ liệu bảo hành…</p></section>
 </div>
 @endsection
-@push('scripts')<script src="/assets/js/features/service-desk.js?v=20261020-warranty-import2"></script>@endpush
+@push('scripts')<script src="/assets/js/features/service-desk.js?v=20261029-list2"></script>@endpush

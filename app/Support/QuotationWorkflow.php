@@ -33,7 +33,13 @@ class QuotationWorkflow
             abort_unless($quote->total_amount > 0 && $quote->items()->exists(), 422, 'Báo giá phải có hàng hóa và giá trị lớn hơn 0.');
             abort_if($quote->items()->where('unit_price', '<=', 0)->exists(), 422, 'Cần nhập đơn giá cho tất cả hàng hóa.');
             $policy = $actor->tenant->fresh()->ui_settings['sales_quotation_approval'] ?? [];
-            $ids = $policy['approvers'] ?? array_filter([$actor->manager_id]);
+            $ids = $policy['approvers'] ?? [];
+            $rolePool = empty($ids);
+            if ($rolePool) {
+                $eligible = app(SalesApprovalAccess::class)->pool($actor->tenant_id);
+                if ($policy['separation_of_duties'] ?? false) $eligible = array_values(array_diff($eligible, [$quote->created_by]));
+                $ids = array_slice($eligible, 0, 1);
+            }
             $reasons = [];
             if ((float) $quote->margin_percent < (float) ($policy['minimum_margin'] ?? 15)) $reasons[] = 'Biên lợi nhuận thấp';
             if ((float) $quote->discount_percent > (float) ($policy['maximum_discount'] ?? 0)) $reasons[] = 'Chiết khấu vượt ngưỡng';
@@ -43,18 +49,18 @@ class QuotationWorkflow
             $standardTerms = $quote->customer->payment_terms ?: $quote->paymentTerm?->name;
             if ($quote->payment_terms && $quote->payment_terms !== $standardTerms) $reasons[] = 'Điều khoản thanh toán khác mặc định';
             if ($quote->delivery_terms) $reasons[] = 'Điều khoản giao hàng riêng';
-            if ($reasons) $ids = array_merge($ids, $policy['exception_approvers'] ?? []);
+            if ($reasons && !$rolePool) $ids = array_merge($ids, $policy['exception_approvers'] ?? []);
             $ids = array_values(array_unique(array_map('intval', $ids)));
-            abort_unless($ids, 422, 'Chưa thiết lập người duyệt báo giá bán hàng. Vui lòng cấu hình trong Thiết lập.');
+            abort_unless($ids, 422, 'Chưa có người duyệt hợp lệ. Chọn cấp duyệt trong Thiết lập hoặc cấp quyền “Duyệt mọi báo giá / duyệt thay các cấp” cho vai trò trong Phân quyền.');
             $steps = [];
             foreach ($ids as $id) {
                 $user = User::where('tenant_id', $actor->tenant_id)->find($id);
-                abort_unless($user && app(SalesApprovalAccess::class)->recipients($actor->tenant_id, $id), 422, 'Người duyệt và người thay không còn hoạt động hoặc thiếu quyền duyệt báo giá.');
+                abort_unless($user && ($rolePool || app(SalesApprovalAccess::class)->recipients($actor->tenant_id, $id)), 422, 'Người duyệt và người thay không còn hoạt động hoặc thiếu quyền duyệt báo giá.');
                 if ($policy['separation_of_duties'] ?? false) {
                     $eligible = array_diff(app(SalesApprovalAccess::class)->recipients($actor->tenant_id, $id), [(int) $quote->created_by]);
                     abort_unless($eligible, 422, 'Luồng duyệt chỉ có người lập báo giá tại một cấp. Hãy chọn người duyệt độc lập hoặc người thay hợp lệ.');
                 }
-                $steps[] = ['user_id' => $id, 'name' => $user->name, 'status' => 'waiting'];
+                $steps[] = ['user_id' => $id, 'name' => $rolePool ? 'Người có quyền duyệt mọi báo giá' : $user->name, 'status' => 'waiting', 'role_pool' => $rolePool];
             }
             $steps[0]['status'] = 'pending';
             $approval = Approval::create(['tenant_id' => $actor->tenant_id, 'source_type' => 'Quotation', 'source_id' => $quote->id, 'approver_id' => $ids[0], 'status' => 'pending', 'reason' => implode('; ', $reasons) ?: 'Duyệt báo giá trước phát hành']);
@@ -65,7 +71,7 @@ class QuotationWorkflow
             $contact = $quote->contact_id ? \App\Models\CustomerContact::where('customer_id', $quote->customer_id)->find($quote->contact_id) : null;
             if ($contact) $customerSnapshot = [...$customerSnapshot, 'contact_name' => $contact->name, 'phone' => $contact->phone ?: $quote->customer->phone, 'email' => $contact->email ?: $quote->customer->email];
             $quote->update(['status' => 'pending_approval', 'submitted_at' => now(), 'approval_steps' => $steps,
-                'approval_policy_snapshot' => [...$policy, 'reasons' => $reasons],
+                'approval_policy_snapshot' => [...$policy, 'reasons' => $reasons, 'role_pool' => $rolePool],
                 'document_snapshot' => ['customer' => $customerSnapshot, 'contact' => $contact?->toArray(), 'price_book' => $quote->priceBook?->toArray(), 'payment_term' => $quote->paymentTerm?->toArray()]]);
             $this->notify($quote, $ids[0]);
             $this->record($quote, $actor, 'submit_quotation', ['steps' => $steps, 'reasons' => $reasons]);
@@ -75,7 +81,9 @@ class QuotationWorkflow
 
     private function notify(Quotation $quote, int $id): void
     {
-        foreach (app(SalesApprovalAccess::class)->recipients($quote->tenant_id, $id) as $recipient) {
+        $access = app(SalesApprovalAccess::class);
+        $recipients = array_unique(array_merge($access->recipients($quote->tenant_id, $id), $access->pool($quote->tenant_id)));
+        foreach ($recipients as $recipient) {
             if (($quote->approval_policy_snapshot['separation_of_duties'] ?? false) && (int) $recipient === (int) $quote->created_by) continue;
             VkNotification::create(['tenant_id' => $quote->tenant_id, 'recipient_id' => $recipient, 'title' => 'Báo giá cần duyệt', 'message' => $quote->code, 'source_type' => 'Quotation', 'source_id' => $quote->id, 'action_url' => '/quotations?open='.$quote->id, 'status' => 'unread']);
         }
@@ -94,12 +102,12 @@ class QuotationWorkflow
             abort_if($index === false, 422, 'Không có bước duyệt đang chờ.');
             abort_unless(app(SalesApprovalAccess::class)->canApprove($quote, $actor), 403, 'Bạn chưa đến lượt duyệt, ủy quyền đã hết hạn hoặc cấu hình không cho người lập tự duyệt.');
             Approval::whereKey($steps[$index]['approval_id'])->where('status', 'pending')->update(['status' => $decision, 'reason' => $reason, 'decided_at' => now()]);
-            $steps[$index] = [...$steps[$index], 'status' => $decision, 'reason' => $reason, 'decided_at' => now()->toIso8601String(), 'decided_by' => $actor->id, 'decided_by_name' => $actor->name, 'delegated' => (int) $steps[$index]['user_id'] !== (int) $actor->id];
+            $steps[$index] = [...$steps[$index], 'status' => $decision, 'reason' => $reason, 'decided_at' => now()->toIso8601String(), 'decided_by' => $actor->id, 'decided_by_name' => $actor->name, 'delegated' => (int) $steps[$index]['user_id'] !== (int) $actor->id, 'permission_override' => app(SalesApprovalAccess::class)->canApproveAny($actor)];
             $status = $decision;
             if ($decision === 'approved' && isset($steps[$index + 1])) {
                 $next = $index + 1;
                 $user = User::where('tenant_id', $actor->tenant_id)->find($steps[$next]['user_id']);
-                abort_unless($user && app(SalesApprovalAccess::class)->recipients($actor->tenant_id, $user->id), 422, 'Người duyệt tiếp theo và người thay không còn hợp lệ.');
+                abort_unless($user && (app(SalesApprovalAccess::class)->recipients($actor->tenant_id, $user->id) || app(SalesApprovalAccess::class)->pool($actor->tenant_id)), 422, 'Người duyệt tiếp theo và người thay không còn hợp lệ.');
                 $approval = Approval::create(['tenant_id' => $actor->tenant_id, 'source_type' => 'Quotation', 'source_id' => $quote->id, 'approver_id' => $user->id, 'status' => 'pending']);
                 $steps[$next]['status'] = 'pending';
                 $steps[$next]['approval_id'] = $approval->id;
@@ -110,6 +118,7 @@ class QuotationWorkflow
                 unset($step);
             }
             $quote->update(['status' => $status, 'approval_steps' => $steps]);
+            if ($status === 'approved') app(SalesOrderService::class)->prepareApprovedQuotation($quote, $actor);
             $this->record($quote, $actor, $decision.'_quotation', ['reason' => $reason, 'step' => $index + 1, 'creator_approved' => (int) $quote->created_by === (int) $actor->id, 'original_approver_id' => $steps[$index]['user_id'], 'delegated' => $steps[$index]['delegated']]);
             return $quote->refresh();
         });
@@ -123,7 +132,8 @@ class QuotationWorkflow
             $quote = $this->locked($quote, $actor);
             abort_if($quote->status === 'superseded' || $quote->status === 'draft', 422, 'Phiên bản này đã thay thế hoặc đang là nháp.');
             $family = Quotation::where('tenant_id', $actor->tenant_id)->where(fn ($q) => $q->whereKey($rootId)->orWhere('revision_root_id', $rootId));
-            abort_if((clone $family)->whereHas('salesOrders')->exists(), 422, 'Báo giá đã có đơn hàng. Không thay thế phiên bản đã chốt.');
+            abort_if((clone $family)->whereHas('salesOrders', fn ($q) => $q->whereNotIn('status', ['awaiting_customer','cancelled']))->exists(), 422, 'Báo giá đã có đơn hàng. Không thay thế phiên bản đã chốt.');
+            \App\Models\SalesOrder::where('tenant_id',$actor->tenant_id)->whereIn('quotation_id',(clone $family)->select('id'))->where('status','awaiting_customer')->update(['status'=>'cancelled']);
             $revision = (clone $family)->max('revision_number') + 1;
             $quote->load('items');
             $copy = app(QuotationService::class)->create($actor, [
@@ -131,6 +141,7 @@ class QuotationWorkflow
                 'price_book_id' => $quote->price_book_id, 'payment_term_id' => $quote->payment_term_id,
                 'discount_percent' => $quote->discount_percent, 'valid_until' => $quote->valid_until?->toDateString(),
                 'payment_terms' => $quote->payment_terms, 'delivery_terms' => $quote->delivery_terms, 'note' => $quote->note,
+                'payment_plan' => $quote->payment_plan, 'contact_id' => $quote->contact_id,
                 'items' => $quote->items->map(fn ($item) => ['sku_id' => $item->sku_id, 'quantity' => $item->quantity, 'unit_price' => $item->list_unit_price ?? $item->unit_price, 'vat_rate' => $item->vat_rate])->all()]);
             $copy->update(['revision_root_id' => $rootId, 'revision_number' => $revision, 'sales_owner_id' => $quote->sales_owner_id]);
             Approval::where('tenant_id', $actor->tenant_id)->where('source_type', 'Quotation')->where('source_id', $quote->id)->where('status', 'pending')->update(['status' => 'cancelled', 'decided_at' => now(), 'reason' => 'Đã tạo phiên bản mới']);
@@ -183,6 +194,7 @@ class QuotationWorkflow
             $issue = QuotationIssue::where('quotation_id', $quote->id)->firstOrFail();
             $issue->update(['customer_decision' => $data['decision'], 'customer_evidence' => $data['evidence'], 'customer_decided_at' => now()]);
             $quote->update(['status' => $data['decision'] === 'accepted' ? 'accepted' : 'customer_rejected', 'accepted_at' => $data['decision'] === 'accepted' ? now() : null]);
+            \App\Models\SalesOrder::where('tenant_id',$actor->tenant_id)->where('quotation_id',$quote->id)->where('status','awaiting_customer')->update(['status'=>$data['decision'] === 'accepted' ? 'draft' : 'cancelled']);
             $this->record($quote, $actor, 'customer_quotation_response', $data);
             return $quote->refresh();
         });

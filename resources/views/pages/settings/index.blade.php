@@ -10,5 +10,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/settings.js?v=20261020-service-sla1"></script>
+<script src="/assets/js/features/settings.js?v=20261029-approval-unified1"></script>
 @endpush

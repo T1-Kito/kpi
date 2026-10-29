@@ -151,10 +151,10 @@ async function loadCustomers(options = {}) {
     }
     const version = ++customerLoadVersion;
     const focused = document.activeElement?.matches('[data-list-search]');
-    await window.VKCustomerGroups?.load();
+    const groupsReady = window.VKCustomerGroups?.load();
     if (customerState.groupId === undefined) customerState.groupId = new URLSearchParams(window.location.search).get('group') || '';
     const params = new URLSearchParams({page_size:customerState.pageSize,page:customerState.page,q:customerState.q,status:customerState.status,customer_type:customerState.customerType,customer_group_id:customerState.groupId || ''});
-    const customers = await VKApi.request(`/customers?${params}`, {cache:false});
+    const [customers] = await Promise.all([VKApi.request(`/customers?${params}`, {cache:false}), groupsReady]);
     if (version !== customerLoadVersion || !document.getElementById('customersRoot')) return;
     const careBucket=new URLSearchParams(window.location.search).get('care');
     const careRoot=document.getElementById('customersRoot');
@@ -306,8 +306,8 @@ async function openCustomerModal(id = null, readOnly = false, asPage = false) {
     const row = id ? (customerState.detailCache[String(id)]?.data || customerState.rows.find(item => String(item.id) === String(id))) : {};
     VKModal.open(id ? 'Sửa khách hàng' : 'Tạo khách hàng', `
         <div class="customer-form-sections">
-            <section class="quick-customer-section">
-                <h4><span aria-hidden="true">${customerFormIcon('user')}</span>Thông tin khách hàng</h4>
+            <section class="quick-customer-section" data-customer-main-section>
+                <div class="customer-section-heading"><h4><span aria-hidden="true">${customerFormIcon('user')}</span>Thông tin khách hàng</h4>${VKCatalogSharing.field(row || {}, readOnly)}</div>
                 <div class="quick-customer-grid">
                     ${customerField('name', 'Tên khách hàng / tổ chức', 'text', row?.name || '', 'CT')}
                     ${customerSelect('customer_type', 'Loại khách hàng', [
@@ -324,7 +324,6 @@ async function openCustomerModal(id = null, readOnly = false, asPage = false) {
                     ${customerField('email', 'Email', 'email', row?.email || '', '@')}
                     ${customerField('address', 'Địa chỉ liên hệ', 'text', row?.address || '', 'DC', true)}
                 </div>
-                ${VKCatalogSharing.field(row || {}, readOnly)}
             </section>
             <section class="quick-customer-section">
                 <h4>Phân nhóm khách hàng</h4>
@@ -343,7 +342,7 @@ async function openCustomerModal(id = null, readOnly = false, asPage = false) {
                     <div data-customer-business-field class="customer-field-full-wrap">${customerField('billing_address', 'Địa chỉ xuất hóa đơn', 'text', row?.billing_address || '', 'DC', true)}</div>
                 </div>
             </section>
-            <section class="quick-customer-section">
+            <section class="quick-customer-section" data-customer-payment-section>
                 <h4><span aria-hidden="true">${customerFormIcon('money')}</span>Thanh toán & công nợ</h4>
                 <div class="quick-customer-grid">
                     ${customerField('credit_limit', 'Hạn mức công nợ', 'number', row?.credit_limit || '0', 'VND')}
@@ -381,14 +380,20 @@ async function openCustomerModal(id = null, readOnly = false, asPage = false) {
         const matches = duplicateResponse.data || [];
         if (matches.length) {
             const sameTaxCode = matches.some(item => item.tax_code && item.tax_code.replace(/[^0-9-]/g, '') === (data.tax_code || '').replace(/[^0-9-]/g, ''));
-            const names = matches.map(item => `${item.code} – ${item.name}`).join(', ');
-            if (sameTaxCode) throw new Error(`Mã số thuế này đã có trong hồ sơ ${names}. Vui lòng mở hồ sơ hiện có.`);
-            if (!window.confirm(`Có thể trùng khách hàng: ${names}. Bạn vẫn muốn lưu hồ sơ này?`)) return;
+            const details = matches.map(item => `${item.code} – ${item.name}`);
+            if (sameTaxCode) {
+                await VKModal.confirm({title:'Không thể lưu khách hàng', message:'Mã số thuế đã có trong hồ sơ hiện có. Vui lòng kiểm tra lại thông tin.', details, allowContinue:false});
+                return;
+            }
+            if (!await VKModal.confirm({title:'Phát hiện khách hàng có thể trùng', message:'Số điện thoại hoặc email đã được sử dụng trong các hồ sơ dưới đây. Nếu đây là khách hàng khác, bạn có thể tiếp tục lưu.', details})) return;
         }
-        await VKApi.request(id ? `/customers/${id}` : '/customers', {
+        try { await VKApi.request(id ? `/customers/${id}` : '/customers', {
             method: id ? 'PUT' : 'POST',
             body: JSON.stringify({ ...data, credit_limit: VKMoney.parse(data.credit_limit || 0) }),
-        });
+        }); } catch (error) {
+            await VKModal.confirm({title:'Chưa lưu được khách hàng', message:error.message || 'Vui lòng kiểm tra lại thông tin và thử lại.', allowContinue:false});
+            return;
+        }
         VKModal.toast(id ? 'Đã cập nhật khách hàng.' : 'Đã tạo khách hàng.');
         VKModal.close();
         if (id) customerState.detailCache[String(id)] = null;
@@ -429,20 +434,36 @@ async function openCustomerModal(id = null, readOnly = false, asPage = false) {
         identityInput.inputMode = 'numeric';
         identityInput.maxLength = 12;
         identityInput.pattern = '[0-9]{12}';
+        const body=document.getElementById('modalBody');
+        const invoice=body.querySelector('[data-customer-invoice-section]');
+        const payment=body.querySelector('[data-customer-payment-section]');
+        body.querySelector('.customer-form-sections')?.classList.toggle('is-person',person);
+        const mergedTitle=body.querySelector('[data-customer-merged-title]');
+        if(mergedTitle)mergedTitle.textContent=person?'Thông tin khách hàng':'Thông tin doanh nghiệp';
+        const groupTitle=body.querySelector('.customer-contact-group-section h4');
+        if(groupTitle)groupTitle.textContent=person?'Phân nhóm khách hàng':'Người liên hệ & phân nhóm';
+        if(invoice && payment){
+            const grid=(person?body.querySelector('[data-customer-main-section]') || payment:invoice).querySelector('.quick-customer-grid');
+            if(identityField.parentElement!==grid)grid.prepend(identityField);
+            invoice.hidden=person;
+        }
     };
     typeSelect?.addEventListener('change', syncIdentityField);
     syncIdentityField();
     {
         const body=document.getElementById('modalBody');
-        body.querySelectorAll('.customer-form-sections > .quick-customer-section').forEach(section=>{section.hidden=false;});
+        body.querySelectorAll('.customer-form-sections > .quick-customer-section').forEach(section=>{section.hidden=section.hasAttribute('data-customer-invoice-section') && typeSelect?.value==='person';});
         const group=body.querySelector('[name="customer_group_id"]')?.closest('.field');
         const groupSection=group?.closest('.quick-customer-section');
         const mainGrid=body.querySelector('.quick-customer-section:first-child .quick-customer-grid');
+        const invoiceGrid=body.querySelector('[data-customer-invoice-section] .quick-customer-grid');
+        const taxField=invoiceGrid?.querySelector('[data-customer-tax-field]');
+        if(taxField)invoiceGrid.prepend(taxField);
         if(group && groupSection && mainGrid){
-            const address=mainGrid.querySelector('[name="address"]')?.closest('.field');
-            mainGrid.insertBefore(group,address || null);
+            mainGrid.append(group);
             groupSection.remove();
         }
+        arrangeCustomerCompanyForm(body);
         if(!readOnly){
         VKModal.mountPage(document.getElementById('customersRoot'));
         document.querySelector('.customer-editor-page')?.scrollIntoView({block:'start',behavior:'instant'});
@@ -580,6 +601,34 @@ async function openCustomerTransactions(id) {
         VKModal.toast(error.message || 'Không tải được giao dịch khách hàng.', 'danger');
         if(!document.getElementById('customersRoot')?.textContent.trim())renderCustomers();
     }
+}
+
+function arrangeCustomerCompanyForm(body) {
+    const sections=body.querySelector('.customer-form-sections');
+    const main=body.querySelector('[data-customer-main-section]');
+    const grid=main?.querySelector('.quick-customer-grid');
+    const invoice=body.querySelector('[data-customer-invoice-section]');
+    if(!sections || !grid || !invoice)return;
+    sections.classList.add('is-business-merged');
+    for(const selector of ['[data-customer-tax-field]','[data-customer-business-field]']) {
+        invoice.querySelectorAll(selector).forEach(field=>grid.append(field));
+    }
+    const tax=grid.querySelector('[data-customer-tax-field]');
+    if(tax)grid.prepend(tax);
+    const identity=body.querySelector('[data-customer-identity-field]');
+    if(sections.classList.contains('is-person') && identity)grid.prepend(identity);
+    const heading=main.querySelector('h4');
+    const icon=heading.querySelector('span');
+    heading.replaceChildren();if(icon)heading.append(icon);
+    const title=document.createElement('span');title.dataset.customerMergedTitle='';
+    title.textContent=sections.classList.contains('is-person')?'Thông tin khách hàng':'Thông tin doanh nghiệp';heading.append(title);
+    const contact=grid.querySelector('[data-primary-contact-picker]');
+    const group=grid.querySelector('[name="customer_group_id"]')?.closest('.field');
+    const extra=document.createElement('section');extra.className='quick-customer-section customer-contact-group-section';
+    extra.innerHTML=`<h4>${sections.classList.contains('is-person')?'Phân nhóm khách hàng':'Người liên hệ & phân nhóm'}</h4><div class="quick-customer-grid"></div>`;
+    if(contact)extra.querySelector('.quick-customer-grid').append(contact);
+    if(group)extra.querySelector('.quick-customer-grid').append(group);
+    main.after(extra);
 }
 
 function customerFormIcon(kind) {

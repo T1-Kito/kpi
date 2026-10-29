@@ -10,5 +10,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/audit-logs.js"></script>
+<script src="/assets/js/features/audit-logs.js?v=20261029-scroll2"></script>
 @endpush

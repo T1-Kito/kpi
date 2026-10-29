@@ -157,6 +157,9 @@ button {
 }
 
 .row-action-menu-list {
+    max-height: var(--row-menu-max-height, calc(100vh - 16px));
+    overflow-y: auto;
+    box-sizing: border-box;
     position: fixed;
     top: var(--row-menu-top, 34px);
     left: var(--row-menu-left, auto);
@@ -2558,6 +2561,19 @@ tbody tr[data-row-detail] {
     font-size: 13px;
     line-height: 1.45;
 }
+.quotation-contact-picker { display:grid; gap:6px; margin-top:12px; }
+.quotation-contact-picker small,.quotation-payment-plan small { color:#64748b; font-size:12px; }
+.quotation-payment-plan { padding:14px; border:1px solid #dbe5f5; background:#f8faff; border-radius:8px; display:grid; gap:10px; }
+.quotation-payment-options { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+.quotation-payment-options[hidden] { display:none; }
+@media(max-width:700px){.quotation-payment-options{grid-template-columns:1fr;}}
+
+.quotation-customer-details { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px 18px; margin:16px 0 0; padding-top:16px; border-top:1px solid #e2e8f0; }
+.quotation-customer-detail { min-width:0; }
+.quotation-customer-detail dt { color:#64748b; font-size:12px; margin-bottom:5px; }
+.quotation-customer-detail dd { margin:0; min-height:34px; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; color:#1e293b; background:#f8fafc; overflow-wrap:anywhere; }
+@media(max-width:900px){.quotation-customer-details{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:560px){.quotation-customer-details{grid-template-columns:minmax(0,1fr);}}
 
 .quotation-create-modal .quick-customer-panel {
     border-top: 1px solid #E5E7EB;

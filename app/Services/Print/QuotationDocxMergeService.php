@@ -66,6 +66,13 @@ class QuotationDocxMergeService
                 }
 
                 $xml = $this->normalizeSplitFields($xml);
+                if ($quotation instanceof Quotation && !empty($quotation->payment_plan['mode']) && str_contains($xml,'{{tien_dat_coc_70}}') && str_contains($xml,'{{tien_con_lai_30}}')) {
+                    // Compatibility for the previously supplied Son Tien 70/30 template.
+                    // Only the old, explicit labels and fields are adapted in the export copy.
+                    $xml = preg_replace('/Số tiền\s+đặt cọc\s*\(70%\)\s*:/u','{{nhan_thanh_toan_dau}}',$xml);
+                    $xml = preg_replace('/Số tiền\s+còn lại cần thanh toán\s*\(30%\)\s*:/u','{{nhan_thanh_toan_con_lai}}',$xml);
+                    $xml = str_replace(['{{tien_dat_coc_70}}','{{tien_con_lai_30}}'],['{{gia_tri_thanh_toan_dau}}','{{gia_tri_thanh_toan_con_lai}}'],$xml);
+                }
                 $xml = $this->repeatItemRows($xml, $quotation);
                 $xml = $this->makeMergeFieldValuesRegular($xml);
                 $xml = $this->replaceFields($xml, $values);
@@ -340,6 +347,15 @@ class QuotationDocxMergeService
 
         $customer = $quotation->customer;
         $subtotal = (float) ($quotation->subtotal_amount ?? 0);
+        if ($quotation instanceof Quotation && $quotation->contact_id) {
+            $contact = \App\Models\CustomerContact::where('customer_id', $quotation->customer_id)->find($quotation->contact_id);
+            if ($contact && $customer) {
+                $customer = clone $customer;
+                $customer->contact_name = $contact->name;
+                $customer->phone = $contact->phone ?: $customer->phone;
+                $customer->email = $contact->email ?: $customer->email;
+            }
+        }
         $discount = (float) ($quotation->discount_amount ?? 0);
         $tax = (float) ($quotation->tax_amount ?? 0);
         $total = (float) ($quotation->total_amount ?? ($subtotal + $tax - $discount));
@@ -368,7 +384,12 @@ class QuotationDocxMergeService
             'chiet_khau' => $this->money($discount),
             'vat' => $this->money($tax),
             'tong_cong' => $this->money($total),
+            // Fixed percentages named explicitly for the Son Tien quotation form.
+            // These are proposed payments, not receipts or outstanding debt.
+            'tien_dat_coc_70' => $this->money(round($total * 0.7)),
+            'tien_con_lai_30' => $this->money(round($total) - round($total * 0.7)),
             'tong_tien_bang_chu' => $this->moneyInWords($total),
+            ...($quotation instanceof Quotation ? \App\Support\QuotationPaymentFields::values($quotation->payment_plan,$total,$quotation->payment_terms ?? '') : []),
             'nguoi_tao' => $quotation->salesOwner?->name ?? '',
             'nguoi_lap' => $quotation->salesOwner?->name ?? '',
             'nguoi_dai_dien_phap_luat' => $customer?->customer_type === 'person' ? '' : ($customer?->legal_representative ?? ''),

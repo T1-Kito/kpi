@@ -8,7 +8,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>Setup</AssemblyName>
     <ApplicationIcon>VK-CRM.ico</ApplicationIcon>
-    <Version>0.8.10</Version>
+    <Version>0.8.18</Version>
     <SourcePackagePath Condition="'$(SourcePackagePath)' == ''">../../storage/app/private/release-packages/vk-crm-uat-source-20261026-010008-a4da4e.zip</SourcePackagePath>
     <PortablePayloadPath Condition="'$(PortablePayloadPath)' == ''">../../storage/app/private/portable-payload-0.8.10.zip</PortablePayloadPath>
     <DebugType>None</DebugType>
@@ -18,6 +18,7 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="license-public.pem" LogicalName="license-public.pem" />
     <EmbeddedResource Include="update-readonly-check.php" LogicalName="update-readonly-check.php" />
     <EmbeddedResource Include="VK-CRM.ico" LogicalName="VK-CRM.ico" />
     <EmbeddedResource Include="initialize-sqlserver.php" LogicalName="initialize-sqlserver.php" />

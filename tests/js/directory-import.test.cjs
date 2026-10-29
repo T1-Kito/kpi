@@ -2,16 +2,19 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
-function setup(kind='leads'){
+function setup(kind='leads',requestOverride){
  let click,modal;const calls=[],file={name:'lead.xlsx',size:100};const result={innerHTML:'',insertAdjacentHTML(_where,html){this.innerHTML+=html;}};
  const input={files:[file],addEventListener(_name,handler){this.changed=handler;}};
  const template={addEventListener(){}};const submit={textContent:''};
+ const steps=Array.from({length:3},()=>{const classes=new Set();return {classes,classList:{toggle(name,on){if(on)classes.add(name);else classes.delete(name);}}};});
  const form={querySelector(selector){return ['[data-directory-file]','[data-product-file]'].includes(selector)?input:result;}};
  const ctx=vm.createContext({window:{loadLeads:async()=>{}},FormData:class{append(){}},document:{addEventListener(_name,fn){click=fn;},querySelector(selector){return selector==='[data-directory-file]'?input:selector==='[data-directory-template]'?template:result;},getElementById(){return submit;}},VKModal:{open(title,html,handler){modal={title,html,handler};},close(){},toast(){}},VKTable:{escapeHtml:v=>String(v??'').replaceAll('<','&lt;')},VKApi:{request:async(url,options)=>{calls.push({url,options});return {data:{id:42,status:url.endsWith('/commit')?'committed':'ready',result:{can_import:true,total:1,imported:url.endsWith('/commit')?1:0,preview:[{row:2,name:'<script>',phone:'0901234567',action:'create'}]}}};}}});
  vm.runInContext(fs.readFileSync('public/assets/js/features/directory-import.js','utf8'),ctx);
  const originalQuery=ctx.document.querySelector;ctx.document.querySelector=selector=>selector==='[data-product-file]'?input:selector==='[data-product-template]'?template:originalQuery(selector);
+ ctx.document.querySelectorAll=()=>steps;
+ if(requestOverride)ctx.VKApi.request=requestOverride;
  click({target:{closest:()=>({dataset:{directoryImport:kind}})}});
- return {get modal(){return modal;},calls,input,result,form};
+ return {get modal(){return modal;},calls,input,result,form,steps,submit};
 }
 test('lead import previews an immutable batch, escapes data, and confirms only its id',async()=>{
  const s=setup();await s.modal.handler(s.form);assert.equal(s.calls[0].url,'/import-center/lead-preview');assert.match(s.result.innerHTML,/&lt;script>/);assert.doesNotMatch(s.result.innerHTML,/<script>/);
@@ -35,7 +38,25 @@ test('supplier warehouse and location imports preview then confirm the immutable
 });
 test('organization imports use Vietnamese instructions and only confirm the approved batch',async()=>{
  for(const kind of ['positions','departments','users']){
-  const s=setup(kind);assert.match(s.modal.html,/chưa kích hoạt, chưa có vai trò/);await s.modal.handler(s.form);assert.equal(s.calls[0].url,`/import-center/organization/${kind}/preview`);
+  const s=setup(kind);if(kind==='users')assert.match(s.modal.html,/chưa kích hoạt, chưa có vai trò/);await s.modal.handler(s.form);assert.equal(s.calls[0].url,`/import-center/organization/${kind}/preview`);
   s.input.changed();await s.modal.handler(s.form);assert.equal(s.calls[1].url,`/import-center/organization/${kind}/preview`);await s.modal.handler(s.form);assert.equal(s.calls[2].url,'/import-center/batches/42/commit');
+ }
+});
+
+test('every directory import uses the same layout, upload control and Vietnamese steps',()=>{
+ for(const kind of ['contacts','leads','categories','brands','skus','suppliers','warehouses','locations','positions','departments','users']){
+  const s=setup(kind);assert.match(s.modal.html,/directory-import-steps/);assert.match(s.modal.html,/directory-import-template/);assert.match(s.modal.html,/directory-import-upload/);assert.match(s.modal.html,/Tải mẫu Excel/);assert.match(s.modal.html,/Kiểm tra dữ liệu/);assert.doesNotMatch(s.modal.html,/style=/);
+ }
+});
+
+test('preview advances the step and changing file resets it for products and contacts',async()=>{
+ for(const kind of ['skus','contacts']){
+  const s=setup(kind);await s.modal.handler(s.form);assert.ok(s.steps[1].classes.has('current'));s.input.changed();assert.ok(s.steps[0].classes.has('current'));assert.ok(!s.steps[1].classes.has('current'));assert.equal(s.submit.textContent,'Kiểm tra file');
+ }
+});
+
+test('a late preview for a changed file cannot enable confirmation',async()=>{
+ for(const kind of ['skus','leads']){
+  let finish;const s=setup(kind,()=>new Promise(resolve=>{finish=resolve;}));const pending=s.modal.handler(s.form);s.input.changed();finish({data:{id:42,status:'ready',result:{can_import:true,total:1,preview:[]}}});await pending;assert.equal(s.submit.textContent,'Kiểm tra file');assert.equal(s.result.innerHTML,'');assert.ok(s.steps[0].classes.has('current'));
  }
 });

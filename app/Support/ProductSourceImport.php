@@ -25,11 +25,17 @@ final class ProductSourceImport
         if(!preg_match('/^(crm|ext):(.+)$/D',trim($value),$m))$this->fail('Danh mục và hãng cần chọn từ danh sách hoặc dùng ext:mã-ngoài đã nhập trước.');
         $model=$this->model($kind);$id=null;
         if($m[1]==='crm'){
+            if($kind==='categories' && str_contains($m[2],' / ')){
+                $matches=ProductCategory::where('tenant_id',$actor->tenant_id)->get()->filter(fn($v)=>ProductCategoryTree::active($v) && mb_strtolower(ProductCategoryTree::path($v))===mb_strtolower($m[2]));
+                if($matches->count()!==1)$this->fail('Đường dẫn nhóm cấp 1 / cấp 2 không hợp lệ hoặc đã ngừng dùng.');
+                return (int)$matches->first()->id;
+            }
             $matches=$model::where('tenant_id',$actor->tenant_id)->where('status','active')->where('name',$m[2])->get(['id']);
             if($matches->count()>1)$this->fail('Tên danh mục/hãng không duy nhất. Dùng Mã ngoài đã liên kết để đối chiếu.');
             $id=$matches->first()?->id;
         }else $id=DB::table('import_record_links')->where('tenant_id',$actor->tenant_id)->where('source_id',$source)->where('catalog',$kind)->where('external_id',strtolower($m[2]))->value('record_id');
         if(!$id || !$model::where('tenant_id',$actor->tenant_id)->where('status','active')->whereKey($id)->exists())$this->fail('Không tìm thấy danh mục hoặc hãng đang hoạt động trong công ty. Nhập danh mục và hãng trước sản phẩm.');
+        if($kind==='categories' && !ProductCategoryTree::active(ProductCategory::findOrFail($id)))$this->fail('Nhóm cha đã ngừng sử dụng.');
         return (int)$id;
     }
     public function run(Request $request,string $path,int $source,bool $confirm,string $kind):array {

@@ -116,4 +116,38 @@ class WordMergeIntegrityTest extends TestCase
             unlink($path);
         }
     }
+
+    public function test_son_tien_proposed_deposit_rounds_and_remainder_balances_without_recording_receipts(): void
+    {
+        $template = $this->template('<w:p><w:r><w:t>{{tong_cong}} / {{tien_dat_coc_70}} / {{tien_con_lai_30}}</w:t></w:r></w:p>');
+        foreach ([0 => ['0 đ', '0 đ'], 1100001 => ['770.001 đ', '330.000 đ']] as $total => [$deposit, $remaining]) {
+            $document = $this->document();
+            $document->total_amount = $total;
+            $path = app(QuotationDocxMergeService::class)->merge($document, $template);
+            $zip = new ZipArchive;
+            $zip->open($path);
+            try {
+                $xml = $zip->getFromName('word/document.xml');
+                $this->assertStringContainsString($deposit.' / '.$remaining, $xml);
+                $this->assertStringNotContainsString('{{', $xml);
+            } finally {
+                $zip->close();
+                unlink($path);
+            }
+        }
+    }
+
+    public function test_old_son_tien_labels_follow_selected_plan_instead_of_fixed_70_30(): void
+    {
+        $template=$this->template('<w:p><w:r><w:t>Số tiền đặt cọc (70%): {{tien_dat_coc_70}} / Số tiền còn lại cần thanh toán (30%): {{tien_con_lai_30}}</w:t></w:r></w:p>');
+        $document=$this->document();$document->total_amount=1000001;
+        $document->payment_plan=['mode'=>'deposit','percent'=>30];
+        $path=app(QuotationDocxMergeService::class)->merge($document,$template);
+        $zip=new ZipArchive;$zip->open($path);
+        try {
+            $xml=$zip->getFromName('word/document.xml');
+            $this->assertStringContainsString('Số tiền đặt cọc (30%): 300.000 đ',$xml);
+            $this->assertStringContainsString('Số tiền còn lại cần thanh toán (70%): 700.001 đ',$xml);
+        }finally{$zip->close();unlink($path);}
+    }
 }

@@ -15,5 +15,5 @@
 @push('scripts')
 <script src="/assets/vendor/jszip.min.js"></script>
 <script src="/assets/vendor/docx-preview.min.js"></script>
-<script src="/assets/js/features/quotations.js?v=20261020-money1"></script>
+<script src="/assets/js/features/quotations.js?v=20261029-workflow-soft1"></script>
 @endpush

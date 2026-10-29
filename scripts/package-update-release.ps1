@@ -19,7 +19,7 @@ try {
     $setup=Join-Path $buildRoot 'Setup.exe'
     $actualVersion=[Diagnostics.FileVersionInfo]::GetVersionInfo($setup).FileVersion
     if($actualVersion -ne "$Version.0"){throw 'Installer version mismatch'}
-    foreach($check in @('--self-test','--verify-package')){
+    foreach($check in @('--self-test','--verify-package','--test-license')){
         $process=Start-Process -FilePath $setup -ArgumentList $check -WindowStyle Hidden -Wait -PassThru
         if($process.ExitCode -ne 0){throw "Installer check failed: $check"}
     }
@@ -29,8 +29,7 @@ try {
     try {
         $files=@{
             'Setup.exe'=$setup
-            'HUONG-DAN-CAP-NHAT.txt'=(Join-Path $repositoryRoot 'deployment\installer\UPDATE-0.8.10.txt')
-            'Update-Source.zip'=$sourcePath
+            'HUONG-DAN-CAP-NHAT.txt'=(Join-Path $repositoryRoot "deployment\installer\UPDATE-$Version.txt")
         }
         foreach($entry in $files.GetEnumerator()){
             [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip,$entry.Value,$entry.Key,[IO.Compression.CompressionLevel]::Optimal) | Out-Null
@@ -42,7 +41,7 @@ try {
     }finally{$zip.Dispose()}
     $checkZip=[IO.Compression.ZipFile]::OpenRead($delivery)
     try {
-        if($checkZip.Entries.Count -ne 4){throw 'Unexpected delivery entry count'}
+        if($checkZip.Entries.Count -ne 3){throw 'Unexpected delivery entry count'}
         foreach($key in $hashes.Keys){
             $stream=$checkZip.GetEntry($key).Open();$algorithm=[Security.Cryptography.SHA256]::Create()
             try{$actual=[Convert]::ToHexString($algorithm.ComputeHash($stream)).ToLowerInvariant()}finally{$stream.Dispose();$algorithm.Dispose()}

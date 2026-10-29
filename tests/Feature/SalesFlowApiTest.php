@@ -243,7 +243,8 @@ class SalesFlowApiTest extends TestCase
         $this->completeSalesQuotation($quotationId);
         $this->withToken($token)
             ->postJson('/api/v1/sales-orders', ['quotation_id' => $quotationId])
-            ->assertCreated();
+            ->assertUnprocessable();
+        $this->assertDatabaseHas('sales_orders',['quotation_id'=>$quotationId,'status'=>'draft']);
 
         $this->withToken($token)
             ->putJson("/api/v1/quotations/{$quotationId}", [
@@ -284,7 +285,8 @@ class SalesFlowApiTest extends TestCase
         $this->completeSalesQuotation($first->json('data.id'));
         $this->withToken($token)
             ->postJson('/api/v1/sales-orders', ['quotation_id' => $first->json('data.id')])
-            ->assertCreated();
+            ->assertUnprocessable();
+        $this->assertSame(1,\App\Models\SalesOrder::where('quotation_id',$first->json('data.id'))->count());
 
         $this->withToken($token)
             ->postJson('/api/v1/sales-orders', ['quotation_id' => $first->json('data.id')])
@@ -370,11 +372,7 @@ class SalesFlowApiTest extends TestCase
         ]);
 
         $this->completeSalesQuotation($quotationId);
-        $create = $this->withToken($token)
-            ->postJson('/api/v1/sales-orders', ['quotation_id' => $quotation->id])
-            ->assertCreated();
-
-        $orderId = $create->json('data.id');
+        $orderId = $quotation->salesOrders()->where('status','draft')->sole()->id;
 
         $this->withToken($token)
             ->postJson("/api/v1/sales-orders/{$orderId}/confirm")

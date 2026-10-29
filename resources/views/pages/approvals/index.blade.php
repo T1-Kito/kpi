@@ -40,5 +40,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/approvals.js?v=20261011-2"></script>
+<script src="/assets/js/features/approvals.js?v=20261028-pjax3"></script>
 @endpush

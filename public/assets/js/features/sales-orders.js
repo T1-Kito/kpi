@@ -3,6 +3,18 @@ let salesOrderState = { rows: [], q: '', status: '', view: 'list', detailCache: 
 
 document.addEventListener('vk:ready', () => loadSalesOrders());
 document.addEventListener('vk:flow-updated', () => loadSalesOrders());
+let orderRefreshTimer;
+window.addEventListener('vk:data-mutated', event => {
+    if (!/^\/(quotations|sales-orders)(\/|$)/.test(event.detail?.path || '')) return;
+    clearTimeout(orderRefreshTimer);
+    orderRefreshTimer=setTimeout(()=>loadSalesOrders(),100);
+});
+window.addEventListener('focus',()=>{if(!document.hidden)loadSalesOrders();});
+let orderLoadVersion=0;
+setInterval(()=>{
+    if(document.hidden || salesOrderState.view !== 'list' || document.body.classList.contains('pjax-loading') || document.getElementById('modalBackdrop')?.classList.contains('open') || document.activeElement?.matches('input,select,textarea')) return;
+    loadSalesOrders().catch(()=>{});
+},20000);
 document.addEventListener('input', (event) => {
     if (!document.getElementById('salesOrdersRoot')) return;
     if (event.target.matches('[data-list-search]')) {
@@ -42,7 +54,7 @@ document.addEventListener('click', (event) => {
     }
     if (event.target.matches('[data-sales-order-word]')) {
         event.stopPropagation();
-        downloadSalesOrderWord(event.target.dataset.salesOrderWord);
+        window.VKDocumentExport.open({module:'sales_order', endpoint:`/api/v1/sales-orders/${encodeURIComponent(event.target.dataset.salesOrderWord)}/word`, title:'đơn hàng', filename:'don-hang.docx'});
     }
     if (event.target.closest('.row-action-menu') && !event.target.closest('[data-sales-order-detail]')) return;
     const detail = event.target.closest('[data-sales-order-detail], tr[data-row-detail]');
@@ -55,7 +67,9 @@ async function loadSalesOrders(options = {}) {
         salesOrderState.view = 'list';
         salesOrderState.currentId = null;
     }
-    const orders = await VKApi.request('/sales-orders');
+    const version=++orderLoadVersion;
+    const orders = await VKApi.request('/sales-orders', {cache:false});
+    if (version !== orderLoadVersion || !document.getElementById('salesOrdersRoot')) return;
     salesOrderState.rows = orders.data || [];
     const openId = new URLSearchParams(window.location.search).get('open');
     if (openId) {
@@ -79,6 +93,7 @@ function renderSalesOrders(total = salesOrderState.rows.length) {
             searchPlaceholder: 'Tìm mã đơn hoặc khách hàng...',
             status: [
                 { value: 'draft', label: 'Nháp' },
+                { value: 'awaiting_customer', label: 'Chờ khách xác nhận' },
                 { value: 'confirmed', label: 'Đã xác nhận' },
                 { value: 'awaiting_delivery', label: 'Chờ giao hàng' },
                 { value: 'delivered', label: 'Đã giao hàng' },

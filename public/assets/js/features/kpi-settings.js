@@ -140,8 +140,15 @@
         return `<section class="module-panel" style="margin-bottom:20px"><div class="panel-head"><div><h2>Bộ KPI theo vị trí / phòng ban</h2><span>Tạo một lần, phát hành phiên bản rồi giao đồng thời nhiều chỉ tiêu.</span></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn secondary small" data-kpi-standard-setup>Thiết lập nhanh KPI chuẩn</button><button class="btn primary small" data-kpi-bundle-create>Tạo bộ KPI</button></div></div>${rows}<p class="form-note">“Thiết lập nhanh” tự nhận diện phòng ban, tạo bộ KPI tháng và kế hoạch cho các kỳ sau. Có thể tạo phiên bản riêng khi doanh nghiệp cần thay đổi mục tiêu.</p></section>`;
     }
 
-    async function setupStandardKpi() {
-        if (!confirm('Thiết lập và giao bộ KPI chuẩn cho các phòng ban đang có? Hệ thống không tạo trùng cấu hình đã tồn tại.')) return;
+    function confirmKpi(title, message, button, action) {
+        VKModal.open(title, `<div class="kpi-confirm-body"><p>${VKTable.escapeHtml(message)}</p></div>`, async () => {
+            VKModal.close();
+            await action();
+        }, {submitText:button,className:'kpi-confirm-modal'});
+    }
+
+    async function setupStandardKpi(confirmed = false) {
+        if (confirmed !== true) return confirmKpi('Thiết lập KPI chuẩn', 'Thiết lập và giao bộ KPI chuẩn cho các phòng ban hiện có. Hệ thống bỏ qua cấu hình đã tồn tại, không tạo trùng.', 'Thiết lập KPI', () => setupStandardKpi(true));
         try {
             const response = await VKApi.request('/kpi/standard-setup', {method:'POST'});
             const result = response.data || {}, configured = result.configured || [], skipped = result.skipped || [];
@@ -186,8 +193,9 @@
         itemsRoot.addEventListener('input',updateWeight); updateWeight();
     }
 
-    async function publishBundle(bundle) {
-        if (!bundle || !confirm(`Phát hành ${bundle.code} v${bundle.version}? Sau khi phát hành phải tạo phiên bản mới để sửa.`)) return;
+    async function publishBundle(bundle, confirmed = false) {
+        if (!bundle) return;
+        if (confirmed !== true) return confirmKpi('Phát hành bộ KPI', `Phát hành ${bundle.code} · Phiên bản ${bundle.version}? Sau khi phát hành, cần tạo phiên bản mới để chỉnh sửa.`, 'Phát hành', () => publishBundle(bundle,true));
         try { await VKApi.request(`/kpi/bundles/${bundle.id}/publish`,{method:'POST'}); VKModal.toast('Đã phát hành bộ KPI.'); await loadKpiSettings(); }
         catch(error){ VKModal.toast(error.message,'danger'); }
     }
@@ -366,9 +374,9 @@
         }, { className: 'wide-modal', submitText: isEdit ? 'Lưu mục tiêu' : 'Thêm mục tiêu' });
     }
 
-    async function lockKpiTarget(id) {
+    async function lockKpiTarget(id, confirmed = false) {
         if (!canConfigure()) return;
-        if (!confirm('Khóa kỳ KPI này? Sau khi khóa, mục tiêu không thể sửa nữa.')) return;
+        if (confirmed !== true) return confirmKpi('Khóa kỳ KPI', 'Sau khi khóa kỳ này, mục tiêu KPI không thể chỉnh sửa. Bạn muốn tiếp tục?', 'Khóa kỳ', () => lockKpiTarget(id,true));
 
         await VKApi.request(`/kpi/targets/${id}/lock`, { method: 'POST' });
         VKModal.toast('Đã khóa kỳ KPI.');
@@ -462,8 +470,8 @@
         renderAudience(); describe();
     }
 
-    async function lockAssignment(id) {
-        if (!confirm('Chốt kết quả KPI của nhóm này? Sau khi chốt không thể sửa chỉ tiêu hoặc kết quả.')) return;
+    async function lockAssignment(id, confirmed = false) {
+        if (confirmed !== true) return confirmKpi('Chốt kết quả KPI', 'Sau khi chốt, chỉ tiêu và kết quả của nhóm này không thể chỉnh sửa. Bạn muốn tiếp tục?', 'Chốt kết quả', () => lockAssignment(id,true));
         try {
             await VKApi.request('/kpi/assignments/'+id+'/lock',{method:'POST'});
             VKModal.toast('Đã chốt kết quả KPI.');
@@ -472,8 +480,8 @@
         } catch(error) { VKModal.toast(error.message,'danger'); }
     }
 
-    async function closePeriod(id) {
-        if (!confirm('Chốt toàn bộ chỉ tiêu của bộ KPI trong kỳ? Hệ thống sẽ dừng nếu còn điều chỉnh chờ duyệt.')) return;
+    async function closePeriod(id, confirmed = false) {
+        if (confirmed !== true) return confirmKpi('Chốt kỳ KPI', 'Chốt toàn bộ chỉ tiêu của bộ KPI trong kỳ. Hệ thống sẽ dừng nếu còn điều chỉnh chờ duyệt.', 'Chốt kỳ KPI', () => closePeriod(id,true));
         try {
             await VKApi.request('/kpi/period-closures/close', {method:'POST', body:JSON.stringify({assignment_id:Number(id)})});
             VKModal.toast('Đã chốt toàn bộ bộ KPI trong kỳ.');

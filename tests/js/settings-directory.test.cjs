@@ -33,7 +33,7 @@ test('section selection preserves URL navigation and active state with the new g
     const buttons = sections.map(node => ({dataset:{settingsNav:node.dataset.settingsSection},classList:{toggle(name,value){this.active=value;}},setAttribute(name,value){this[name]=value;}}));
     let newUrl;
     const context = vm.createContext({URL, location:{href:'https://example.test/settings'}, history:{state:null,replaceState(state,title,url){newUrl=url;}},
-        document:{getElementById(){return {querySelector(){return titles;},querySelectorAll(selector){return selector === '[data-settings-section]' ? sections : buttons;}};}}});
+        document:{getElementById(){return {classList:{toggle(){}},querySelector(){return titles;},querySelectorAll(selector){return selector === '[data-settings-section]' ? sections : buttons;}};}}});
     vm.runInContext(source.slice(source.indexOf('function showSettingsSection('), source.indexOf('function renderLegacySettings(')), context);
     context.showSettingsSection('assignment',true);
     assert.equal(titles.textContent,'Tự động phân công');

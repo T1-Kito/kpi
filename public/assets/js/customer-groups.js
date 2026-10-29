@@ -9,7 +9,7 @@
     }
     function active(row) { return path(row.id).every(r => r.is_active); }
     async function load() {
-        const result = await VKApi.request('/customer-groups', {cache:false});
+        const result = await VKApi.request('/customer-groups');
         rows = result.data || []; canManage = !!result.can_manage;
     }
     function field(customer) {

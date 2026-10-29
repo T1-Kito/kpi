@@ -70,6 +70,33 @@ class PrintTemplateBoundaryTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_merge_guide_download_covers_every_supported_field_and_requires_permission(): void
+    {
+        $this->seed();
+        $this->getJson('/api/v1/print-templates/merge-field-guide')->assertUnauthorized();
+        $this->withToken($this->token('sales@vk-kpi.local'))
+            ->getJson('/api/v1/print-templates/merge-field-guide')->assertForbidden();
+        $this->withToken($this->token('admin@vk-kpi.local'))
+            ->get('/api/v1/print-templates/merge-field-guide')
+            ->assertOk()->assertDownload('bo-truong-tron.docx');
+
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open(resource_path('templates/print/bo-truong-tron.docx')));
+        $xml = $zip->getFromName('word/document.xml');
+        $zip->close();
+        $text = html_entity_decode(strip_tags($xml), ENT_QUOTES | ENT_XML1, 'UTF-8');
+        $allowed = [];
+        foreach (\App\Http\Controllers\Api\V1\PrintTemplateController::modules() as $module => $label) {
+            $this->assertStringContainsString($label, $text);
+            foreach (\App\Http\Controllers\Api\V1\PrintTemplateController::fields($module) as $field) {
+                $allowed[] = $field['key'];
+                $this->assertStringContainsString('{{'.$field['key'].'}}', $text);
+            }
+        }
+        preg_match_all('/\{\{([^{}]+)\}\}/u', $text, $matches);
+        $this->assertSame([], array_values(array_diff($matches[1], $allowed)));
+    }
+
     public function test_unknown_field_upload_does_not_create_template_or_change_default(): void
     {
         $this->seed();

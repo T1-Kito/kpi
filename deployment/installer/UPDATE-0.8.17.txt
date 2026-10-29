@@ -1,0 +1,40 @@
+VK CRM 0.8.17 — CẬP NHẬT CÓ KÍCH HOẠT BẢN QUYỀN
+
+QUAN TRỌNG: Máy chủ khách cần kích hoạt lần đầu sau cập nhật.
+File license thử trên máy phát triển KHÔNG dùng được trên máy khách.
+
+CẬP NHẬT
+1. Giải nén ZIP ngoài thư mục CRM đang dùng.
+2. Cho người dùng ngừng thao tác và dừng máy chủ CRM.
+3. Chạy Setup.exe mới → Cập nhật bản đã cài → chọn đúng thư mục cũ.
+   Hoặc chọn Setup.exe mới từ nút Cập nhật phần mềm trên trình quản lý cũ.
+4. Chỉ tiếp tục khi sao lưu và kiểm chứng database thành công.
+5. Mở trình quản lý VK CRM mới, bấm Khởi động. Gửi mã máy hiển thị cho
+   nhà cung cấp để nhận file .vkcrm. Bấm Chọn file bản quyền để kích hoạt.
+6. Các lần sau không cần chọn lại file. Máy con truy cập bình thường.
+7. Trình duyệt nhấn Ctrl + F5 một lần để nhận giao diện mới.
+
+THAY ĐỔI
+- Kích hoạt offline bằng file bản quyền ký số, gắn với máy chủ Windows.
+  Kiểm tra tại trình quản lý C# và backend PHP; không đổi tài khoản cũ.
+- Bản PHP đóng gói được làm rối cơ bản; code phát triển giữ riêng.
+  Đây KHÔNG phải mã hóa hoặc bảo vệ chống dịch ngược tuyệt đối.
+- Thu gọn phần duyệt/phát hành báo giá; chi tiết mở khi cần.
+- Nhật ký hiển thị thao tác, trường thông tin và so sánh trước/sau bằng
+  tiếng Việt; sửa cuộn chi tiết. Hoạt động tổng quan Việt hóa tên thao tác.
+- Thu gọn trang báo cáo KPI, xác nhận KPI bằng modal của phần mềm.
+- Danh sách khách tiềm năng giãn theo chiều cao màn hình, bỏ tiêu đề lặp.
+- Icon và màu thống kê công việc; bố cục tạo công việc rộng hơn.
+- Sắp xếp bộ lọc, bảng và phân trang danh sách yêu cầu hỗ trợ.
+- Giữ các thay đổi của 0.8.16, gồm danh mục sản phẩm hai cấp và nhập Excel.
+
+LƯU Ý
+- Giữ nguyên .env, dữ liệu và tài khoản hiện có. Không cài mới đè dữ liệu.
+- Cài lại Windows hoặc đổi máy chủ cần cấp lại license. Bản offline
+  không tự thu hồi được license trên máy cũ.
+- Không gửi khóa riêng hay công cụ cấp license cho khách.
+- Bản cài chưa ký số; cần kiểm tra SQL Server và mạng thực tế của khách.
+- Khác mạng cần VPN hoặc HTTPS riêng; không cố định địa chỉ IP LAN.
+- Chưa bổ sung nghiệp vụ Đặt dịch vụ đoàn và Nghiệm thu mua vật tư.
+
+GÓI GỒM: Setup.exe, HUONG-DAN-CAP-NHAT.txt, SHA256SUMS.txt.

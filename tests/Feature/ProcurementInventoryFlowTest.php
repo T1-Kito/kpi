@@ -280,10 +280,7 @@ class ProcurementInventoryFlowTest extends TestCase
         ]);
 
         $this->completeSalesQuotation($quotationId);
-        $salesOrderId = $this->withToken($salesToken)
-            ->postJson('/api/v1/sales-orders', ['quotation_id' => $quotation->id])
-            ->assertCreated()
-            ->json('data.id');
+        $salesOrderId = $quotation->salesOrders()->where('status','draft')->sole()->id;
 
         $this->withToken($salesToken)
             ->postJson("/api/v1/sales-orders/{$salesOrderId}/confirm")

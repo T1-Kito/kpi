@@ -1,6 +1,7 @@
 (function () {
 const labels = { quotation: 'Báo giá', purchase_request: 'Yêu cầu mua', purchase_order: 'Đơn mua', kpi_adjustment: 'Phiếu điểm', kpi_exception: 'Ngoại lệ KPI' };
 const esc = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
+let approvalLoadVersion = 0;
 
 document.addEventListener('click', (event) => {
     const button = event.target.closest('[data-approval-decision]');
@@ -106,17 +107,22 @@ function render(data) {
 }
 
 async function loadApprovals(formData) {
-    if (!document.querySelector('.approval-center')) return;
+    const root = document.querySelector('.approval-center');
+    if (!root) return;
+    const version = ++approvalLoadVersion;
     const params = new URLSearchParams();
-    if (formData) for (const [key, value] of formData.entries()) if (value) params.set(key, value);
+    // PJAX supplies navigation options, while the filter supplies FormData.
+    if (typeof formData?.entries === 'function') for (const [key, value] of formData.entries()) if (value) params.set(key, value);
     try {
         const response = await VKApi.request(`/approval-center${params.size ? `?${params}` : ''}`);
+        if (version !== approvalLoadVersion || !root.isConnected || document.querySelector('.approval-center') !== root) return;
         render(response.data || response);
     } catch (error) {
+        if (version !== approvalLoadVersion || !root.isConnected || document.querySelector('.approval-center') !== root) return;
         document.querySelector('[data-approval-list]').innerHTML = `<div class="empty-state"><strong>Không tải được hàng chờ</strong><span>${esc(error.message || 'Vui lòng thử lại.')}</span><button class="btn small" type="button" onclick="loadApprovals()">Thử lại</button></div>`;
     }
 }
 
 window.loadApprovals = loadApprovals;
-loadApprovals();
+document.addEventListener('vk:ready', () => loadApprovals());
 })();

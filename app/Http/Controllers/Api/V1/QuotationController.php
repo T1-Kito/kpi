@@ -42,6 +42,7 @@ class QuotationController extends Controller
         $user = $request->user();
         $assigned = Approval::where('tenant_id', $user->tenant_id)->where('source_type', 'Quotation')->whereIn('approver_id', app(\App\Support\SalesApprovalAccess::class)->principals($user))->select('source_id');
         $query->where(function ($scope) use ($user, $assigned) {
+            if (app(\App\Support\SalesApprovalAccess::class)->canApproveAny($user)) return;
             if ($user->hasPermission('sales.quotation.view')) {
                 $scope->whereIn('id', DataScope::owned(Quotation::where('tenant_id', $user->tenant_id)->select('id'), $user, 'sales_owner_id', 'salesOwner'));
                 if ($user->hasPermission('sales.margin.approve')) $scope->orWhereIn('id', $assigned);
@@ -74,6 +75,22 @@ class QuotationController extends Controller
         $quotation = $this->quotations->create($request->user(), $data);
 
         return response()->json(['data' => $quotation], 201);
+    }
+
+    public function previewDraft(Request $request): BinaryFileResponse
+    {
+        $data = $this->validateWritableQuotation($request);
+        $selection = $request->validate(['template_id'=>['nullable','integer']]);
+        $query = PrintTemplate::where('tenant_id',$request->user()->tenant_id)->where('module','quotation')->where('status','active')->whereNotNull('file_path');
+        if (!empty($selection['template_id'])) $query->whereKey($selection['template_id']);
+        $template = $query->orderByDesc('is_default')->latest('id')->first();
+        abort_unless($template,422,'Chưa có mẫu Word báo giá đang dùng. Vui lòng thêm mẫu trong Mẫu in.');
+        $quotation = $this->quotations->preview($request->user(),$data);
+        $path = $this->docxMerge->merge($quotation,$template);
+        return response()->download($path,'xem-truoc-bao-gia.docx',[
+            'Content-Type'=>'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'Cache-Control'=>'private, no-store',
+        ])->deleteFileAfterSend(true);
     }
 
     public function update(Request $request, Quotation $quotation): JsonResponse
@@ -198,6 +215,7 @@ class QuotationController extends Controller
             'discount_percent' => $quotation->discount_percent,
             'valid_until' => optional($quotation->valid_until)->toDateString(),
             'payment_terms' => $quotation->payment_terms,
+            'payment_plan' => $quotation->payment_plan,
             'delivery_terms' => $quotation->delivery_terms,
             'note' => $quotation->note,
             'items' => $quotation->items->map(fn ($item): array => [
@@ -291,8 +309,8 @@ class QuotationController extends Controller
             ])),
             default => abort(404),
         };
-        $salesOrder = null;
-        if ($action === 'customer-response' && $result->status === 'accepted' && $actor->hasPermission('sales.order.create')) {
+        $salesOrder = $result->salesOrders()->whereNotIn('status',['cancelled'])->first();
+        if (!$salesOrder && $action === 'customer-response' && $result->status === 'accepted' && $actor->hasPermission('sales.order.create')) {
             $salesOrder = app(\App\Support\SalesOrderService::class)->createFromQuotation($result->loadMissing('items'), $actor);
         }
 
@@ -315,7 +333,7 @@ class QuotationController extends Controller
         $user = $request->user();
         $owned = $user->hasPermission('sales.quotation.view') && DataScope::owned(Quotation::whereKey($quotation->id), $user, 'sales_owner_id', 'salesOwner')->exists();
         $assigned = $user->hasPermission('sales.margin.approve') && Approval::where('tenant_id', $user->tenant_id)->where('source_type', 'Quotation')->where('source_id', $quotation->id)->whereIn('approver_id', app(\App\Support\SalesApprovalAccess::class)->principals($user))->exists();
-        abort_unless($owned || $assigned, 404);
+        abort_unless($owned || $assigned || app(\App\Support\SalesApprovalAccess::class)->canApproveAny($user), 404);
     }
 
     /** @return array<string, mixed> */
@@ -337,6 +355,7 @@ class QuotationController extends Controller
 
         return $request->validate([
             'customer_id' => ['required', Rule::exists('customers', 'id')->where('tenant_id', $tenantId)],
+            'contact_id' => ['nullable', 'integer', Rule::exists('customer_contacts', 'id')->where('customer_id', $request->input('customer_id'))],
             'lead_id' => ['nullable', Rule::exists('leads', 'id')->where('tenant_id', $tenantId)],
             'deal_id' => ['nullable', Rule::exists('deals', 'id')->where('tenant_id', $tenantId)],
             'price_book_id' => ['nullable', Rule::exists('sales_price_books', 'id')->where('tenant_id', $tenantId)->where('is_active', true)],
@@ -344,6 +363,12 @@ class QuotationController extends Controller
             'valid_until' => ['nullable', 'date'],
             'discount_percent' => ['nullable', 'numeric', 'min:0', 'max:99.99'],
             'payment_terms' => ['nullable', 'string', 'max:255'],
+            'payment_plan' => ['nullable', 'array:mode,percent,deposit_date,balance_date,days'],
+            'payment_plan.mode' => ['required_with:payment_plan', Rule::in(['prepaid','credit','deposit'])],
+            'payment_plan.percent' => ['required_if:payment_plan.mode,deposit','nullable','numeric','gt:0','lt:100','decimal:0,2'],
+            'payment_plan.days' => ['required_if:payment_plan.mode,credit','nullable','integer','min:1','max:3650'],
+            'payment_plan.deposit_date' => ['nullable','date_format:Y-m-d'],
+            'payment_plan.balance_date' => ['nullable','date_format:Y-m-d',Rule::when($request->filled('payment_plan.deposit_date'),'after_or_equal:payment_plan.deposit_date')],
             'delivery_terms' => ['nullable', 'string', 'max:255'],
             'note' => ['nullable', 'string', 'max:1000'],
             'items' => ['required', 'array', 'min:1'],

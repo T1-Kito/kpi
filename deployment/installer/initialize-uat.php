@@ -23,5 +23,6 @@ Illuminate\Support\Facades\DB::transaction(function()use($input){
     $role=App\Models\Role::create(['tenant_id'=>$tenant->id,'code'=>'ROLE-SPADMIN','name'=>'Super Admin','data_scope'=>'company']);$role->permissions()->sync(App\Models\Permission::pluck('id'));
     $user=App\Models\User::create(['tenant_id'=>$tenant->id,'name'=>'Chủ tịch','email'=>$input['email'],'password'=>Illuminate\Support\Facades\Hash::make($input['password']),'is_active'=>true]);$user->roles()->sync([$role->id]);
     App\Support\InitialAdministrator::create($tenant->id,$input['operator_email'] ?? '',$input['operator_password'] ?? '');
+    App\Support\InstallationDefaultAccounts::provision(Illuminate\Support\Facades\DB::connection());
 });
 echo "SQLite UAT initialized. No demo data.\n";

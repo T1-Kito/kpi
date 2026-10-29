@@ -21,7 +21,7 @@ document.addEventListener('click', (event) => {
     if (!document.getElementById('goodsIssuesRoot')) return;
     if (event.target.matches('[data-goods-issue-word]')) {
         event.stopPropagation();
-        downloadGoodsIssueWord(event.target.dataset.goodsIssueWord);
+        window.VKDocumentExport.open({module:'goods_issue', endpoint:`/api/v1/goods-issues/${encodeURIComponent(event.target.dataset.goodsIssueWord)}/word`, title:'phiếu xuất kho', filename:'phieu-xuat-kho.docx'});
     }
     if (event.target.matches('[data-confirm-goods-issue]')) {
         event.stopPropagation();

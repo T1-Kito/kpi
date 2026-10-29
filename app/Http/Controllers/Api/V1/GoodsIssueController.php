@@ -123,12 +123,7 @@ class GoodsIssueController extends Controller
         abort_if($goodsIssue->tenant_id !== $request->user()->tenant_id, 404);
         abort_if(! DataScope::warehouseScope(GoodsIssue::whereKey($goodsIssue->id), $request->user())->exists(), 404);
 
-        $template = PrintTemplate::where('tenant_id', $request->user()->tenant_id)
-            ->where('module', 'goods_issue')
-            ->where('status', 'active')
-            ->orderByDesc('is_default')
-            ->latest('id')
-            ->first();
+        $template = \App\Support\PrintTemplateSelection::resolve($request, 'goods_issue');
 
         if (! $template || ! $template->file_path) {
             return response()->json(['message' => 'Chưa có file Word cho mẫu Phiếu xuất kho. Vào Mẫu in để tải mẫu Phiếu xuất kho lên và đặt làm mặc định.'], 422);

@@ -16,6 +16,11 @@ class AdditiveDatabaseUpgradeTest extends TestCase
         $db->getSchemaBuilder()->create('customers',fn($t)=>[$t->increments('id'),$t->unsignedBigInteger('tenant_id')->default(1),$t->string('name')]);
         $db->getSchemaBuilder()->create('skus',fn($t)=>[$t->increments('id'),$t->unsignedBigInteger('tenant_id')->default(1)]);
         $db->getSchemaBuilder()->create('deals',fn($t)=>[$t->increments('id'),$t->string('name')]);
+        $db->getSchemaBuilder()->create('product_categories',fn($t)=>[$t->increments('id'),$t->string('name')]);
+        foreach(['tenants','users','quotations'] as $table)$db->getSchemaBuilder()->create($table,fn($t)=>$t->increments('id'));
+        $db->getSchemaBuilder()->create('roles',fn($t)=>[$t->increments('id'),$t->string('code')]);
+        $db->getSchemaBuilder()->create('permissions',fn($t)=>[$t->increments('id'),$t->string('code'),$t->string('name')]);
+        $db->getSchemaBuilder()->create('role_permissions',fn($t)=>[$t->unsignedInteger('role_id'),$t->unsignedInteger('permission_id')]);
         $db->table('customers')->insert(['name'=>'Existing customer retained']);
         return [$db,$path];
     }

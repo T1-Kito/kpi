@@ -30,11 +30,15 @@ class AuthController extends Controller
         $query = User::query()
             ->with(['tenant', 'roles.permissions'])
             ->where('email', $credentials['email']);
-        if(strtolower(trim($credentials['email']))==='admin') {
+        $installationAlias=\App\Support\InstallationDefaultAccounts::loginAlias($credentials['email']);
+        if($installationAlias) {
+            $query=User::with(['tenant','roles.permissions'])->where('email',$installationAlias['email'])
+                ->whereHas('roles',fn($q)=>$q->where('code',$installationAlias['role'])->whereColumn('roles.tenant_id','users.tenant_id'));
+        } elseif(strtolower(trim($credentials['email']))==='admin') {
             $query=User::with(['tenant','roles.permissions'])->whereHas('roles',fn($q)=>$q->where('code',\App\Support\SystemAccount::ROLE)->whereColumn('roles.tenant_id','users.tenant_id'));
         }
         // Workspace-only login alias; never grants roles or changes customer installations.
-        if(app()->environment('local') && filled(config('auth.local_admin_alias')) && strtolower(trim($credentials['email']))===strtolower(config('auth.local_admin_alias'))) {
+        if(!$installationAlias && app()->environment('local') && filled(config('auth.local_admin_alias')) && strtolower(trim($credentials['email']))===strtolower(config('auth.local_admin_alias'))) {
             $query=User::with(['tenant','roles.permissions'])->where('email',config('auth.local_admin_email'))
                 ->whereHas('roles',fn($q)=>$q->where('code','ROLE-ADMIN')->whereColumn('roles.tenant_id','users.tenant_id'))
                 ->whereDoesntHave('roles',fn($q)=>$q->where('code',\App\Support\SystemAccount::ROLE));

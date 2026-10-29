@@ -167,6 +167,17 @@ class PrintTemplateController extends Controller
         return Storage::disk($disk)->download($path, basename($printTemplate->file_name ?: 'mau-word.docx'));
     }
 
+    public function mergeFieldGuide()
+    {
+        $path = resource_path('templates/print/bo-truong-tron.docx');
+        abort_unless(is_file($path), 404, 'Không tìm thấy bộ trường trộn.');
+
+        return response()->download($path, 'bo-truong-tron.docx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'Cache-Control' => 'private, no-store',
+        ]);
+    }
+
     public function reference(string $module)
     {
         $files = [
@@ -375,6 +386,11 @@ class PrintTemplateController extends Controller
             ['key' => 'tam_tinh', 'label' => 'Tạm tính'],
             ['key' => 'chiet_khau', 'label' => 'Chiết khấu'],
             ['key' => 'vat', 'label' => 'VAT'],
+            ['key' => 'tien_dat_coc_70', 'label' => 'Tiền đặt cọc dự kiến 70% tổng báo giá'],
+            ...array_map(fn($key,$label)=>['key'=>$key,'label'=>$label],
+                ['ty_le_dat_coc','ty_le_con_lai','tien_dat_coc','tien_con_lai','nhan_thanh_toan_dau','gia_tri_thanh_toan_dau','nhan_thanh_toan_con_lai','gia_tri_thanh_toan_con_lai','han_dat_coc','han_thanh_toan_con_lai','so_ngay_cong_no'],
+                ['Tỷ lệ cọc đã chọn','Tỷ lệ còn lại','Tiền cọc dự kiến theo báo giá','Tiền còn lại dự kiến','Nhãn khoản thanh toán đầu','Giá trị khoản thanh toán đầu','Nhãn khoản còn lại','Giá trị khoản còn lại','Hạn cọc','Hạn thanh toán còn lại','Số ngày công nợ']),
+            ['key' => 'tien_con_lai_30', 'label' => 'Tiền thanh toán dự kiến còn lại 30%'],
             ['key' => 'tong_cong', 'label' => 'Tổng cộng'],
             ['key' => 'tong_tien_bang_chu', 'label' => 'Tổng tiền bằng chữ'],
             ['key' => 'nguoi_dai_dien_phap_luat', 'label' => 'Người đại diện pháp luật khách hàng'],

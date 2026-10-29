@@ -1,0 +1,42 @@
+VK CRM 0.8.13 — BẢN CẬP NHẬT THỬ NGHIỆM
+
+CẬP NHẬT
+1. Giải nén ZIP vào thư mục riêng ngoài bản VK CRM đang dùng.
+2. Cho người dùng ngừng thao tác và đóng máy chủ VK CRM.
+3. Chạy Setup.exe mới, chọn Cập nhật bản đã cài, chọn đúng thư mục cũ.
+   Hoặc chọn Setup.exe mới từ nút Cập nhật phần mềm trong trình quản lý cũ.
+4. Đợi thông báo thành công rồi mở lại. Không cài mới vào thư mục có dữ liệu.
+
+THAY ĐỔI
+- Máy chủ nhận kết nối mạng nội bộ tại cổng 8099. Khi Windows hỏi quyền quản trị
+  để mở tường lửa, chọn Yes. Quy tắc chỉ cho phép mạng cục bộ tới PHP của bản cài này.
+- Máy con cùng mạng mở địa chỉ IPv4 hiển thị trong cửa sổ máy chủ, ví dụ
+  http://192.168.1.11:8099/. Giữ máy chủ chạy; địa chỉ có thể đổi theo Wi-Fi/DHCP.
+- Hai tên đăng nhập mặc định: admin (Chủ tịch/SPAdmin), sontien (Quản trị/Admin).
+  Tạo tài khoản còn thiếu theo cấu hình riêng đã được chủ phần mềm xác nhận.
+  Không đặt lại mật khẩu, mở khóa hay thay quyền tài khoản đã tồn tại.
+- Báo giá lưu cách thanh toán, tỷ lệ cọc, hạn thanh toán và số ngày công nợ.
+  Mẫu Word có trường tỷ lệ/số tiền động và hỗ trợ mẫu Sơn Tiên cũ 70/30.
+- Khôi phục cách thanh toán từ nội dung cũ do form tạo, giữ lựa chọn khi sửa.
+- Xem trước báo giá đang nhập bằng mẫu Word, chưa lưu hay phát sinh phê duyệt.
+- Tự tải công cụ xem Word và căn vị trí ảnh đặt theo trang trong các bản xem trước.
+- Gộp thông tin doanh nghiệp; MST/CCCD ở đầu; địa chỉ liên hệ cùng hàng thông tin.
+- Thiết kế lại trang thiết lập duyệt báo giá, đưa nút lưu xuống thanh cuối.
+- Bộ trường trộn bổ sung dữ liệu thanh toán và đối chiếu biểu mẫu Sơn Tiên.
+
+DỮ LIỆU VÀ TÀI KHOẢN
+Bộ cập nhật giữ cấu hình kết nối và dữ liệu hiện có. Yêu cầu sao lưu/kiểm chứng
+trước khi nâng cấp cấu trúc. Không xóa database, không chép .env từ máy khác.
+Nếu không sao lưu được, giữ nguyên dữ liệu và kiểm tra quyền tài khoản SQL,
+quyền ghi thư mục backup của dịch vụ SQL. Không bỏ qua kiểm chứng.
+Nếu bản cài có nhiều công ty, tự động cấp tài khoản mặc định sẽ dừng để tránh
+gán tài khoản vào sai công ty. Mật khẩu khởi tạo được bàn giao riêng.
+
+BẢO VỆ MÃ NGUỒN
+Gói giao không chứa ZIP nguồn rời. Tuy nhiên, mã PHP bên trong Setup và bản cài
+CHƯA được mã hóa. Đóng gói EXE không ngăn trích xuất mã nguồn.
+
+GIỚI HẠN
+Bản cập nhật thử, chưa ký số; chưa xác nhận cài/cập nhật trên SQL Server máy khách.
+Runtime PHP đánh giá đi kèm chưa được phê duyệt cho vận hành dữ liệu thật/Internet.
+Chưa kiểm tra trực quan toàn bộ giao diện và mẫu Word trên máy khách.

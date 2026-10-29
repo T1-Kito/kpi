@@ -4,7 +4,7 @@
 @section('page_title', 'Điều hành KPI và công việc')
 @section('page_subtitle', 'Theo dõi người được giao, mức đạt KPI và tiến độ công việc theo kỳ.')
 @section('content')
-<section class="module-panel">
+<section class="module-panel kpi-period-report">
     <div class="panel-head"><div><h2>KPI theo nhân viên</h2><span id="kpiReportSync" role="status">Số liệu tự cập nhật khi màn hình đang mở.</span></div><button type="button" class="btn primary" data-kpi-report-export disabled>Xuất Excel</button></div>
     <form id="kpiReportFilters" class="kpi-report-filters">
         <label>Kỳ<select name="period_type"><option value="month">Tháng</option><option value="quarter">Quý</option><option value="year">Năm</option></select></label>
@@ -17,5 +17,5 @@
 </section>
 @endsection
 @push('scripts')
-<script src="/assets/js/features/kpi-reports.js?v=20261013-permissions1"></script>
+<script src="/assets/js/features/kpi-reports.js?v=20261029-compact1"></script>
 @endpush
