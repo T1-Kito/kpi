@@ -4,13 +4,32 @@ let dashboardLoadVersion = 0;
 let dashboardRefreshing = false;
 setInterval(async () => {
     if (dashboardRefreshing || document.hidden || !document.getElementById('dashboardRoot')
-        || document.querySelector('#modalBackdrop.open') || document.activeElement?.matches('[data-executive-month]')) return;
+        || document.querySelector('#modalBackdrop.open') || document.querySelector('.dashboard-month-picker[open]')) return;
     dashboardRefreshing = true;
     try { await loadDashboard({ source: 'pjax', silent: true }); }
     finally { dashboardRefreshing = false; }
 }, 30000);
 document.addEventListener('vk:ready', () => loadDashboard());
 document.addEventListener('click',event=>{if(event.target.closest('[data-dashboard-retry]'))loadDashboard();});
+function dashboardMonthPicker(value) {
+    const valid=/^\d{4}-\d{2}$/.test(value || '') ? value : new Date().toLocaleDateString('sv-SE').slice(0,7);
+    const [year,month]=valid.split('-').map(Number);
+    return `<div class="dashboard-month-field"><span>Tháng xem</span><input type="hidden" data-executive-month value="${valid}"><details class="dashboard-month-picker"><summary>Tháng ${month}, ${year}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg></summary><div class="dashboard-month-popover"><div class="dashboard-month-year"><button type="button" data-month-year="-1" aria-label="Năm trước">‹</button><input type="number" aria-label="Năm xem" data-month-picker-year value="${year}" min="1" max="9999"><button type="button" data-month-year="1" aria-label="Năm sau">›</button></div><div class="dashboard-month-grid">${Array.from({length:12},(_,i)=>`<button type="button" data-month-choice="${i+1}" aria-pressed="${i+1===month}" class="${i+1===month?'selected':''}">Tháng ${i+1}</button>`).join('')}</div><button type="button" class="dashboard-current-month" data-month-today>Tháng hiện tại</button></div></details></div>`;
+}
+document.addEventListener('click',event=>{
+    const picker=event.target.closest('.dashboard-month-picker');
+    document.querySelectorAll('.dashboard-month-picker[open]').forEach(item=>{if(item!==picker)item.open=false;});
+    if(!picker)return;
+    const year=picker.querySelector('[data-month-picker-year]');
+    const move=event.target.closest('[data-month-year]');
+    if(move){year.value=Math.max(1,Math.min(9999,Number(year.value)+Number(move.dataset.monthYear)));return;}
+    const choice=event.target.closest('[data-month-choice]');
+    if(!choice&&!event.target.closest('[data-month-today]'))return;
+    if(!year.checkValidity())return year.reportValidity();
+    const value=choice?`${String(year.value).padStart(4,'0')}-${choice.dataset.monthChoice.padStart(2,'0')}`:new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Ho_Chi_Minh'}).slice(0,7);
+    const input=picker.parentElement.querySelector('[data-executive-month]');input.value=value;picker.open=false;input.dispatchEvent(new Event('change',{bubbles:true}));
+});
+document.addEventListener('keydown',event=>{if(event.key==='Escape')document.querySelectorAll('.dashboard-month-picker[open]').forEach(item=>item.open=false);});
 document.addEventListener('change', event => {
     if (event.target.matches('[data-executive-month]')) loadDashboard({ source: 'pjax' });
 });
@@ -252,7 +271,7 @@ function renderExecutiveDashboard(executive, data) {
         <div class="executive-dashboard ${(window.VKUser?.permissions || []).includes('dashboard.chairman.view') ? 'chairman-dashboard' : ''}">
             <div class="executive-heading">
                 ${(window.VKUser?.permissions || []).includes('dashboard.chairman.view') ? '<div><h2>Điều hành toàn công ty</h2><p>Bán hàng · Kho vận · Mua hàng · Công việc & KPI</p></div>' : ''}
-                <div class="executive-filters"><label>Tháng xem <input type="month" data-executive-month value="${month}"></label><button type="button" class="btn secondary" onclick="window.print()">In báo cáo</button></div>
+                <div class="executive-filters">${dashboardMonthPicker(month)}<button type="button" class="btn secondary" onclick="window.print()">In báo cáo</button></div>
             </div>
             <div class="executive-metrics" data-executive-panel="overview">${metrics.map(([label, value, note, href, money]) => `<a href="${href}" class="executive-metric"><span>${label}</span><strong>${money ? VKTable.money(value) + ' đ' : VKTable.money(value)}</strong><small>${VKTable.escapeHtml(note)}</small></a>`).join('')}</div>
             <section class="executive-panel"><div class="executive-panel-head"><div><h3>Khách hàng & chất lượng dữ liệu</h3><p>Tình trạng hiện tại · hồ sơ đang hoạt động · cập nhật ${VKTable.escapeHtml(executive.generated_at ? new Date(executive.generated_at).toLocaleString('vi-VN') : 'vừa tải')}</p></div><a href="/customers">Mở hồ sơ khách hàng</a></div><div class="executive-priority-list">${[
@@ -312,7 +331,7 @@ function renderChairmanDashboard(e) {
         {label:'Chốt kỳ',render:r=>r.kpi_indicators?(r.kpi_locked?'Đã chốt':'Đang theo dõi'):'—'},
     ],e.employee_kpi,'Chưa có nhân viên trong phạm vi báo cáo') : '<p class="chairman-empty">Chưa tải được KPI nhân viên. Không thay thế bằng điểm 0; mở báo cáo để kiểm tra.</p>';
     return `<div class="chairman-console">
-        <header class="chairman-toolbar"><div><h2>Điều hành toàn công ty</h2><small>Cập nhật ${esc(new Date(e.generated_at).toLocaleString('vi-VN'))}</small></div><div class="executive-filters"><label>Tháng xem <input type="month" data-executive-month value="${esc(e.period)}"></label><a class="btn secondary" href="/business-reports">Báo cáo / Excel</a><button class="btn secondary" onclick="window.print()">In / PDF</button></div></header>
+        <header class="chairman-toolbar"><div><h2>Điều hành toàn công ty</h2><small>Cập nhật ${esc(new Date(e.generated_at).toLocaleString('vi-VN'))}</small></div><div class="executive-filters">${dashboardMonthPicker(e.period)}<a class="btn secondary" href="/business-reports">Báo cáo / Excel</a><button class="btn secondary" onclick="window.print()">In / PDF</button></div></header>
         <p class="form-note">Kỳ báo cáo theo giờ Việt Nam. Doanh thu hóa đơn và đơn mới theo tháng đã chọn; công nợ, tồn kho, việc cần xử lý và CSKH là tình trạng hiện tại. Doanh thu không đồng nghĩa tiền đã thu.</p>
         <div class="chairman-kpis">${card('Doanh thu hóa đơn',money(e.revenue),'Hóa đơn phát hành trong tháng','/sales-invoices')}${card('Đơn bán mới',VKTable.money(e.orders),'Phát sinh trong tháng','/sales-orders')}${card('Công nợ phải thu',money(e.receivables),'Số dư hiện tại','/customer-receivables')}${card('Việc quá hạn',VKTable.money(e.overdue_tasks),'Toàn công ty · hiện tại','/tasks')}</div>
         <section class="chairman-panel chairman-decisions"><header><h3>Việc cần quyết định</h3><a href="/approvals">Mở phê duyệt →</a></header>${decisions.length?`<div class="chairman-decisions-grid">${decisions.map(([label,value,href])=>row(label,VKTable.money(value),href)).join('')}</div>`:'<p class="chairman-empty">Chưa có vấn đề phát sinh ở các mục đang theo dõi.</p>'}</section>

@@ -1,0 +1,30 @@
+VK CRM 0.8.23 — LEAD, BÀN GIAO SALES VÀ KIỂM TRA TRÙNG
+
+CÁCH CẬP NHẬT
+1. Giải nén gói ZIP ngoài thư mục CRM đang dùng.
+2. Cho người dùng ngừng thao tác, dừng máy chủ CRM.
+3. Chạy Setup.exe trong gói mới, chọn Cập nhật bản đã cài.
+4. Chọn đúng thư mục CRM cũ. Chỉ tiếp tục khi sao lưu và kiểm chứng thành công.
+5. Khởi động lại CRM; nhấn Ctrl + F5 trên các máy sử dụng.
+
+THAY ĐỔI CHÍNH
+- Lead bổ sung nhu cầu, khu vực, ngày dự kiến, số khách, dịch vụ và ghi chú.
+- Bàn giao Sales có thông báo, tiếp nhận hoặc trả lại và lịch sử thao tác.
+- Người phụ trách chỉ chuyển sau khi Sales tiếp nhận.
+- Chuyển đổi cơ hội mang theo nhu cầu đã nhập.
+- Tìm không dấu theo tên, nguồn, chiến dịch và thông tin liên hệ.
+- Kiểm tra trùng trước khi lưu; gộp lead giữ bản gốc, lịch sử và công việc.
+- Không gộp hồ sơ đã chuyển đổi, có chứng từ hoặc đang chờ tiếp nhận.
+- Mẫu Excel tiếng Việt có trường mới, nhận ngày Excel và ngày dd/mm/yyyy.
+- Vẫn nhận mẫu cũ; kiểm tra lại trước khi ghi, lô lỗi không ghi một phần.
+- Sửa định dạng giá sản phẩm, kiểm tra số điện thoại, lịch hẹn và kết quả chăm sóc.
+- Giữ các sửa lỗi tài khoản, logo, thông báo và giao diện từ bản trước.
+
+GIỮ NGUYÊN
+Cấu hình kết nối, tài khoản, dữ liệu và file bản quyền đang dùng.
+Không cài mới đè lên dữ liệu cũ. Không bỏ qua kiểm tra sao lưu hoặc migration.
+Máy chưa kích hoạt cần file bản quyền theo mã máy chủ.
+
+Gói gồm Setup.exe, hướng dẫn này và SHA256SUMS.txt.
+Không kèm database local, cấu hình .env hoặc khóa riêng cấp bản quyền.
+Bản cài chưa ký số; cần xác nhận vận hành trên SQL Server thực tế của khách.

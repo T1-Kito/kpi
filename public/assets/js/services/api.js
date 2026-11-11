@@ -71,10 +71,12 @@
         }
 
         const body = await response.json().catch(() => ({}));
+        if(String(options.method || 'GET').toUpperCase()!=='GET')window.VKInteractionLog?.response(path,response.ok);
         if (!response.ok) {
             const fields = body.fields ? Object.values(body.fields).flat().join(' ') : '';
             const error = new Error([body.message, fields].filter(Boolean).join(' ') || 'Có lỗi xảy ra.');
             error.status = response.status;
+            error.data = body;
             throw error;
         }
 
@@ -85,6 +87,22 @@
         }
 
         return body;
+    }
+
+    // Follow server pagination for complete selection lists; never treat page one as all records.
+    async function allPages(path, options = {}) {
+        const url = new URL(path, 'http://vk.local');
+        url.searchParams.set('page_size', '100');
+        const data = []; let meta = {};
+        for (let page = 1; ; page++) {
+            url.searchParams.set('page', String(page));
+            const result = await request(url.pathname + url.search, options);
+            const rows = result.data || [];
+            if (!Array.isArray(rows)) throw new Error('Danh sách trả về không hợp lệ.');
+            data.push(...rows); meta = result.meta || {};
+            if (!rows.length || (meta.total != null ? data.length >= Number(meta.total) : meta.last_page != null ? page >= Number(meta.last_page) : meta.has_more != null ? !meta.has_more : true)) break;
+        }
+        return {data, meta};
     }
 
     function token() {
@@ -119,5 +137,5 @@
         const hex=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
         return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
     }
-    window.VKApi = { request, token, setToken, clearToken, clearCache, newRequestKey };
+    window.VKApi = { request, allPages, token, setToken, clearToken, clearCache, newRequestKey };
 })();

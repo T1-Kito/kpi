@@ -1,19 +1,21 @@
 (function () {
-let alertState = { rows: [], q: '', status: '' };
+let alertState = { page:1,total:0, rows: [], q: '', status: '' };
 
+let listSearchTimer,listRequestVersion=0;
+document.addEventListener('click',event=>{if(!document.getElementById('alertsRoot'))return;const pager=event.target.closest('[data-module-page]');if(pager){alertState.page=Number(pager.dataset.modulePage);loadAlerts();}});
 document.addEventListener('vk:ready', () => loadAlerts());
 document.addEventListener('input', (event) => {
     if (!document.getElementById('alertsRoot')) return;
     if (event.target.matches('[data-list-search]')) {
         alertState.q = event.target.value.toLowerCase();
-        renderAlerts();
+        alertState.page=1;++listRequestVersion;clearTimeout(listSearchTimer);listSearchTimer=setTimeout(loadAlerts,280);
     }
 });
 document.addEventListener('change', (event) => {
     if (!document.getElementById('alertsRoot')) return;
     if (event.target.matches('[data-list-status]')) {
         alertState.status = event.target.value;
-        renderAlerts();
+        alertState.page=1;++listRequestVersion;clearTimeout(listSearchTimer);listSearchTimer=setTimeout(loadAlerts,280);
     }
 });
 document.addEventListener('click', (event) => {
@@ -28,14 +30,17 @@ document.addEventListener('click', (event) => {
 
 async function loadAlerts() {
     if (!document.getElementById('alertsRoot')) return;
-    const alerts = await VKApi.request('/alerts');
+    const listVersion=++listRequestVersion;
+    const alerts = await VKApi.request('/alerts?'+new URLSearchParams({page_size:20,page:alertState.page,q:alertState.q,status:alertState.status}),{cache:false});
+    if(listVersion!==listRequestVersion || !document.getElementById('alertsRoot'))return;
+    alertState.total=alerts.meta?.total ?? alerts.data?.length ?? 0;
     alertState.rows = alerts.data || [];
     renderAlerts(alerts.meta.total);
 }
 
-function renderAlerts(total = alertState.rows.length) {
-    const rows = filterRows();
-    document.getElementById('alertsRoot').innerHTML = VKTable.fullList({
+function renderAlerts(total = alertState.total) {
+    const rows = alertState.rows;
+    VKTable.updateList(document.getElementById('alertsRoot'), VKTable.fullList({
         title: 'Danh sách cảnh báo',
         subtitle: 'Ghi nhận, xử lý và đóng vòng cảnh báo theo nguồn phát sinh.',
         meta: `${VKTable.money(rows.length)} / ${VKTable.money(total)} cảnh báo`,
@@ -48,7 +53,8 @@ function renderAlerts(total = alertState.rows.length) {
             ],
         }),
         table: renderAlertTable(rows),
-    });
+    }));
+    document.getElementById('alertsRoot').insertAdjacentHTML('beforeend',VKTable.pager({page:alertState.page,total:alertState.total,page_size:20},'data-module-page'));
     restoreFilters();
 }
 

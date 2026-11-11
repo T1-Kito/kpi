@@ -10,5 +10,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/kpi.js?v=20261011-scope1"></script>
+<script src="/assets/js/features/kpi.js?v=20261101-full-pagination12"></script>
 @endpush

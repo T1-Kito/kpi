@@ -84,10 +84,21 @@
                 ${state.type === 'salesOrder' ? '' : renderHead(key, state, row)}
                 ${renderTabs(key, state, row)}
                 <div class="record-page-body">
-                    ${renderContent(state, row)}
+                    ${state.type==='salesOrder' && state.tab==='care' ? '' : renderContent(state, row)}
+                    ${state.type==='salesOrder' && ['overview','care'].includes(state.tab) && (window.VKUser?.permissions || []).includes('service.ticket.view') ? '<div data-order-service-panel></div>' : ''}
                 </div>
             </section>
         `;
+        const care=state.type==='salesOrder' ? root.querySelector('[data-order-service-panel]') : null;
+        if(care && row.id && (row.customer_id || row.customer?.id)) {
+            care.innerHTML='<section class="order-service-card order-care-loading" aria-busy="true"><header><div><h3>CSKH &amp; Khiếu nại của đơn hàng</h3><p>Đang tải thông tin…</p></div></header><div class="order-care-skeleton"></div></section>';
+            const mount=()=>{if(care.isConnected)window.VKServiceDesk.embed(care,{document_type:'order',document_id:row.id,customer_id:row.customer_id || row.customer.id});};
+            if(window.VKServiceDesk)mount();
+            else {
+                if(!window.vkServiceDeskLoading)window.vkServiceDeskLoading=new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='/assets/js/features/service-desk.js?v=20261110-faceid1';script.onload=resolve;script.onerror=()=>{window.vkServiceDeskLoading=null;reject(new Error('Không tải được phần CSKH.'));};document.head.append(script);});
+                window.vkServiceDeskLoading.then(mount).catch(error=>{if(care.isConnected)care.textContent=error.message;});
+            }
+        }
     }
 
     function renderHead(key, state, row) {
@@ -179,6 +190,7 @@
             ['items', `${tabLabels.items} (${row.items?.length || 0})`],
             ['history', tabLabels.history],
             ['fulfillment', 'Giao hàng & thu tiền'],
+            ...((window.VKUser?.permissions || []).includes('service.ticket.view') ? [['care','CSKH & Khiếu nại']] : []),
             ['notes', tabLabels.notes],
         ] : simpleTypes.includes(state.type) ? [
             ['overview', tabLabels.overview],
@@ -1203,10 +1215,10 @@
                 <h3>Chứng từ liên quan</h3>
                 <div class="record-related">
                     ${rows.map(row => `
-                        <div>
+                        <${row.path && /^\/(?!\/)/.test(row.path) ? `a href="${escape(row.path)}"` : 'div'}>
                             <strong>${escape(row.label || row.type || 'Chứng từ')}</strong>
-                            <span>${escape(row.code || '-')} · ${escape(row.status === 'selected' ? 'Đã chọn làm căn cứ mua hàng' : VKTable.translateStatus(row.status || '-'))}</span>
-                        </div>
+                            <span><b class="mono">${escape(row.code || '-')}</b> · ${escape(row.status === 'selected' ? 'Đã chọn làm căn cứ mua hàng' : VKTable.translateStatus(row.status || '-'))}</span>
+                        </${row.path && /^\/(?!\/)/.test(row.path) ? 'a' : 'div'}>
                     `).join('')}
                 </div>
             </section>
@@ -1304,3 +1316,15 @@
 
     window.VKRecordPage = { open };
 })();
+
+window.VKDocumentCare = { mount(root, context) {
+    if (!root || !(window.VKUser?.permissions || []).includes('service.ticket.view')) return;
+    root.innerHTML='<section class="order-service-card order-care-loading" aria-busy="true"><header><h3>CSKH &amp; Khiếu nại</h3><p>Đang tải thông tin…</p></header><div class="order-care-skeleton"></div></section>';
+    const mount=()=>{if(root.isConnected) return window.VKServiceDesk.embed(root,context);};
+    if(window.VKServiceDesk) return mount();
+    if(!window.vkServiceDeskLoading) window.vkServiceDeskLoading=new Promise((resolve,reject)=>{
+        const script=document.createElement('script');script.src='/assets/js/features/service-desk.js?v=20261110-faceid1';
+        script.onload=resolve;script.onerror=()=>{window.vkServiceDeskLoading=null;reject(new Error('Không tải được phần CSKH.'));};document.head.append(script);
+    });
+    return window.vkServiceDeskLoading.then(mount).catch(error=>{if(root.isConnected)root.textContent=error.message;});
+}};

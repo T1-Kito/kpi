@@ -25,10 +25,11 @@ class SupplierController extends Controller
         $pageSize = min((int) $request->query('page_size', 20), 100);
         $query = Supplier::query()->where('tenant_id', $request->user()->tenant_id);
 
+        if($status=$request->query('status'))$query->where('status',$status);
         if ($search = $request->query('q')) {
             $query->where(fn ($q) => $q
                 ->where('code', 'like', "%{$search}%")
-                ->orWhere('name', 'like', "%{$search}%"));
+                ->orWhere('name', 'like', "%{$search}%")->orWhere('phone','like',"%{$search}%")->orWhere('email','like',"%{$search}%"));
         }
 
         $suppliers = $query->latest('id')->paginate($pageSize);
@@ -45,7 +46,7 @@ class SupplierController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'tax_code' => ['nullable', 'string', 'max:30'],
-            'phone' => ['nullable', 'string', 'max:50'],
+            'phone' => ['nullable', 'string', 'max:50', 'phone_number'],
             'email' => ['nullable', 'email', 'max:255'],
             'address' => ['nullable', 'string', 'max:255'],
             'contact_name' => ['nullable', 'string', 'max:255'],
@@ -84,7 +85,7 @@ class SupplierController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'tax_code' => ['nullable', 'string', 'max:30'],
-            'phone' => ['nullable', 'string', 'max:50'],
+            'phone' => ['nullable', 'string', 'max:50', 'phone_number'],
             'email' => ['nullable', 'email', 'max:255'],
             'address' => ['nullable', 'string', 'max:255'],
             'contact_name' => ['nullable', 'string', 'max:255'],

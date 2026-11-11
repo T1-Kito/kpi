@@ -31,7 +31,7 @@ class ExecutiveDashboardService
         }
 
         $funnel = [
-            'leads' => DB::table('leads')->where('tenant_id', $tenantId)->where('created_at','>=',$start)->where('created_at','<',$end)->count(),
+            'leads' => DB::table('leads')->where('tenant_id', $tenantId)->whereNull('merged_into_id')->where('created_at','>=',$start)->where('created_at','<',$end)->count(),
             'quotations' => DB::table('quotations')->where('tenant_id', $tenantId)->where('created_at','>=',$start)->where('created_at','<',$end)->count(),
             'orders' => DB::table('sales_orders')->where('tenant_id', $tenantId)->where('created_at','>=',$start)->where('created_at','<',$end)->count(),
             'deliveries' => DB::table('deliveries')->where('tenant_id', $tenantId)->where('delivered_at','>=',$start)->where('delivered_at','<',$end)->count(),
@@ -130,7 +130,7 @@ class ExecutiveDashboardService
                 ->groupBy('u.id', 'u.name', 'd.name')->orderByDesc('overdue_count')->orderBy('u.name')->get(),
             'generated_at' => now()->toIso8601String(),
             'governance' => [
-                'unassigned_leads' => DB::table('leads')->where('tenant_id', $tenantId)->whereNull('assigned_to')->where('status', 'new')->count(),
+                'unassigned_leads' => DB::table('leads')->where('tenant_id', $tenantId)->whereNull('merged_into_id')->whereNull('assigned_to')->where('status', 'new')->count(),
                 'customers_without_owner' => DB::table('customers')->where('tenant_id', $tenantId)->whereNull('merged_into_id')->where('status', 'active')->whereNull('sales_owner_id')->count(),
                 'organizations_without_contact' => DB::table('customers as c')->where('c.tenant_id', $tenantId)->whereNull('c.merged_into_id')->where('c.status', 'active')->where('c.customer_type', 'organization')->whereNotExists(fn ($q) => $q->selectRaw('1')->from('customer_contacts as cc')->whereColumn('cc.customer_id', 'c.id')->where('cc.is_primary', true))->count(),
                 'duplicate_reviews' => DB::table('customer_duplicate_reviews')->where('tenant_id', $tenantId)->where('status', 'open')->count(),

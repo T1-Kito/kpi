@@ -1,20 +1,22 @@
 (function () {
-let poState = { rows: [], q: '', status: '', view: 'list', detailCache: {} };
+let poState = { page:1,total:0, rows: [], q: '', status: '', view: 'list', detailCache: {} };
 
+let listSearchTimer,listRequestVersion=0;
+document.addEventListener('click',event=>{if(!document.getElementById('purchaseOrdersRoot'))return;const pager=event.target.closest('[data-module-page]');if(pager){poState.page=Number(pager.dataset.modulePage);loadPurchaseOrders();}});
 document.addEventListener('vk:ready', () => loadPurchaseOrders());
 document.addEventListener('vk:flow-updated', () => loadPurchaseOrders());
 document.addEventListener('input', (event) => {
     if (!document.getElementById('purchaseOrdersRoot')) return;
     if (event.target.matches('[data-list-search]')) {
         poState.q = event.target.value.toLowerCase();
-        renderPurchaseOrders();
+        poState.page=1;++listRequestVersion;clearTimeout(listSearchTimer);listSearchTimer=setTimeout(loadPurchaseOrders,280);
     }
 });
 document.addEventListener('change', (event) => {
     if (!document.getElementById('purchaseOrdersRoot')) return;
     if (event.target.matches('[data-list-status]')) {
         poState.status = event.target.value;
-        renderPurchaseOrders();
+        poState.page=1;++listRequestVersion;clearTimeout(listSearchTimer);listSearchTimer=setTimeout(loadPurchaseOrders,280);
     }
 });
 document.addEventListener('click', (event) => {
@@ -40,8 +42,11 @@ async function loadPurchaseOrders(options = {}) {
         poState.currentId = null;
         if (poState.rows.length) renderPurchaseOrders();
     }
-    const orders = await VKApi.request('/purchase-orders');
+    const listVersion=++listRequestVersion;
+    const orders = await VKApi.request('/purchase-orders?'+new URLSearchParams({page_size:20,page:poState.page,q:poState.q,status:poState.status}),{cache:false});
     if (document.getElementById('purchaseOrdersRoot') !== root) return;
+    if(listVersion!==listRequestVersion || !document.getElementById('purchaseOrdersRoot'))return;
+    poState.total=orders.meta?.total ?? orders.data?.length ?? 0;
     poState.rows = orders.data || [];
     if (poState.view === 'detail' && poState.currentId) {
         openPurchaseOrderDetail(poState.currentId);
@@ -55,9 +60,9 @@ async function loadPurchaseOrders(options = {}) {
     renderPurchaseOrders(orders.meta.total);
 }
 
-function renderPurchaseOrders(total = poState.rows.length) {
-    const rows = filterRows();
-    document.getElementById('purchaseOrdersRoot').innerHTML = VKTable.fullList({
+function renderPurchaseOrders(total = poState.total) {
+    const rows = poState.rows;
+    VKTable.updateList(document.getElementById('purchaseOrdersRoot'), VKTable.fullList({
         title: 'Danh sách đơn mua',
         subtitle: 'Đơn tự sinh từ báo giá NCC đã chọn. Duyệt đủ cấp sẽ tự tạo phiếu nhập chờ kho xác nhận.',
         meta: `${VKTable.money(rows.length)} / ${VKTable.money(total)} đơn`,
@@ -70,7 +75,8 @@ function renderPurchaseOrders(total = poState.rows.length) {
             ],
         }),
         table: renderPurchaseOrderTable(rows),
-    });
+    }));
+    document.getElementById('purchaseOrdersRoot').insertAdjacentHTML('beforeend',VKTable.pager({page:poState.page,total:poState.total,page_size:20},'data-module-page'));
     restoreFilters();
 }
 

@@ -130,7 +130,8 @@ class SalesQuotationWorkflowTest extends TestCase
         try {
             $zip=new \ZipArchive;$zip->open($path);$xml=$zip->getFromName('word/document.xml');$zip->close();
             $this->assertStringContainsString('BẢN NHÁP',$xml);
-            $this->assertStringContainsString('1.080 đ',$xml);
+            $this->assertStringContainsString('1.080',$xml);
+            $this->assertStringNotContainsString('1.080 đ',$xml);
             $this->assertStringNotContainsString('{{',$xml);
             $this->assertSame($before,Quotation::count());
         } finally {if(is_file($path))unlink($path);}

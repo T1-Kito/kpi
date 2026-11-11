@@ -28,6 +28,8 @@ class GoodsReceiptController extends Controller
             ->where('tenant_id', $request->user()->tenant_id)
             ->with(['purchaseOrder:id,code', 'warehouse:id,code,name', 'items.sku:id,sku_code,name,unit']);
         DataScope::warehouseScope($query, $request->user());
+        if ($search = trim((string)$request->query('q',''))) {$term='%'.$search.'%';$query->where(function($q)use($term){$q->where('code','like',$term)->orWhereHas('warehouse',fn($u)=>$u->where('name','like',$term))->orWhereHas('purchaseOrder',fn($u)=>$u->where('code','like',$term));});}
+        if($status=$request->query('status'))$query->where('status',$status);
         $rows = $query->latest('id')->paginate($pageSize);
         foreach ($rows as $row) {
             $row->setAttribute('can_confirm', $row->status === 'draft' && $request->user()->hasPermission('inventory.receipt.confirm') && app(\App\Support\OperationalApproval::class)->isCurrentApprover($row->approval_flow, $request->user()));
@@ -82,14 +84,14 @@ class GoodsReceiptController extends Controller
                     'label' => 'Đơn mua',
                     'code' => $purchaseOrder->code,
                     'status' => $purchaseOrder->status,
-                    'path' => '/purchase-orders/'.$purchaseOrder->id,
+                    'path' => '/purchase-orders?order='.$purchaseOrder->id,
                 ]] : [],
                 $purchaseRequest ? [[
                     'type' => 'purchaseRequest',
                     'label' => 'Yêu cầu mua',
                     'code' => $purchaseRequest->code,
                     'status' => $purchaseRequest->status,
-                    'path' => '/purchase-requests/'.$purchaseRequest->id,
+                    'path' => '/purchase-requests?request='.$purchaseRequest->id,
                 ]] : [],
                 $salesOrder ? [[
                     'type' => 'salesOrder',

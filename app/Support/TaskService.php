@@ -32,7 +32,8 @@ class TaskService
                 if ($existing) return $existing;
                 $data['assignee_id'] = $data['assignee_id'] ?? app(WorkAssignmentService::class)->pick($actor->tenant_id, $data['task_type']);
             }
-            $dueAt = $data['due_at'] ?? $this->calculateDueAt(
+            $localInput = is_string($data['due_at'] ?? null) && preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/D', $data['due_at']);
+            $dueAt = !empty($data['due_at']) ? Carbon::parse($data['due_at'], $localInput ? 'Asia/Ho_Chi_Minh' : 'UTC')->utc() : $this->calculateDueAt(
                 $actor->tenant_id,
                 $data['module'] ?? 'general',
                 $data['task_type'],
@@ -99,6 +100,7 @@ class TaskService
             $task = Task::where('tenant_id', $actor->tenant_id)->whereKey($task->id)->lockForUpdate()->firstOrFail();
             abort_if($deal && $deal->status !== 'open' && in_array($status, ['new', 'in_progress', 'overdue'], true), 422, 'Cơ hội đã kết thúc, không thể mở lại công việc chăm sóc.');
             if ($task->status === $status) return $task;
+            abort_if($status === 'completed' && $task->task_type === 'lead_follow_up' && !trim($reason ?? ''), 422, 'Cần ghi kết quả chăm sóc trước khi hoàn thành.');
             $old = $task->status;
             $task->update(['status' => $status]);
 
@@ -111,6 +113,11 @@ class TaskService
 
             $this->audit->record('task', $task->id, 'change_task_status', $actor, ['status' => $old], ['status' => $status], null, $reason);
             $this->events->publish($actor->tenant_id, 'TaskStatusChanged', 'Task', $task->id, ['from' => $old, 'to' => $status]);
+            if ($status === 'completed' && $task->created_by && $task->created_by !== $actor->id) {
+                VkNotification::create(['tenant_id' => $task->tenant_id, 'recipient_id' => $task->created_by,
+                    'title' => 'Công việc đã hoàn thành', 'message' => $task->code.' - '.$task->title,
+                    'source_type' => 'Task', 'source_id' => $task->id, 'action_url' => '/tasks?open='.$task->id, 'status' => 'unread']);
+            }
 
             if (in_array($status, ['completed', 'cancelled'], true)) {
                 \App\Models\Alert::where('tenant_id', $actor->tenant_id)->where('source_type', 'Task')->where('source_id', $task->id)

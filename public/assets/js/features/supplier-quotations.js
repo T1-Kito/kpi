@@ -113,6 +113,8 @@
             const queueToggle = document.querySelector('[data-toggle-sq-queue]');
             if (queueToggle) queueToggle.hidden = data.purchaseRequests.length <= 5;
             const requestId = new URLSearchParams(window.location.search).get('request');
+            const quotationId = new URLSearchParams(window.location.search).get('quotation');
+            if (quotationId && !options.keepView) { await openDetail(quotationId); return; }
             if (requestId && !options.keepView) { openCreateModal(requestId); window.history.replaceState({}, '', window.location.pathname); }
         } catch (error) {
             document.querySelector('[data-sq-queue-body]').innerHTML = `<tr><td colspan="9"><div class="empty-state"><strong>Không tải được yêu cầu mua</strong><span>${escape(error.message || 'Vui lòng thử lại.')}</span><button class="btn small" type="button" data-retry-sq>Thử lại</button></div></td></tr>`;

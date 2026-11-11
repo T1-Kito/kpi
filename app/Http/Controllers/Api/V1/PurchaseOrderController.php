@@ -38,6 +38,7 @@ class PurchaseOrderController extends Controller
             $query->where('status', $status);
         }
 
+        if ($search = trim((string)$request->query('q',''))) {$term='%'.$search.'%';$query->where(function($q)use($term){$q->where('code','like',$term)->orWhereHas('supplier',fn($u)=>$u->where('name','like',$term))->orWhereHas('purchaseRequest',fn($u)=>$u->where('code','like',$term));});}
         $rows = $query->latest('id')->paginate($pageSize);
         foreach ($rows as $row) {
             $row->setAttribute('can_approve', $row->status === 'draft' && $request->user()->hasPermission('procurement.po.approve') && app(\App\Support\OperationalApproval::class)->isCurrentApprover($row->approval_flow, $request->user()));
@@ -119,14 +120,14 @@ class PurchaseOrderController extends Controller
                     'label' => 'Báo giá NCC',
                     'code' => $purchaseOrder->supplierQuotation->code,
                     'status' => $purchaseOrder->supplierQuotation->status,
-                    'path' => '/supplier-quotations/'.$purchaseOrder->supplierQuotation->id,
+                    'path' => '/supplier-quotations?quotation='.$purchaseOrder->supplierQuotation->id,
                 ]] : [],
                 $purchaseOrder->purchaseRequest ? [[
                     'type' => 'purchaseRequest',
                     'label' => 'Yêu cầu mua',
                     'code' => $purchaseOrder->purchaseRequest->code,
                     'status' => $purchaseOrder->purchaseRequest->status,
-                    'path' => '/purchase-requests/'.$purchaseOrder->purchaseRequest->id,
+                    'path' => '/purchase-requests?request='.$purchaseOrder->purchaseRequest->id,
                 ]] : [],
                 GoodsReceipt::where('tenant_id', $purchaseOrder->tenant_id)
                     ->where('purchase_order_id', $purchaseOrder->id)
@@ -137,7 +138,7 @@ class PurchaseOrderController extends Controller
                         'label' => 'Phiếu nhập kho',
                         'code' => $receipt->code,
                         'status' => $receipt->status,
-                        'path' => '/goods-receipts/'.$receipt->id,
+                        'path' => '/goods-receipts?receipt='.$receipt->id,
                     ])
                     ->all(),
             ),

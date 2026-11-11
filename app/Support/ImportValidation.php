@@ -3,6 +3,14 @@ namespace App\Support;
 
 final class ImportValidation
 {
+    public static function isoDate(?string $value): ?string {
+        if ($value===null || $value==='') return null;
+        if (preg_match('/^\d{2}\/\d{2}\/\d{4}$/D',$value)) {
+            $date=\DateTimeImmutable::createFromFormat('!d/m/Y',$value);
+            if ($date && $date->format('d/m/Y')===$value) return $date->format('Y-m-d');
+        }
+        return $value;
+    }
     public const MESSAGES=[
         'required'=>'Vui lòng nhập :attribute.',
         'string'=>':attribute phải là văn bản.',

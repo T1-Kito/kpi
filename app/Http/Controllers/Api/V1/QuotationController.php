@@ -53,6 +53,7 @@ class QuotationController extends Controller
             $query->where('status', $status);
         }
 
+        if ($search = trim((string)$request->query('q',''))) {$term='%'.$search.'%';$query->where(function($q)use($term){$q->where('code','like',$term)->orWhereHas('customer',fn($c)=>$c->where('name','like',$term)->orWhere('code','like',$term));});}
         $quotations = $query->latest('id')->paginate($pageSize);
         $quotations->getCollection()->each(function ($quote) use ($user) {
             $quote->setAttribute('can_approve', app(\App\Support\SalesApprovalAccess::class)->canApprove($quote, $user));
@@ -208,6 +209,7 @@ class QuotationController extends Controller
         $copy = $this->quotations->create($request->user(), [
             'customer_id' => $quotation->customer_id,
             'duplicated_from_id' => $quotation->id,
+            'prices_include_vat' => (bool) $quotation->prices_include_vat,
             'deal_id' => $quotation->deal_id,
             'lead_id' => $quotation->lead_id,
             'price_book_id' => $quotation->price_book_id,
@@ -361,6 +363,7 @@ class QuotationController extends Controller
             'price_book_id' => ['nullable', Rule::exists('sales_price_books', 'id')->where('tenant_id', $tenantId)->where('is_active', true)],
             'payment_term_id' => ['nullable', Rule::exists('sales_payment_terms', 'id')->where('tenant_id', $tenantId)->where('is_active', true)],
             'valid_until' => ['nullable', 'date'],
+            'prices_include_vat' => ['sometimes','boolean'],
             'discount_percent' => ['nullable', 'numeric', 'min:0', 'max:99.99'],
             'payment_terms' => ['nullable', 'string', 'max:255'],
             'payment_plan' => ['nullable', 'array:mode,percent,deposit_date,balance_date,days'],

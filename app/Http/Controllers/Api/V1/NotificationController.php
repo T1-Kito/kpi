@@ -28,6 +28,17 @@ class NotificationController extends Controller
         ]);
     }
 
+    public function markAllRead(Request $request): JsonResponse
+    {
+        $count = VkNotification::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->where('recipient_id', $request->user()->id)
+            ->where('status', 'unread')
+            ->update(['status' => 'read', 'read_at' => now()]);
+
+        return response()->json(['data' => ['updated' => $count]]);
+    }
+
     public function markRead(Request $request, VkNotification $notification): JsonResponse
     {
         abort_if($notification->tenant_id !== $request->user()->tenant_id || $notification->recipient_id !== $request->user()->id, 404);

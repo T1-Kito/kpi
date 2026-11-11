@@ -32,9 +32,9 @@ class DealController extends Controller
             $query->where('stage', $stage);
         }
         if ($search = $request->query('q')) {
-            $query->where(fn ($q) => $q->where('code', 'like', "%{$search}%")->orWhere('name', 'like', "%{$search}%"));
+            $query->where(fn ($q) => $q->where('code', 'like', "%{$search}%")->orWhere('name', 'like', "%{$search}%")->orWhereHas('customer', fn ($customer) => $customer->where('name', 'like', "%{$search}%")));
         }
-        $rows = $query->latest('id')->paginate(min((int) $request->query('page_size', 50), 100));
+        $rows = $query->latest('id')->paginate(max(1, min((int) $request->query('page_size', 50), 100)));
 
         return response()->json(['data' => $rows->items(), 'meta' => ['page' => $rows->currentPage(), 'page_size' => $rows->perPage(), 'total' => $rows->total(), 'stages' => DealService::stages((int) $request->user()->tenant_id)]]);
     }

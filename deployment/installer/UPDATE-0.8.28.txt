@@ -1,0 +1,16 @@
+VK CRM 0.8.28 — THỬ KẾT NỐI FACEID
+
+Giải nén ZIP vào thư mục riêng rồi mở Setup.exe.
+Nếu đã có VK CRM, chọn Cập nhật bản đã cài và chỉ đúng thư mục CRM đang dùng.
+Nếu cài thử lần đầu, chọn Cài mới và dùng thư mục, cơ sở dữ liệu dành riêng cho bản thử.
+
+KẾT NỐI FACEID
+1. Từ chính máy chạy CRM, kiểm tra máy đó truy cập được URL HTTPS nội bộ của phần mềm FaceID.
+2. Trên máy chủ CRM, thêm vào .env các biến HOSPITALITY_BASE_URL, HOSPITALITY_USERNAME,
+   HOSPITALITY_PASSWORD và HOSPITALITY_TENANT_ID. URL không kèm /api/v1.
+3. Làm mới cấu hình CRM rồi mở FaceID > Tổng quan kết nối > Đồng bộ ngay.
+4. So sánh phòng, khách, lượt lưu trú và thiết bị với phần mềm FaceID.
+5. Để tự cập nhật mỗi 15 phút, cấu hình chạy php artisan schedule:run mỗi phút trên máy chủ CRM.
+
+Gói chứa phần tra cứu và đồng bộ chỉ đọc. Cần xác nhận dữ liệu thật tại máy triển khai.
+Thông tin kết nối riêng của khách được cấu hình tại máy chạy CRM.

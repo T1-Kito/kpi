@@ -49,6 +49,7 @@ class SalesOrderController extends Controller
             $query->where('status', $status);
         }
 
+        if ($search = trim((string)$request->query('q',''))) {$term='%'.$search.'%';$query->where(function($q)use($term){$q->where('code','like',$term)->orWhereHas('customer',fn($c)=>$c->where('name','like',$term)->orWhere('code','like',$term));});}
         $orders = $query->latest('id')->paginate($pageSize);
 
         return response()->json([
@@ -219,7 +220,7 @@ class SalesOrderController extends Controller
                         'label' => 'Yêu cầu mua',
                         'code' => $pr->code,
                         'status' => $pr->status,
-                        'path' => '/purchase-requests/'.$pr->id,
+                        'path' => '/purchase-requests?request='.$pr->id,
                     ])
                     ->all(),
                 GoodsIssue::where('tenant_id', $order->tenant_id)

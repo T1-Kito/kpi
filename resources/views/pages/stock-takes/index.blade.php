@@ -16,5 +16,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/stock-takes.js?v=20261011-live1"></script>
+<script src="/assets/js/features/stock-takes.js?v=20261101-full-pagination12"></script>
 @endpush

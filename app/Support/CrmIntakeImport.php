@@ -169,6 +169,7 @@ final class CrmIntakeImport
     {
         $rules=array_fill_keys(array_keys(CrmIntakeWorkbook::LABELS),'nullable|string|max:255');
         foreach(['external_ref'=>100,'tax_code'=>30,'phone'=>50,'source'=>100,'group_size'=>100,'purpose'=>255,'special_requests'=>2000,'note'=>2000,'interests'=>2000] as $key=>$max)$rules[$key]='nullable|string|max:'.$max;
+        $rules['phone'].='|phone_number';
         foreach(['guest_count','budget','amount','forecast'] as $key)$rules[$key]=$key==='guest_count'?'nullable|numeric|integer|min:1|max:1000000':'nullable|numeric|min:0|max:999999999999';
         $rules['email']='nullable|email|max:255';$rules['tax_code']='nullable|regex:/^[0-9.\s-]+$/|max:30';
         $input=array_map(fn($v)=>$v===''?null:$v,$d);

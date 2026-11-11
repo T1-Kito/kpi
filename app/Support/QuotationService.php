@@ -36,6 +36,7 @@ class QuotationService
             $quotation = Quotation::create([
                 'tenant_id' => $actor->tenant_id,
                 'workflow_version' => 2,
+                'prices_include_vat' => $data['prices_include_vat'] ?? false,
                 'created_by' => $actor->id,
                 'contact_id' => array_key_exists('contact_id', $data) ? $data['contact_id'] : $customer->contacts()->where('is_primary', true)->value('id'),
                 'code' => $this->codes->next('quotations', 'code', 'QUO-', fn ($query) => $query->where('tenant_id', $actor->tenant_id)),
@@ -94,6 +95,7 @@ class QuotationService
                 'payment_term_id' => $data['payment_term_id'] ?? $quotation->payment_term_id,
                 'valid_until' => $data['valid_until'] ?? null,
                 'payment_terms' => $data['payment_terms'] ?? $customer->payment_terms ?? $term?->name,
+                'prices_include_vat' => $data['prices_include_vat'] ?? $quotation->prices_include_vat,
                 'payment_plan' => array_key_exists('payment_plan',$data) ? $data['payment_plan'] : $quotation->payment_plan,
                 'delivery_terms' => $data['delivery_terms'] ?? null,
                 'note' => $data['note'] ?? null,
@@ -166,6 +168,7 @@ class QuotationService
             $lineUnit = $sku->unit ?: '-';
             $unitCost = (float) $sku->cost_price;
             $vatRate = (float) ($line['vat_rate'] ?? 0);
+            if($quotation->prices_include_vat)$unitPrice=$unitPrice/(1+$vatRate/100);
             $lineSubtotal = $quantity * $unitPrice;
             $vatAmount = round($lineSubtotal * $vatRate / 100, 2);
             $lineTotal = $lineSubtotal + $vatAmount;
@@ -286,9 +289,12 @@ class QuotationService
             $qty = (string) $line['quantity'];
             $list = $this->money((string) ($line['unit_price'] ?? $sku->sale_price));
             $price = $this->money(bcmul($list, $factor, 6));
-            $base = $this->money(bcmul($qty, $price, 6));
+            $gross = $this->money(bcmul($qty, $price, 6));
             $vat = (string) ($line['vat_rate'] ?? 0);
-            $taxLine = $this->money(bcdiv(bcmul($base, $vat, 6), '100', 6));
+            $inclusive = (bool)$quote->prices_include_vat;
+            $base = $inclusive ? $this->money(bcdiv(bcmul($gross,'100',8),bcadd('100',$vat,4),8)) : $gross;
+            $taxLine = $inclusive ? bcsub($gross,$base,2) : $this->money(bcdiv(bcmul($base, $vat, 6), '100', 6));
+            if($inclusive)$price=$this->money(bcdiv(bcmul($price,'100',8),bcadd('100',$vat,4),8));
             $costLine = $this->money(bcmul($qty, (string) $sku->cost_price, 6));
             abort_if(bccomp(bcadd($base, $taxLine, 2), '9999999999999999.99', 2) > 0 || bccomp($costLine, '9999999999999999.99', 2) > 0, 422, 'Giá trị hàng hóa vượt giới hạn lưu trữ.');
             $values = ['sku_id' => $sku->id, 'sku_code' => $sku->sku_code, 'name' => $sku->name, 'unit' => $sku->unit ?: '-',
@@ -296,7 +302,8 @@ class QuotationService
                 'line_subtotal' => $base, 'vat_rate' => $vat, 'vat_amount' => $taxLine, 'line_total' => bcadd($base, $taxLine, 2), 'line_cost' => $costLine];
             if ($persist) $quote->items()->create($values);
             else { $item = new \App\Models\QuotationItem($values); $item->setRelation('sku',$sku); $previewItems->push($item); }
-            $subtotal = bcadd($subtotal, $this->money(bcmul($qty, $list, 6)), 2);
+            $listBase=$quote->prices_include_vat ? $this->money(bcdiv(bcmul(bcmul($qty,$list,8),'100',8),bcadd('100',$vat,4),8)) : $this->money(bcmul($qty,$list,6));
+            $subtotal = bcadd($subtotal, $listBase, 2);
             $net = bcadd($net, $base, 2); $tax = bcadd($tax, $taxLine, 2); $cost = bcadd($cost, $costLine, 2);
         }
         $total = bcadd($net, $tax, 2);

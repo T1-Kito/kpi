@@ -8,6 +8,8 @@ function vkSqlDiagnostic(Throwable $exception,string $stage,?string $migration):
             if(isset($info[1])&&is_numeric($info[1]))$native=(int)$info[1];
         }
         $text=strtolower($current->getMessage());
+        if ($current->getMessage()==='Cần email riêng và mật khẩu ít nhất 8 ký tự cho Admin thường.') $reason='ADMIN_INPUT';
+        if ($current->getMessage()==='Invalid administrator details') $reason='CHAIRMAN_INPUT';
         foreach(['multiple cascade paths'=>'FOREIGN_KEY_CASCADE','already an object named'=>'OBJECT_EXISTS','query timeout'=>'TIMEOUT','login timeout'=>'TIMEOUT','invalid column name'=>'COLUMN','invalid object name'=>'OBJECT_MISSING','permission was denied'=>'PERMISSION','login failed'=>'LOGIN','certificate'=>'TLS'] as $needle=>$code)
             if(str_contains($text,$needle)){$reason=$code;break;}
     }

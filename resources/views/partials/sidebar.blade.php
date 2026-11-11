@@ -107,10 +107,11 @@
             <div class="nav-group" data-nav-group data-nav-key="dashboard-service">
                 <button class="nav-group-toggle" type="button" data-nav-toggle><span class="nav-icon tasks" aria-hidden="true"></span><span>Chăm sóc khách hàng</span><span class="nav-chevron" aria-hidden="true"></span></button>
                 <div class="nav-sub">
-                    <a data-permission="service.ticket.view" href="/service-tickets">Ticket hỗ trợ</a>
+                    <a data-permission="service.ticket.view" href="/service-tickets">Yêu cầu khách hàng</a>
                     <a data-permission="service.ticket.view" href="/warranty-claims">Bảo hành</a>
                 </div>
             </div>
+            @include('partials.hospitality-integration-nav')
             <div class="nav-group" data-nav-group data-nav-key="dashboard-kpi">
                 <button class="nav-group-toggle" type="button" data-nav-toggle><span class="nav-icon kpi" aria-hidden="true"></span><span>KPI</span><span class="nav-chevron" aria-hidden="true"></span></button>
                 <div class="nav-sub">
@@ -173,7 +174,7 @@
         </div>
 
         <div data-module-section="service" hidden>
-            <a class="nav-link" data-permission="service.ticket.view" href="/service-tickets"><span class="nav-icon tasks" aria-hidden="true"></span><span>Ticket hỗ trợ</span></a>
+            <a class="nav-link" data-permission="service.ticket.view" href="/service-tickets"><span class="nav-icon tasks" aria-hidden="true"></span><span>Yêu cầu khách hàng</span></a>
             <a class="nav-link" data-permission="service.ticket.view" href="/warranty-claims"><span class="nav-icon approval" aria-hidden="true"></span><span>Yêu cầu bảo hành</span></a>
         </div>
 
@@ -190,6 +191,6 @@
 
     <div class="sidebar-foot">
         <button class="side-foot-link" type="button" data-logout><span class="nav-icon logout" aria-hidden="true"></span><span>Đăng xuất</span></button>
-        <div class="user-chip" id="userLine" title=""><span class="user-avatar" aria-hidden="true">U</span><span class="user-meta"><strong id="userName">Người dùng</strong><small id="userRole">VK-KPI</small></span></div>
+        <button type="button" class="user-chip" id="userLine" data-account-open title="Tài khoản cá nhân"><span class="user-avatar" aria-hidden="true">U</span><span class="user-meta"><strong id="userName">Người dùng</strong><small id="userRole">VK-KPI</small></span></button>
     </div>
 </aside>

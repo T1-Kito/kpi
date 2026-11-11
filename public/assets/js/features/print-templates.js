@@ -1,26 +1,27 @@
 (function () {
-let templateState = { rows: [], q: '', status: '', module: 'quotation', fields: [], fieldSets: {}, modules: {} };
-let templateLoadVersion = 0;
+let templateState = { page:1,total:0,rows: [], q: '', status: '', module: 'quotation', fields: [], fieldSets: {}, modules: {} };
+let templateLoadVersion = 0, templateSearchTimer;
 
 document.addEventListener('vk:ready', () => loadPrintTemplates());
 document.addEventListener('input', (event) => {
     if (!document.getElementById('printTemplatesRoot')) return;
     if (event.target.matches('[data-list-search]')) {
         templateState.q = event.target.value.toLowerCase();
-        renderPrintTemplates();
+        templateState.page=1;++templateLoadVersion;clearTimeout(templateSearchTimer);templateSearchTimer=setTimeout(()=>loadPrintTemplates(),280);
     }
 });
 document.addEventListener('change', (event) => {
     if (!document.getElementById('printTemplatesRoot')) return;
     if (event.target.matches('[data-list-status]')) {
         templateState.status = event.target.value;
-        renderPrintTemplates();
+        templateState.page=1;loadPrintTemplates();
     }
 });
 document.addEventListener('click', (event) => {
     if (!document.getElementById('printTemplatesRoot')) return;
     const tab = event.target.closest('[data-template-module]');
-    if (tab) { templateState.module = tab.dataset.templateModule; renderPrintTemplates(); }
+    const pager=event.target.closest('[data-template-page]');if(pager){templateState.page=Number(pager.dataset.templatePage);loadPrintTemplates();return;}
+    if (tab) { templateState.module = tab.dataset.templateModule;templateState.page=1;loadPrintTemplates(); }
     const copy = event.target.closest('[data-copy-merge-field]');
     if (copy) copyMergeField(copy.dataset.copyMergeField);
     if (event.target.closest('[data-download-merge-guide]')) downloadMergeFieldGuide();
@@ -49,12 +50,13 @@ async function loadPrintTemplates(options = {}) {
 
     const version = ++templateLoadVersion;
     let response;
-    try { response = await VKApi.request('/print-templates?page_size=100'); }
+    try { response = await VKApi.request('/print-templates?'+new URLSearchParams({page_size:20,page:templateState.page,q:templateState.q,status:templateState.status,module:templateState.module}),{cache:false}); }
     catch (error) {
         if (version === templateLoadVersion && document.getElementById('printTemplatesRoot') === root) root.innerHTML = `<section class="module-panel"><p class="form-note">${VKTable.escapeHtml(error.message || 'Không tải được danh sách mẫu. Vui lòng tải lại trang.')}</p></section>`;
         return;
     }
     if (version !== templateLoadVersion || document.getElementById('printTemplatesRoot') !== root) return;
+    templateState.total=response.meta?.total || 0;
     templateState.rows = response.data || [];
     templateState.fields = response.meta?.fields || defaultFields();
     templateState.fieldSets = response.meta?.field_sets || { quotation: templateState.fields };
@@ -62,10 +64,11 @@ async function loadPrintTemplates(options = {}) {
     renderPrintTemplates(response.meta?.total ?? templateState.rows.length);
 }
 
-function renderPrintTemplates(total = templateState.rows.length) {
+function renderPrintTemplates(total = templateState.total) {
+    const focused=document.activeElement?.matches('[data-list-search]'), caret=focused?document.activeElement.selectionStart:null;
     const root = document.getElementById('printTemplatesRoot');
     if (!root) return;
-    const rows = filterRows();
+    const rows = templateState.rows;
 
     root.innerHTML = `<div class="template-module-bar"><nav class="template-module-tabs" aria-label="Loại mẫu chứng từ">${moduleOptions().map(item => `<button type="button" data-template-module="${item.value}" aria-pressed="${templateState.module === item.value}" class="${templateState.module === item.value ? 'active' : ''}">${VKTable.escapeHtml(item.label)}</button>`).join('')}</nav><button class="btn secondary template-example-download" type="button" data-download-merge-template="${templateState.module}">Tải mẫu ${VKTable.escapeHtml(moduleLabel(templateState.module))} tham khảo</button></div>` + VKTable.fullList({
         title: `Mẫu ${moduleLabel(templateState.module).toLowerCase()}`,
@@ -80,6 +83,7 @@ function renderPrintTemplates(total = templateState.rows.length) {
         }),
         table: renderTemplateTable(rows),
     });
+    root.insertAdjacentHTML('beforeend',VKTable.pager({page:templateState.page,page_size:20,total:templateState.total},'data-template-page'));
     const referenceButton = root.querySelector('[data-download-merge-template]');
     if (referenceButton) {
         const actions = document.createElement('div');
@@ -89,6 +93,7 @@ function renderPrintTemplates(total = templateState.rows.length) {
         actions.append(referenceButton);
     }
     restoreFilters();
+    if(focused){const input=document.querySelector('[data-list-search]');input?.focus();if(caret!==null)input?.setSelectionRange(caret,caret);}
 }
 
 function renderTemplateTable(rows) {
@@ -167,7 +172,7 @@ function openPrintTemplateModal(id = null) {
     if (id && row?.file_path) {
         const endpoint = {quotation:'quotations', sales_order:'sales-orders', goods_issue:'goods-issues', contract:'contracts', delivery_acceptance:'delivery-records'}[row.module];
         const select = document.querySelector('[data-template-record]');
-        VKApi.request(`/${endpoint}?page_size=100`, {cache:false}).then(response => {
+        VKApi.allPages(`/${endpoint}`, {cache:false}).then(response => {
             if (!select?.isConnected) return;
             select.innerHTML = '<option value="">Chọn hồ sơ để trộn thử…</option>' + (response.data || []).map(record => `<option value="${Number(record.id)}">${VKTable.escapeHtml(record.code)} · ${VKTable.escapeHtml(record.customer?.name || record.name || record.status || '')}</option>`).join('');
         }).catch(() => { if (select?.isConnected) select.innerHTML = '<option value="">Không tải được hồ sơ hoặc chưa có quyền xem</option>'; });

@@ -22,3 +22,8 @@ test('Audit comparison includes cleared values, skips unchanged and sensitive fi
     assert.equal(rows[2].before,'Không');assert.equal(rows[2].after,'Có');
     assert.ok(!JSON.stringify(rows).includes('password'));
 });
+test('Handover audit uses tenant-resolved names and Vietnamese handover status',()=>{
+    const rows=presentation().changes({old_value:{handover_to:null,handover_status:null},new_value:{handover_to:11,handover_status:'pending'},reference_users:{11:'Nguyễn Minh — Sales'}});
+    assert.equal(rows[0].label,'Sales nhận bàn giao');assert.equal(rows[0].after,'Nguyễn Minh — Sales');
+    assert.equal(rows[1].after,'Chờ Sales tiếp nhận');
+});

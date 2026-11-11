@@ -1,20 +1,22 @@
 (function () {
-let grState = { rows: [], q: '', status: '', view: 'list', detailCache: {} };
+let grState = { page:1,total:0, rows: [], q: '', status: '', view: 'list', detailCache: {} };
 
+let listSearchTimer,listRequestVersion=0;
+document.addEventListener('click',event=>{if(!document.getElementById('goodsReceiptsRoot'))return;const pager=event.target.closest('[data-module-page]');if(pager){grState.page=Number(pager.dataset.modulePage);loadGoodsReceipts();}});
 document.addEventListener('vk:ready', () => loadGoodsReceipts());
 document.addEventListener('vk:flow-updated', () => loadGoodsReceipts());
 document.addEventListener('input', (event) => {
     if (!document.getElementById('goodsReceiptsRoot')) return;
     if (event.target.matches('[data-list-search]')) {
         grState.q = event.target.value.toLowerCase();
-        renderGoodsReceipts();
+        grState.page=1;++listRequestVersion;clearTimeout(listSearchTimer);listSearchTimer=setTimeout(loadGoodsReceipts,280);
     }
 });
 document.addEventListener('change', (event) => {
     if (!document.getElementById('goodsReceiptsRoot')) return;
     if (event.target.matches('[data-list-status]')) {
         grState.status = event.target.value;
-        renderGoodsReceipts();
+        grState.page=1;++listRequestVersion;clearTimeout(listSearchTimer);listSearchTimer=setTimeout(loadGoodsReceipts,280);
     }
 });
 document.addEventListener('click', (event) => {
@@ -34,7 +36,10 @@ async function loadGoodsReceipts(options = {}) {
         grState.view = 'list';
         grState.currentId = null;
     }
-    const receipts = await VKApi.request('/goods-receipts');
+    const listVersion=++listRequestVersion;
+    const receipts = await VKApi.request('/goods-receipts?'+new URLSearchParams({page_size:20,page:grState.page,q:grState.q,status:grState.status}),{cache:false});
+    if(listVersion!==listRequestVersion || !document.getElementById('goodsReceiptsRoot'))return;
+    grState.total=receipts.meta?.total ?? receipts.data?.length ?? 0;
     grState.rows = receipts.data || [];
     const requestedReceipt = new URLSearchParams(window.location.search).get('receipt');
     if (requestedReceipt) { openGoodsReceiptDetail(requestedReceipt); return; }
@@ -45,9 +50,9 @@ async function loadGoodsReceipts(options = {}) {
     renderGoodsReceipts(receipts.meta.total);
 }
 
-function renderGoodsReceipts(total = grState.rows.length) {
-    const rows = filterRows();
-    document.getElementById('goodsReceiptsRoot').innerHTML = VKTable.fullList({
+function renderGoodsReceipts(total = grState.total) {
+    const rows = grState.rows;
+    VKTable.updateList(document.getElementById('goodsReceiptsRoot'), VKTable.fullList({
         title: 'Danh sách phiếu nhập',
         subtitle: 'Phiếu tự sinh từ đơn mua đã duyệt. Kho kiểm tra hàng thực nhận rồi xác nhận để cập nhật tồn.',
         meta: `${VKTable.money(rows.length)} / ${VKTable.money(total)} phiếu`,
@@ -59,7 +64,8 @@ function renderGoodsReceipts(total = grState.rows.length) {
             ],
         }),
         table: renderReceiptTable(rows),
-    });
+    }));
+    document.getElementById('goodsReceiptsRoot').insertAdjacentHTML('beforeend',VKTable.pager({page:grState.page,total:grState.total,page_size:20},'data-module-page'));
     restoreFilters();
 }
 

@@ -9,5 +9,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/sales-master-data.js?v=20261013-defaults1"></script>
+<script src="/assets/js/features/sales-master-data.js?v=20261031-full-pagination12"></script>
 @endpush

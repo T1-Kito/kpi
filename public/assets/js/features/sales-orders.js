@@ -1,6 +1,8 @@
 (function () {
-let salesOrderState = { rows: [], q: '', status: '', view: 'list', detailCache: {} };
+let salesOrderState = { page:1,total:0, rows: [], q: '', status: '', view: 'list', detailCache: {} };
 
+let listSearchTimer,listRequestVersion=0;
+document.addEventListener('click',event=>{if(!document.getElementById('salesOrdersRoot'))return;const pager=event.target.closest('[data-module-page]');if(pager){salesOrderState.page=Number(pager.dataset.modulePage);loadSalesOrders();}});
 document.addEventListener('vk:ready', () => loadSalesOrders());
 document.addEventListener('vk:flow-updated', () => loadSalesOrders());
 let orderRefreshTimer;
@@ -19,14 +21,14 @@ document.addEventListener('input', (event) => {
     if (!document.getElementById('salesOrdersRoot')) return;
     if (event.target.matches('[data-list-search]')) {
         salesOrderState.q = event.target.value.toLowerCase();
-        renderSalesOrders();
+        salesOrderState.page=1;++listRequestVersion;clearTimeout(listSearchTimer);listSearchTimer=setTimeout(loadSalesOrders,280);
     }
 });
 document.addEventListener('change', (event) => {
     if (!document.getElementById('salesOrdersRoot')) return;
     if (event.target.matches('[data-list-status]')) {
         salesOrderState.status = event.target.value;
-        renderSalesOrders();
+        salesOrderState.page=1;++listRequestVersion;clearTimeout(listSearchTimer);listSearchTimer=setTimeout(loadSalesOrders,280);
     }
 });
 document.addEventListener('click', (event) => {
@@ -68,8 +70,11 @@ async function loadSalesOrders(options = {}) {
         salesOrderState.currentId = null;
     }
     const version=++orderLoadVersion;
-    const orders = await VKApi.request('/sales-orders', {cache:false});
+    const listVersion=++listRequestVersion;
+    const orders = await VKApi.request('/sales-orders?'+new URLSearchParams({page_size:20,page:salesOrderState.page,q:salesOrderState.q,status:salesOrderState.status}),{cache:false});
     if (version !== orderLoadVersion || !document.getElementById('salesOrdersRoot')) return;
+    if(listVersion!==listRequestVersion || !document.getElementById('salesOrdersRoot'))return;
+    salesOrderState.total=orders.meta?.total ?? orders.data?.length ?? 0;
     salesOrderState.rows = orders.data || [];
     const openId = new URLSearchParams(window.location.search).get('open');
     if (openId) {
@@ -83,9 +88,9 @@ async function loadSalesOrders(options = {}) {
     renderSalesOrders(orders.meta.total);
 }
 
-function renderSalesOrders(total = salesOrderState.rows.length) {
-    const rows = filterRows();
-    document.getElementById('salesOrdersRoot').innerHTML = VKTable.fullList({
+function renderSalesOrders(total = salesOrderState.total) {
+    const rows = salesOrderState.rows;
+    VKTable.updateList(document.getElementById('salesOrdersRoot'), VKTable.fullList({
         title: 'Danh sách đơn hàng',
         subtitle: 'Kiểm tra tồn, giữ hàng, xử lý thiếu tồn và theo dõi xuất kho.',
         meta: `${VKTable.money(rows.length)} / ${VKTable.money(total)} đơn`,
@@ -102,7 +107,8 @@ function renderSalesOrders(total = salesOrderState.rows.length) {
             ],
         }),
         table: renderSalesOrderTable(rows),
-    });
+    }));
+    document.getElementById('salesOrdersRoot').insertAdjacentHTML('beforeend',VKTable.pager({page:salesOrderState.page,total:salesOrderState.total,page_size:20},'data-module-page'));
     restoreFilters();
 }
 
@@ -145,7 +151,7 @@ function renderItems(items = []) {
 }
 
 async function openSalesOrderModal() {
-    const quotations = await VKApi.request('/quotations');
+    const quotations = await VKApi.allPages('/quotations');
     const ready = quotations.data.filter(q => ['ready', 'approved'].includes(q.status));
     if (!ready.length) return VKModal.toast('Chưa có báo giá đã duyệt để tạo đơn hàng.', 'warning');
     VKModal.open('Tạo đơn hàng từ báo giá', `

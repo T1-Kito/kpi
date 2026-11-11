@@ -1,19 +1,21 @@
 (function () {
-let userState = { rows: [], departments: [], positions: [], roles: [], canAssignRoles: false, q: '', status: '' };
+let userState = {page:1,total:0, rows: [], departments: [], positions: [], roles: [], canAssignRoles: false, q: '', status: '' };
 
+let userListTimer,userListVersion=0;
+document.addEventListener('click',event=>{if(!document.getElementById('usersRoot'))return;const pager=event.target.closest('[data-user-page]');if(pager){userState.page=Number(pager.dataset.userPage);loadUsers();}});
 document.addEventListener('vk:ready', () => loadUsers());
 document.addEventListener('input', (event) => {
     if (!document.getElementById('usersRoot')) return;
     if (event.target.matches('[data-list-search]')) {
         userState.q = event.target.value.toLowerCase();
-        renderUsers();
+        userState.page=1;++userListVersion;clearTimeout(userListTimer);userListTimer=setTimeout(loadUsers,280);
     }
 });
 document.addEventListener('change', (event) => {
     if (!document.getElementById('usersRoot')) return;
     if (event.target.matches('[data-list-status]')) {
         userState.status = event.target.value;
-        renderUsers();
+        userState.page=1;++userListVersion;clearTimeout(userListTimer);userListTimer=setTimeout(loadUsers,280);
     }
 });
 document.addEventListener('click', (event) => {
@@ -31,7 +33,10 @@ document.addEventListener('click', (event) => {
 
 async function loadUsers() {
     if (!document.getElementById('usersRoot')) return;
-    const users = await VKApi.request('/users');
+    const version=++userListVersion;
+    const users = await VKApi.request('/users?'+new URLSearchParams({page_size:20,page:userState.page,q:userState.q,status:userState.status}),{cache:false});
+    if(version!==userListVersion || !document.getElementById('usersRoot'))return;
+    userState.total=users.meta?.total || 0;
     userState.rows = users.data || [];
     userState.departments = users.meta.departments || [];
     userState.positions = users.meta.positions || [];
@@ -41,8 +46,9 @@ async function loadUsers() {
     renderUsers(users.meta.total);
 }
 
-function renderUsers(total = userState.rows.length) {
-    const rows = filterRows();
+function renderUsers(total = userState.total) {
+    const focused=document.activeElement?.matches('[data-list-search]'), caret=focused?document.activeElement.selectionStart:null;
+    const rows = userState.rows;
     document.getElementById('usersRoot').innerHTML = VKTable.fullList({
         title: 'Danh sách người dùng',
         subtitle: 'Quản lý tài khoản, phòng ban, chức vụ và vai trò truy cập.',
@@ -56,7 +62,9 @@ function renderUsers(total = userState.rows.length) {
         }),
         table: renderUserTable(rows),
     });
+    document.getElementById('usersRoot').insertAdjacentHTML('beforeend',VKTable.pager({page:userState.page,page_size:20,total:userState.total},'data-user-page'));
     restoreFilters();
+    if(focused){const input=document.querySelector('[data-list-search]');input?.focus();if(caret!==null)input?.setSelectionRange(caret,caret);}
 }
 
 function renderUserTable(rows) {

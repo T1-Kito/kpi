@@ -114,7 +114,6 @@ class KpiController extends Controller
             ->with('definition:id,code,name')
             ->latest('period_start')
             ->latest('id')
-            ->limit(50)
             ->get();
 
         return response()->json(['data' => $targets]);

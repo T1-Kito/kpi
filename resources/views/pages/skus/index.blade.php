@@ -14,5 +14,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/skus.js?v=20261028-category-tree4"></script>
+<script src="/assets/js/features/skus.js?v=20261101-full-pagination12"></script>
 @endpush

@@ -1,7 +1,7 @@
 <?php
 // Exercises real CLI entrypoint on invalid inputs; never creates or connects to a database.
 $root=dirname(__DIR__).'/deployment/installer';
-$base=['server'=>'localhost','database'=>'VKCRM_Test','auth'=>'windows','email'=>'trial@example.test','password'=>str_repeat('a',16),'company'=>'Trial','confirm_empty_trial'=>true];
+$base=['server'=>'localhost','database'=>'VKCRM_Test','auth'=>'windows','email'=>'trial@example.test','password'=>str_repeat('a',16),'operator_email'=>'operator@example.test','operator_password'=>str_repeat('b',8),'company'=>'Trial','confirm_empty_trial'=>true];
 $cases=[['database'=>'master'],['database'=>'crm;Encrypt=no'],['server'=>'host;Encrypt=no'],['confirm_empty_trial'=>false],['email'=>'invalid'],['password'=>'short']];
 foreach($cases as $case){
     $process=proc_open([PHP_BINARY,'-n',$root.'/initialize-sqlserver.php'],[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes);
@@ -11,3 +11,12 @@ foreach($cases as $case){
     if(file_exists($root.'/.env')||file_exists($root.'/sql-install-started.json'))throw new RuntimeException('Guard wrote install state');
 }
 echo "PASS: 6 SQL CLI pre-write guards; no database connection, no configuration writes.\n";
+
+// Both installer paths must send the two independent identities to PHP.
+foreach (['Program.cs','SqlTrialInstall.cs'] as $file) {
+    $source=file_get_contents($root.'/'.$file);
+    foreach (['operator_email=operatorEmail.Text.Trim()','operator_password=operatorPassword.Text'] as $required) {
+        if (!str_contains($source,$required)) throw new RuntimeException('Missing operator input in '.$file);
+    }
+}
+echo "PASS: SQLite and SQL Server installers forward both administrator fields.\n";

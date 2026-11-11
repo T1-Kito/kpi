@@ -317,6 +317,7 @@ class QuotationDocxMergeService
                 'ngay_chung_tu' => optional($quotation->created_at)->format('d/m/Y'),
                 'ma_hop_dong' => $quotation->code,
                 'ten_hop_dong' => $quotation->name,
+                'loai_hop_dong' => $quotation->contract_type ?? '',
                 'ngay_hop_dong' => optional($quotation->created_at)->format('d/m/Y'),
                 'ngay_hieu_luc' => optional($quotation->effective_date)->format('d/m/Y'),
                 'ngay_het_han' => optional($quotation->expiry_date)->format('d/m/Y'),
@@ -495,7 +496,7 @@ class QuotationDocxMergeService
 
     private function money(float $value): string
     {
-        return number_format($value, 0, ',', '.').' đ';
+        return number_format($value, 0, ',', '.');
     }
 
     private function moneyInWords(float $value): string

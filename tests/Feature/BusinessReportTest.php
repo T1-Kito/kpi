@@ -35,6 +35,11 @@ class BusinessReportTest extends TestCase
                 $this->assertTrue($zip->open($path));
                 foreach ([1,2] as $sheet) $this->assertNotFalse(simplexml_load_string($zip->getFromName('xl/worksheets/sheet'.$sheet.'.xml')));
                 $this->assertStringContainsString('Chi tiết',$zip->getFromName('xl/workbook.xml'));
+                $summaryXml = $zip->getFromName('xl/worksheets/sheet1.xml');
+                $this->assertStringContainsString('showGridLines="0"', $summaryXml);
+                $this->assertStringContainsString('<mergeCell ref="A1:B1"', $summaryXml);
+                $this->assertStringNotContainsString('>type<', $summaryXml);
+                $this->assertStringContainsString('orientation="landscape"', $summaryXml);
                 $zip->close();
             } finally { @unlink($path); }
         }

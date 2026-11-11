@@ -36,7 +36,10 @@ class CustomerController extends Controller
         $customers = Customer::where('tenant_id', $request->user()->tenant_id)->whereNull('merged_into_id');
         DataScope::owned($customers, $request->user(), 'sales_owner_id', 'salesOwner');
         $query = CustomerContact::whereIn('customer_id', $customers->select('customers.id'))->with('customer:id,code,name');
-        if ($search = $request->query('q')) $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('phone', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%")->orWhereHas('customer', fn ($c) => $c->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%")));
+        if ($search = $request->query('q')) $query->where(function($q) use($search) {
+            $q->where(fn($contact)=>\App\Support\VietnameseSearch::apply($contact,$search))
+              ->orWhereHas('customer',fn($customer)=>\App\Support\VietnameseSearch::apply($customer,$search));
+        });
         $rows = $query->latest('id')->paginate(20);
         return response()->json(['data' => $rows->items(), 'meta' => ['total' => $rows->total(), 'page' => $rows->currentPage(), 'last_page' => $rows->lastPage()]]);
     }
@@ -55,17 +58,7 @@ class CustomerController extends Controller
             $query->where('customer_type', $filters['customer_type']);
         }
 
-        if ($search = $request->query('q')) {
-            $query->where(fn ($q) => $q
-                ->where('code', 'like', "%{$search}%")
-                ->orWhere('name', 'like', "%{$search}%")
-                ->orWhere('tax_code', 'like', "%{$search}%")
-                ->orWhere('phone', 'like', "%{$search}%")
-                ->orWhere('email', 'like', "%{$search}%")
-                ->orWhere('identity_number', 'like', "%{$search}%")
-                ->orWhere('address', 'like', "%{$search}%")
-                ->orWhere('billing_address', 'like', "%{$search}%"));
-        }
+        if ($search = $request->query('q')) \App\Support\VietnameseSearch::apply($query,$search);
 
         if ($status = $request->query('status')) {
             $query->where('status', $status);
@@ -103,7 +96,7 @@ class CustomerController extends Controller
             'tax_code' => ['nullable', 'string', 'max:30'],
             'identity_number' => ['nullable', 'regex:/^[0-9]{12}$/', Rule::unique('customers', 'identity_number')->where('tenant_id', $tenantId)],
             'contact_name' => ['nullable', 'string', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:50'],
+            'phone' => ['nullable', 'string', 'max:50', 'phone_number'],
             'email' => ['nullable', 'email', 'max:255'],
             'billing_address' => ['nullable', 'string', 'max:255'],
             'address' => ['nullable', 'string', 'max:255'],
@@ -147,7 +140,7 @@ class CustomerController extends Controller
             'customer_type' => ['nullable', Rule::in(['person', 'organization'])],
             'tax_code' => ['nullable', 'string', 'max:30'],
             'contact_name' => ['nullable', 'string', 'max:255'],
-            'phone' => ['required', 'string', 'max:50'],
+            'phone' => ['required', 'string', 'max:50', 'phone_number'],
             'email' => ['nullable', 'email', 'max:255'],
             'billing_address' => ['nullable', 'string', 'max:255'],
             'address' => ['nullable', 'string', 'max:255'],
@@ -329,7 +322,7 @@ class CustomerController extends Controller
     {
         $data = $request->validate([
             'tax_code' => ['nullable', 'string', 'max:30'],
-            'phone' => ['nullable', 'string', 'max:50'],
+            'phone' => ['nullable', 'string', 'max:50', 'phone_number'],
             'email' => ['nullable', 'email', 'max:255'],
             'exclude_id' => ['nullable', 'integer'],
         ]);
@@ -371,7 +364,7 @@ class CustomerController extends Controller
                 'max:30',
             ],
             'contact_name' => ['nullable', 'string', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:50'],
+            'phone' => ['nullable', 'string', 'max:50', 'phone_number'],
             'email' => ['nullable', 'email', 'max:255'],
             'billing_address' => ['nullable', 'string', 'max:255'],
             'address' => ['nullable', 'string', 'max:255'],
@@ -582,7 +575,7 @@ class CustomerController extends Controller
     {
         return $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:50'],
+            'phone' => ['nullable', 'string', 'max:50', 'phone_number'],
             'email' => ['nullable', 'email', 'max:255'],
             'position' => ['nullable', 'string', 'max:255'],
             'is_primary' => ['nullable', 'boolean'],

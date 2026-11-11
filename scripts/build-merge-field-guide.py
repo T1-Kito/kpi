@@ -18,6 +18,7 @@ modules = dict(quotation='Báo giá', sales_order='Đơn bán hàng', goods_issu
 sets = {m: dict((f['key'], f['label']) for f in fs) for m, fs in catalog.items()}
 common = set.intersection(*(set(fs) for fs in sets.values()))
 examples = {
+    'loai_hop_dong': 'Loại hợp đồng đã nhập, ví dụ: Dịch vụ, mua bán, nguyên tắc',
     'ty_le_dat_coc':'Theo tỷ lệ đã chọn, ví dụ 30%', 'ty_le_con_lai':'Tỷ lệ còn lại, ví dụ 70%',
     'tien_dat_coc':'Tiền cọc dự kiến theo lựa chọn', 'tien_con_lai':'Số tiền còn lại dự kiến',
     'nhan_thanh_toan_dau':'Nhãn tự đổi theo cách thanh toán', 'gia_tri_thanh_toan_dau':'Tiền cọc, thanh toán 100% hoặc nội dung riêng',

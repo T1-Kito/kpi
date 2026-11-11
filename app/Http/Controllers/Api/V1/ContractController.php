@@ -28,7 +28,9 @@ class ContractController extends Controller
         $query = Contract::where('tenant_id', $request->user()->tenant_id)->with(['customer:id,code,name', 'owner:id,name'])->latest('id');
         DataScope::owned($query, $request->user(), 'owner_id', 'owner');
         if ($status = $request->query('status')) $query->where('status', $status);
-        return response()->json(['data' => $query->paginate(min((int) $request->query('page_size', 50), 100))->items()]);
+        if ($search = $request->query('q')) $query->where(fn ($q) => $q->where('code', 'like', "%{$search}%")->orWhere('name', 'like', "%{$search}%")->orWhereHas('customer', fn ($customer) => $customer->where('name', 'like', "%{$search}%")));
+        $rows = $query->paginate(max(1, min((int) $request->query('page_size', 50), 100)));
+        return response()->json(['data' => $rows->items(), 'meta' => ['page'=>$rows->currentPage(), 'page_size'=>$rows->perPage(), 'total'=>$rows->total(), 'last_page'=>$rows->lastPage()]]);
     }
 
     public function show(Request $request, Contract $contract): JsonResponse
@@ -41,7 +43,7 @@ class ContractController extends Controller
     public function store(Request $request): JsonResponse
     {
         $tenantId = $request->user()->tenant_id;
-        $data = $request->validate(['name' => ['required','string','max:255'], 'quotation_id' => ['nullable', Rule::exists('quotations','id')->where('tenant_id',$tenantId)], 'sales_order_id' => ['nullable', Rule::exists('sales_orders','id')->where('tenant_id',$tenantId)], 'customer_id' => ['nullable', Rule::exists('customers','id')->where('tenant_id',$tenantId)], 'effective_date' => ['nullable','date'], 'expiry_date' => ['nullable','date','after_or_equal:effective_date'], 'note' => ['nullable','string','max:2000'], 'milestones' => ['nullable','array'], 'milestones.*.name' => ['required','string','max:255'], 'milestones.*.amount' => ['required','numeric','gt:0'], 'milestones.*.due_date' => ['nullable','date']]);
+        $data = $request->validate(['contract_type'=>['nullable','string','max:100'], 'name' => ['required','string','max:255'], 'quotation_id' => ['nullable', Rule::exists('quotations','id')->where('tenant_id',$tenantId)], 'sales_order_id' => ['nullable', Rule::exists('sales_orders','id')->where('tenant_id',$tenantId)], 'customer_id' => ['nullable', Rule::exists('customers','id')->where('tenant_id',$tenantId)], 'effective_date' => ['nullable','date'], 'expiry_date' => ['nullable','date','after_or_equal:effective_date'], 'note' => ['nullable','string','max:2000'], 'milestones' => ['nullable','array'], 'milestones.*.name' => ['required','string','max:255'], 'milestones.*.amount' => ['required','numeric','gt:0'], 'milestones.*.due_date' => ['nullable','date']]);
         $quotation = !empty($data['quotation_id']) ? Quotation::find($data['quotation_id']) : null;
         $order = !empty($data['sales_order_id']) ? SalesOrder::find($data['sales_order_id']) : null;
         if ($quotation) abort_unless(DataScope::owned(Quotation::whereKey($quotation->id), $request->user(), 'sales_owner_id', 'salesOwner')->exists(), 404);
@@ -54,7 +56,7 @@ class ContractController extends Controller
         $amount = $order?->total_amount ?? $quotation?->total_amount ?? collect($data['milestones'] ?? [])->sum('amount');
         abort_if(!empty($data['milestones']) && abs((float)collect($data['milestones'])->sum('amount') - (float)$amount) > 0.005, 422, 'Tổng mốc thanh toán phải bằng giá trị hợp đồng.');
         $contract = DB::transaction(function () use ($request, $data, $tenantId, $quotation, $order, $customerId, $amount) {
-            $contract = Contract::create(['tenant_id'=>$tenantId,'code'=>$this->codes->next('contracts','code','CTR-',fn($q)=>$q->where('tenant_id',$tenantId)),'name'=>$data['name'],'customer_id'=>$customerId,'quotation_id'=>$quotation?->id,'sales_order_id'=>$order?->id,'owner_id'=>$request->user()->id,'total_amount'=>$amount,'effective_date'=>$data['effective_date']??null,'expiry_date'=>$data['expiry_date']??null,'note'=>$data['note']??null,'status'=>'draft']);
+            $contract = Contract::create(['contract_type'=>$data['contract_type']??null,'tenant_id'=>$tenantId,'code'=>$this->codes->next('contracts','code','CTR-',fn($q)=>$q->where('tenant_id',$tenantId)),'name'=>$data['name'],'customer_id'=>$customerId,'quotation_id'=>$quotation?->id,'sales_order_id'=>$order?->id,'owner_id'=>$request->user()->id,'total_amount'=>$amount,'effective_date'=>$data['effective_date']??null,'expiry_date'=>$data['expiry_date']??null,'note'=>$data['note']??null,'status'=>'draft']);
             $milestones = $data['milestones'] ?? [];
             if (! count($milestones) && $amount > 0) $milestones = [['name' => 'Thanh toán toàn bộ hợp đồng', 'amount' => $amount, 'due_date' => $data['effective_date'] ?? null]];
             foreach ($milestones as $milestone) $contract->milestones()->create($milestone + ['status'=>'pending']);

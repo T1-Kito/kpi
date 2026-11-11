@@ -10,6 +10,16 @@ class ServiceDeskApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_reception_without_customer_or_document_keeps_reporter_and_does_not_create_customer(): void
+    {
+        $this->seed();$token=$this->loginAs('admin@vk-kpi.local');$before=Customer::count();
+        foreach(['ticket_advice','complaint','lost_property','suggestion'] as $category){
+            $ticket=$this->withToken($token)->postJson('/api/v1/service-tickets',['customer_id'=>null,'subject'=>'Tiếp nhận độc lập '.$category,'category'=>$category,'priority'=>'normal','request_details'=>['reporter_name'=>'Khách tại quầy','reporter_phone'=>'0901234567']])->assertCreated()->assertJsonPath('data.customer_id',null)->assertJsonPath('data.request_details.reporter_phone','0901234567')->json('data');
+            $this->withToken($token)->getJson('/api/v1/service-tickets/'.$ticket['id'])->assertOk()->assertJsonPath('data.customer',null);
+        }
+        $this->assertSame($before,Customer::count());
+    }
+
     public function test_ticket_creation_and_customer_lookup_respect_customer_scope(): void
     {
         $this->seed();
@@ -53,11 +63,14 @@ class ServiceDeskApiTest extends TestCase
             'customer_id' => $customer->id,
             'serial_number' => 'SER-SVC-001',
             'product_name' => 'Máy in tại quầy lễ tân',
+            'request_details'=>['reporter_name'=>'Người nhận hàng khác','reporter_phone'=>'0901234567'],
             'subject' => 'Máy in không in được tem',
             'category' => 'warranty',
             'priority' => 'high',
         ])->assertCreated()->json('data');
 
+        $this->assertSame('Người nhận hàng khác',$ticket['request_details']['reporter_name']);
+        $this->assertSame('0901234567',$ticket['request_details']['reporter_phone']);
         $this->withToken($token)->postJson('/api/v1/warranty-claims', [
             'customer_id' => $customer->id,
             'serial_numbers' => ['SER-SVC-001', 'SER-SVC-002'],
@@ -111,6 +124,8 @@ class ServiceDeskApiTest extends TestCase
         $other=Customer::create(['tenant_id'=>$actor->tenant_id,'code'=>'CUS-FEEDBACK-OTHER','name'=>'Other customer','status'=>'active']);
         $quote=\App\Models\Quotation::create(['tenant_id'=>$actor->tenant_id,'customer_id'=>$customer->id,'sales_owner_id'=>$actor->id,'code'=>'Q-FEEDBACK-TEST','status'=>'draft','subtotal_amount'=>0,'tax_amount'=>0,'total_amount'=>0]);
         $this->withToken($token)->getJson('/api/v1/service-desk/documents?type=quotation&customer_id='.$customer->id)->assertOk()->assertJsonFragment(['code'=>$quote->code]);
+        $this->withToken($token)->getJson('/api/v1/service-desk/documents?type=quotation&search='.urlencode($quote->code))->assertOk()->assertJsonFragment(['code'=>$quote->code,'customer_id'=>$customer->id,'customer_name'=>$customer->name]);
+        $this->withToken($token)->getJson('/api/v1/service-desk/documents?type=quotation&search=NO-MATCH-REPORTER')->assertOk()->assertJsonCount(0,'data');
         $payload=['customer_id'=>$customer->id,'subject'=>'Giá chưa phù hợp','category'=>'quotation','priority'=>'normal','document_type'=>'quotation','document_id'=>$quote->id,'related_document'=>'FAKE'];
         $this->withToken($token)->postJson('/api/v1/service-tickets',$payload)->assertCreated()->assertJsonPath('data.related_document',$quote->code)->assertJsonPath('data.document_id',$quote->id);
         $this->withToken($token)->postJson('/api/v1/service-tickets',array_replace($payload,['customer_id'=>$other->id]))->assertNotFound();
@@ -118,4 +133,33 @@ class ServiceDeskApiTest extends TestCase
         $this->withToken($token)->getJson('/api/v1/service-desk/documents?type=quotation&customer_id=99999999')->assertNotFound();
         $this->assertDatabaseCount('service_tickets',1);
     }
+    public function test_context_groups_assignment_notification_and_acceptance(): void
+    {
+        $this->seed();$token=$this->loginAs('admin@vk-kpi.local');
+        $actor=\App\Models\User::where('email','admin@vk-kpi.local')->firstOrFail();
+        $sales=\App\Models\User::where('email','sales@vk-kpi.local')->firstOrFail();
+        $customer=Customer::where('tenant_id',$actor->tenant_id)->firstOrFail();
+        $quote=\App\Models\Quotation::create(['tenant_id'=>$actor->tenant_id,'customer_id'=>$customer->id,'sales_owner_id'=>$actor->id,'code'=>'Q-CONTEXT','status'=>'draft','subtotal_amount'=>0,'tax_amount'=>0,'total_amount'=>0]);
+        $payload=['customer_id'=>$customer->id,'subject'=>'Phản ánh báo giá','category'=>'complaint','priority'=>'normal','document_type'=>'quotation','document_id'=>$quote->id,'assignee_id'=>$sales->id];
+        $ticket=$this->withToken($token)->postJson('/api/v1/service-tickets',$payload)->assertCreated()->json('data');
+        $this->assertDatabaseHas('notifications',['recipient_id'=>$sales->id,'source_type'=>'ServiceTicket','source_id'=>$ticket['id'],'status'=>'unread']);
+        $this->withToken($token)->postJson('/api/v1/service-tickets/'.$ticket['id'].'/accept')->assertForbidden();
+        $this->withToken($this->loginAs($sales->email))->postJson('/api/v1/service-tickets/'.$ticket['id'].'/accept')->assertOk()->assertJsonPath('data.status','in_progress');
+        $this->withToken($this->loginAs($sales->email))->postJson('/api/v1/service-tickets/'.$ticket['id'].'/accept')->assertUnprocessable();
+        $token=$this->loginAs($actor->email);
+        $this->withToken($token)->putJson('/api/v1/service-tickets/'.$ticket['id'],['status'=>'in_progress','assignee_id'=>$actor->id])->assertOk()->assertJsonPath('data.status','open');
+        $this->assertDatabaseHas('notifications',['recipient_id'=>$actor->id,'source_type'=>'ServiceTicket','source_id'=>$ticket['id']]);
+        $this->withToken($token)->postJson('/api/v1/service-tickets/'.$ticket['id'].'/accept')->assertOk();
+        foreach(['ticket_advice','group_sales','resort','online_payment','onsite','lost_property','suggestion','aftercare'] as $group){
+            $this->withToken($token)->postJson('/api/v1/service-tickets',array_replace($payload,['category'=>$group,'document_type'=>null,'document_id'=>null,'assignee_id'=>null]))->assertCreated();
+        }
+        $query='/api/v1/service-tickets?'.http_build_query(['customer_id'=>$customer->id,'document_type'=>'quotation','document_id'=>$quote->id]);
+        $this->withToken($token)->getJson($query)->assertOk()->assertJsonPath('meta.total',1)->assertJsonPath('meta.stats.total',1)->assertJsonPath('meta.stats.open',1)->assertJsonPath('meta.stats.closed',0)->assertJsonPath('data.0.id',$ticket['id']);
+        $compact=$this->withToken($token)->getJson($query.'&compact=1')->assertOk()->assertJsonPath('meta.stats.total',1)->json('data.0');
+        $this->assertArrayNotHasKey('response_sla',$compact);$this->assertArrayNotHasKey('resolution_sla',$compact);$this->assertSame($ticket['id'],$compact['id']);
+        $quote->refresh();$this->assertSame('draft',$quote->status);$this->assertEquals(0,$quote->total_amount);
+        $contract=\App\Models\Contract::create(['tenant_id'=>$actor->tenant_id,'customer_id'=>$customer->id,'owner_id'=>$actor->id,'code'=>'CTR-CONTEXT','name'=>'Hợp đồng thử','total_amount'=>0,'status'=>'draft']);
+        $this->withToken($token)->postJson('/api/v1/service-tickets',array_replace($payload,['document_type'=>'contract','document_id'=>$contract->id]))->assertCreated()->assertJsonPath('data.related_document','CTR-CONTEXT');
+    }
+
 }

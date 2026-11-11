@@ -34,7 +34,7 @@ class CustomerImportController extends Controller
                 $validator = Validator::make($row['data'],[
                     'name'=>['required','string','max:255'],
                     'customer_type'=>['required',Rule::in(['person','organization'])],
-                    'phone'=>['nullable','string','max:50'], 'email'=>['nullable','email','max:255'],
+                    'phone'=>['nullable','string','max:50', 'phone_number'], 'email'=>['nullable','email','max:255'],
                     'tax_code'=>['nullable','regex:/^[0-9.\s-]+$/','max:30'],
                     'address'=>['nullable','string','max:255'], 'contact_name'=>['nullable','string','max:255'],
                     'identity_number'=>['nullable','regex:/^[0-9]{12}$/'],

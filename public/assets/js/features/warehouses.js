@@ -10,7 +10,7 @@ let warehouseRows = [];
 
 async function loadWarehouses() {
     if (!document.getElementById('warehousesRoot')) return;
-    const warehouses = await VKApi.request('/warehouses',{cache:false});
+    const warehouses = await VKApi.allPages('/warehouses',{cache:false});
     warehouseRows = warehouses.data;
     const active = warehouseRows.filter(row => row.status === 'active').length;
     const locations = warehouseRows.reduce((sum, row) => sum + (row.locations?.length || 0), 0);
@@ -34,7 +34,7 @@ async function loadWarehouses() {
 }
 
 function renderWarehouseTable(rows) {
-    return VKTable.renderTable([
+    return VKTable.clientTable('warehouses', [
         { label: 'Mã', render: row => `<span class="mono">${VKTable.escapeHtml(row.code)}</span>` },
         { label: 'Kho', render: row => renderName(row) },
         { label: 'Địa chỉ', render: row => VKTable.escapeHtml(row.address || '-') },

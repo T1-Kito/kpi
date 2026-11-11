@@ -135,7 +135,9 @@ class ImportBatchController extends Controller
     public function leadTemplate(Request $request) {
         $this->available();$actor=$request->user();
         abort_unless($actor->hasPermission('master.view') && $actor->hasPermission('sales.lead.manage') && $actor->dataScope()==='company',403);
-        $path=app(\App\Support\ImportTemplateOptions::class)->build(resource_path('templates/import/khach-tiem-nang-theo-nguon-v1.xlsx'),$actor,'leads');
+        $base=\App\Support\LeadImportTemplate::build(true);
+        try { $path=app(\App\Support\ImportTemplateOptions::class)->build($base,$actor,'leads'); }
+        finally { @unlink($base); }
         return response()->download($path,'Mẫu khách hàng tiềm năng.xlsx',['Cache-Control'=>'private, no-store, max-age=0'])->deleteFileAfterSend(true);
     }
     public function index(Request $request) {

@@ -137,7 +137,7 @@
             {label:'Trạng thái',render:row=>`${esc(({draft:'Bản nháp',active:'Đang áp dụng',inactive:'Phiên bản cũ'})[row.status] || row.status || '—')}<br><small>${(row.plans || []).filter(plan=>plan.status==='active').length} kế hoạch tự động</small>`},
             {label:'Thao tác',render:row=>row.status === 'draft' ? `<button class="btn secondary small" data-kpi-bundle-edit="${row.id}">Sửa</button> <button class="btn primary small" data-kpi-bundle-publish="${row.id}">Phát hành</button>` : `<button class="btn primary small" data-kpi-bundle-apply="${row.id}">Giao theo bộ</button> <button class="btn secondary small" data-kpi-bundle-duplicate="${row.id}">Tạo phiên bản mới</button>`},
         ], (data.bundles || []).filter(row=>row?.code), 'Chưa có bộ KPI mẫu.');
-        return `<section class="module-panel" style="margin-bottom:20px"><div class="panel-head"><div><h2>Bộ KPI theo vị trí / phòng ban</h2><span>Tạo một lần, phát hành phiên bản rồi giao đồng thời nhiều chỉ tiêu.</span></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn secondary small" data-kpi-standard-setup>Thiết lập nhanh KPI chuẩn</button><button class="btn primary small" data-kpi-bundle-create>Tạo bộ KPI</button></div></div>${rows}<p class="form-note">“Thiết lập nhanh” tự nhận diện phòng ban, tạo bộ KPI tháng và kế hoạch cho các kỳ sau. Có thể tạo phiên bản riêng khi doanh nghiệp cần thay đổi mục tiêu.</p></section>`;
+        return `<section class="module-panel kpi-bundle-panel" style="margin-bottom:20px"><div class="panel-head"><div><h2>Bộ KPI theo vị trí / phòng ban</h2><span>Tạo một lần, phát hành phiên bản rồi giao đồng thời nhiều chỉ tiêu.</span></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn secondary small" data-kpi-standard-setup>Thiết lập nhanh KPI chuẩn</button><button class="btn primary small" data-kpi-bundle-create>Tạo bộ KPI</button></div></div>${rows}<p class="form-note">“Thiết lập nhanh” tự nhận diện phòng ban, tạo bộ KPI tháng và kế hoạch cho các kỳ sau. Có thể tạo phiên bản riêng khi doanh nghiệp cần thay đổi mục tiêu.</p></section>`;
     }
 
     function confirmKpi(title, message, button, action) {
@@ -424,7 +424,7 @@
                 VKModal.toast('Đã phân KPI. Tài khoản thuộc nhóm sẽ tự nhận.');
                 document.dispatchEvent(new CustomEvent('vk:kpi:changed'));
                 await loadKpiSettings();
-            }, {className:'wide-modal',submitText:'Lưu phân KPI'});
+            }, {className:'wide-modal kpi-assignment-modal',submitText:'Lưu phân KPI'});
         const form = document.getElementById('modalForm');
         form.elements.kpi_definition_id.addEventListener('change', () => {
             form.querySelector('#kpi_selected_definition_name').value = data.activeDefinitions.find(item => String(item.id) === form.elements.kpi_definition_id.value)?.name || '';

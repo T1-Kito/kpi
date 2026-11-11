@@ -8,4 +8,6 @@ if($diagnostic['reason']!=='FOREIGN_KEY_CASCADE'||$diagnostic['native']!==1785||
 if(str_contains(json_encode($diagnostic),$secret)||str_contains(json_encode($diagnostic),'private'))throw new RuntimeException('Secret disclosed');
 $unsafe=vkSqlDiagnostic(new RuntimeException($secret),'bad '.$secret,'path/'.$secret);
 if($unsafe['stage']!=='UNKNOWN'||$unsafe['migration']!==null)throw new RuntimeException('Untrusted identifiers disclosed');
+$admin=vkSqlDiagnostic(new RuntimeException('Cần email riêng và mật khẩu ít nhất 8 ký tự cho Admin thường.'),'INPUT',null);
+if($admin['reason']!=='ADMIN_INPUT')throw new RuntimeException('Administrator input classification failed');
 echo "PASS: safe SQLSTATE/native/migration classification; raw errors and credentials suppressed.\n";

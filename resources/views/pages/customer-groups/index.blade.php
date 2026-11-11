@@ -6,5 +6,5 @@
 <div id="customerGroupsRoot" aria-live="polite"></div>
 @endsection
 @push('scripts')
-<script src="/assets/js/features/customer-groups-page.js?v=20261025-4"></script>
+<script src="/assets/js/features/customer-groups-page.js?v=20261031-full-pagination12"></script>
 @endpush

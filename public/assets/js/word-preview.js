@@ -15,6 +15,7 @@
         }
     }
     async function alignPageImages(file, stage) {
+        addZoomControls(stage);
         if (!window.JSZip || !stage?.isConnected) return;
         const zip = await window.JSZip.loadAsync(file);
         const part = zip.file('word/document.xml');
@@ -48,6 +49,21 @@
                 if (Number.isFinite(shift)) box.style[property] = `calc(${box.style[property] || '0px'} + ${shift}px)`;
             }
         });
+    }
+    function addZoomControls(stage) {
+        const wrapper = stage?.querySelector?.('.docx-wrapper');
+        if (!wrapper || stage.querySelector('[data-word-zoom]') || !stage.ownerDocument) return;
+        let percent = 100;
+        const toolbar = stage.ownerDocument.createElement('div');
+        toolbar.dataset.wordZoom = 'true';
+        toolbar.style.cssText = 'display:flex;justify-content:flex-end;align-items:center;gap:8px;padding:8px;background:#f8fafc;position:sticky;top:0;z-index:2';
+        toolbar.innerHTML = '<button type="button" class="btn small" aria-label="Thu nhỏ">−</button><span aria-live="polite">100%</span><button type="button" class="btn small" aria-label="Phóng to">+</button><button type="button" class="btn small">Đặt lại</button>';
+        const buttons = toolbar.querySelectorAll('button');
+        function apply(value) { percent = Math.max(50, Math.min(200, value)); wrapper.style.zoom = String(percent / 100); toolbar.querySelector('span').textContent = `${percent}%`; }
+        buttons[0].addEventListener('click', () => apply(percent - 10));
+        buttons[1].addEventListener('click', () => apply(percent + 10));
+        buttons[2].addEventListener('click', () => apply(100));
+        stage.prepend(toolbar);
     }
     window.VKWordPreview = {alignPageImages,ensureReady};
 })();

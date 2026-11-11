@@ -40,6 +40,7 @@ test('dashboard does not write to a detached page',async()=>{
 test('chairman dashboard separates period money from current care and links reports to selected month',()=>{
     const table={escapeHtml:value=>String(value ?? '').replaceAll('<','&lt;'),money:value=>String(value),renderTable:()=>'<table></table>',statusBadge:String};
     const context=vm.createContext({VKTable:table,Date,Math});
+    vm.runInContext(source.slice(source.indexOf('function dashboardMonthPicker('),source.indexOf("document.addEventListener('click',event=>{",source.indexOf('function dashboardMonthPicker('))),context);
     vm.runInContext(source.slice(source.indexOf('function renderChairmanDashboard('),source.indexOf('function welcomeTitle(')),context);
     const data={period:'2030-02',generated_at:'2030-02-01T00:00:00Z',revenue:100,collections:40,orders:1,receivables:60,overdue_tasks:0,governance:{},purchase:{},operations:{},funnel:{},monthly_revenue:[{label:'02/2030',revenue:100}],receivable_aging:{days_1_30:0,days_31_60:0,over_60:0},recent_orders:[],employee_work:[]};
     const html=context.renderChairmanDashboard(data);

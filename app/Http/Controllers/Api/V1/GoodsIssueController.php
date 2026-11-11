@@ -38,6 +38,8 @@ class GoodsIssueController extends Controller
                 'items.sku:id,sku_code,name,unit',
             ]);
         DataScope::warehouseScope($query, $request->user());
+        if ($search = trim((string)$request->query('q',''))) {$term='%'.$search.'%';$query->where(function($q)use($term){$q->where('code','like',$term)->orWhereHas('warehouse',fn($u)=>$u->where('name','like',$term))->orWhereHas('salesOrder',fn($u)=>$u->where('code','like',$term));});}
+        if($status=$request->query('status'))$query->where('status',$status);
         $rows = $query->latest('id')->paginate($pageSize);
 
         return response()->json([
@@ -54,7 +56,7 @@ class GoodsIssueController extends Controller
             'warehouse_id' => ['required', Rule::exists('warehouses', 'id')->where('tenant_id', $tenantId)],
             'warehouse_location_id' => ['nullable', 'integer'],
             'recipient_name' => ['nullable', 'string', 'max:255'],
-            'recipient_phone' => ['nullable', 'string', 'max:50'],
+            'recipient_phone' => ['nullable', 'string', 'max:50', 'phone_number'],
             'recipient_address' => ['nullable', 'string', 'max:2000'],
             'delivery_location' => ['nullable', 'string', 'max:255'],
             'issue_reason' => ['nullable', 'string', 'max:500'],

@@ -1,6 +1,6 @@
 (function () {
 let taskState = {
-    rows: [],
+    rows: [], page:1, total:0, lastPage:1, stats:{}, assignees:[],
     q: '',
     status: '',
     priority: '',
@@ -44,13 +44,14 @@ const taskTypes = [
     { value: 'alert_resolution', label: 'Xử lý cảnh báo', module: 'kpi', priority: 'high' },
 ];
 
+let taskSearchTimer, taskLoadVersion=0;
 document.addEventListener('vk:ready', () => loadTasks());
 
 document.addEventListener('input', (event) => {
     if (!document.getElementById('tasksRoot')) return;
     if (event.target.matches('[data-task-search]')) {
         taskState.q = event.target.value.toLowerCase();
-        renderTasks();
+        taskState.page=1;clearTimeout(taskSearchTimer);++taskLoadVersion;taskSearchTimer=setTimeout(()=>loadTasks(),280);
     }
 });
 
@@ -72,12 +73,14 @@ document.addEventListener('change', (event) => {
     if (event.target.matches('[data-task-priority]')) taskState.priority = event.target.value;
     if (event.target.matches('[data-task-assignee]')) taskState.assignee = event.target.value;
     if (event.target.matches('[data-task-due]')) taskState.due = event.target.value;
-    renderTasks();
+    taskState.page=1;loadTasks();
 });
 
 document.addEventListener('click', (event) => {
     if (!document.getElementById('tasksRoot')) return;
 
+    const page=event.target.closest('[data-task-page]');
+    if(page && !page.disabled){taskState.page=Number(page.dataset.taskPage);loadTasks();return;}
     if (event.target.matches('[data-create-task]')) openTaskModal();
 
     if (event.target.matches('[data-back-task-list]')) {
@@ -98,7 +101,7 @@ document.addEventListener('click', (event) => {
         taskState.tab = event.target.dataset.taskTab;
         taskState.status = '';
         taskState.due = '';
-        renderTasks();
+        taskState.page=1;loadTasks();
         return;
     }
 
@@ -129,8 +132,16 @@ async function loadTasks(options = {}) {
         taskState.detail = null;
         taskState.detailTab = 'overview';
     }
-    const tasks = await VKApi.request('/tasks?page_size=100');
+    const version=++taskLoadVersion;
+    const query=new URLSearchParams({page:taskState.page,page_size:20,tab:taskState.tab});
+    for(const [key,value] of Object.entries({q:taskState.q,status:taskState.status,priority:taskState.priority,assignee_id:taskState.assignee,due:taskState.due}))if(value)query.set(key,value);
+    const tasks = await VKApi.request(`/tasks?${query}`,{cache:false});
+    if(version!==taskLoadVersion || !document.getElementById('tasksRoot'))return;
     taskState.rows = tasks.data || [];
+    taskState.total=tasks.meta.total;taskState.lastPage=tasks.meta.last_page || 1;
+    taskState.stats=tasks.meta.stats || {};taskState.assignees=tasks.meta.assignees || [];
+    const requestedTask = new URLSearchParams(window.location.search).get('open');
+    if (requestedTask && /^\d+$/.test(requestedTask)) { await openTaskDetail(requestedTask); return; }
     if (taskState.view === 'detail' && taskState.selectedId) {
         await openTaskDetail(taskState.selectedId);
         return;
@@ -138,7 +149,8 @@ async function loadTasks(options = {}) {
     renderTasks(tasks.meta.total);
 }
 
-function renderTasks(total = taskState.rows.length) {
+function renderTasks(total = taskState.total) {
+    const searchFocused=document.activeElement?.matches('[data-task-search]'),cursor=searchFocused?document.activeElement.selectionStart:null;
     const rows = filterRows();
     document.getElementById('tasksRoot').innerHTML = `
         ${renderTaskStats()}
@@ -149,24 +161,22 @@ function renderTasks(total = taskState.rows.length) {
             <div class="task-table-footer">
                 <span>Hiển thị ${VKTable.money(rows.length)} / ${VKTable.money(total)} công việc</span>
                 <div>
-                    <select aria-label="Số dòng mỗi trang">
-                        <option>20 / trang</option>
-                    </select>
-                    <button class="btn small" type="button" disabled>‹</button>
-                    <button class="btn small primary" type="button">1</button>
-                    <button class="btn small" type="button" disabled>›</button>
+                    <button class="btn small" type="button" data-task-page="${taskState.page-1}" ${taskState.page<=1?'disabled':''}>‹ Trước</button>
+                    <span>Trang ${taskState.page} / ${taskState.lastPage}</span>
+                    <button class="btn small" type="button" data-task-page="${taskState.page+1}" ${taskState.page>=taskState.lastPage?'disabled':''}>Sau ›</button>
                 </div>
             </div>
         </section>
     `;
     restoreFilters();
+    if(searchFocused){const input=document.querySelector('[data-task-search]');input?.focus();if(cursor!==null)input?.setSelectionRange(cursor,cursor);}
 }
 
 function renderTaskStats() {
-    const overdue = taskState.rows.filter(row => isOverdue(row)).length;
-    const today = taskState.rows.filter(row => isToday(row.due_at)).length;
-    const week = taskState.rows.filter(row => isThisWeek(row.due_at)).length;
-    const completed = taskState.rows.filter(row => row.status === 'completed').length;
+    const overdue = (taskState.stats.overdue || 0);
+    const today = (taskState.stats.today || 0);
+    const week = (taskState.stats.week || 0);
+    const completed = (taskState.stats.completed || 0);
 
     return `
         <div class="task-stat-row">
@@ -174,7 +184,7 @@ function renderTaskStats() {
             ${taskStat('Hôm nay', today, 'Đến hạn hôm nay', 'warning')}
             ${taskStat('Tuần này', week, 'Đến hạn trong tuần', 'info')}
             ${taskStat('Hoàn thành', completed, 'Đã xử lý', 'success')}
-            ${taskStat('Tất cả', taskState.rows.length, 'Công việc', 'neutral')}
+            ${taskStat('Tất cả', taskState.stats.all || 0, 'Công việc', 'neutral')}
         </div>
     `;
 }
@@ -200,7 +210,7 @@ function taskStat(label, value, note, tone) {
 }
 
 function renderTaskFilters() {
-    const assignees = uniqueBy(taskState.rows.map(row => row.assignee).filter(Boolean), 'id');
+    const assignees = taskState.assignees;
     return `
         <div class="task-filter-bar">
             <label class="list-search">
@@ -231,21 +241,14 @@ function renderTaskFilters() {
                 ${option('overdue', 'Quá hạn', taskState.due)}
                 ${option('today', 'Hôm nay', taskState.due)}
                 ${option('week', 'Tuần này', taskState.due)}
-                ${option('none', 'Chưa có hạn', taskState.due)}
+                ${option('none', 'Chưa đặt hạn / chưa cấu hình SLA', taskState.due)}
             </select>
         </div>
     `;
 }
 
 function renderTaskTabs() {
-    const counts = {
-        all: taskState.rows.length,
-        overdue: taskState.rows.filter(row => isOverdue(row)).length,
-        today: taskState.rows.filter(row => isToday(row.due_at)).length,
-        week: taskState.rows.filter(row => isThisWeek(row.due_at)).length,
-        pending: taskState.rows.filter(row => ['new', 'in_progress', 'overdue'].includes(row.status)).length,
-        completed: taskState.rows.filter(row => row.status === 'completed').length,
-    };
+    const counts = taskState.stats;
     const tabs = [
         ['all', 'Tất cả'],
         ['overdue', 'Quá hạn'],
@@ -284,16 +287,7 @@ function renderTaskTable(rows) {
 }
 
 function filterRows() {
-    return taskState.rows.filter(row => {
-        const haystack = `${row.code || ''} ${row.title || ''} ${row.task_type || ''} ${row.assignee?.name || ''} ${row.department?.name || ''} ${row.source_type || ''}`.toLowerCase();
-        const matchText = !taskState.q || haystack.includes(taskState.q);
-        const matchStatus = !taskState.status || row.status === taskState.status;
-        const matchPriority = !taskState.priority || row.priority === taskState.priority;
-        const matchAssignee = !taskState.assignee || String(row.assignee?.id || '') === taskState.assignee;
-        const matchDue = !taskState.due || matchDueFilter(row, taskState.due);
-        const matchTab = matchTabFilter(row, taskState.tab);
-        return matchText && matchStatus && matchPriority && matchAssignee && matchDue && matchTab;
-    });
+    return taskState.rows;
 }
 
 function restoreFilters() {
@@ -400,6 +394,16 @@ async function openTaskModal() {
 }
 
 async function updateTaskStatus(id, status) {
+    const task = taskState.rows.find(row => String(row.id) === String(id)) || taskState.detail;
+    if (status === 'completed' && task?.task_type === 'lead_follow_up') {
+        VKModal.open('Ghi nhận kết quả chăm sóc', VKModal.field('reason','Kết quả trao đổi với khách'), async form => {
+            const reason = form.elements.reason.value.trim();
+            if (!reason) throw new Error('Cần ghi kết quả chăm sóc trước khi hoàn thành.');
+            await VKApi.request(`/tasks/${id}/status`, {method:'POST',body:JSON.stringify({status,reason})});
+            VKModal.close(); await loadTasks(); VKModal.toast('Đã lưu kết quả chăm sóc.');
+        }, {submitText:'Lưu kết quả'});
+        return;
+    }
     await VKApi.request(`/tasks/${id}/status`, {
         method: 'POST',
         body: JSON.stringify({ status, reason: `Cập nhật từ màn hình công việc: ${VKTable.translateStatus(status)}` }),

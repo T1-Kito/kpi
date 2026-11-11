@@ -1,0 +1,23 @@
+VK CRM 0.8.26 — CẬP NHẬT BÁO GIÁ VÀ HỢP ĐỒNG
+
+CÁCH CẬP NHẬT
+1. Giải nén ZIP ngoài thư mục CRM đang dùng.
+2. Ngừng thao tác trên các máy con và dừng máy chủ CRM.
+3. Mở Setup.exe mới, chọn Cập nhật bản đã cài và đúng thư mục CRM cũ.
+4. Đợi sao lưu, kiểm chứng và kiểm tra cấu trúc thành công.
+5. Khởi động lại CRM; các máy con nhấn Ctrl + F5.
+
+THAY ĐỔI
+- Báo giá có lựa chọn giá đã/chưa bao gồm VAT; giữ khi sửa, nhân bản và tạo phiên bản mới.
+- Hợp đồng có Loại hợp đồng; bổ sung trường trộn loai_hop_dong và file tra cứu.
+- Thông báo thiếu số điện thoại bằng tiếng Việt.
+- Danh sách dùng chiều cao màn hình, phân trang ở cuối; sửa con trỏ chờ trên nút phân trang vô hiệu.
+- Bao gồm các thay đổi phân trang và tìm kiếm của bản 0.8.25.
+
+LƯU Ý
+- Chưa thay giá SKU-00010: cần đối chiếu giá gốc.
+- Chưa có cấu hình SLA thì không tự sinh hạn công việc; quản trị thiết lập thời hạn phù hợp.
+- Giữ cấu hình kết nối, dữ liệu, tài khoản và bản quyền của bản đã cài.
+- Không cài mới đè database; không bỏ qua sao lưu và kiểm tra cấu trúc.
+- Gói không chứa database local, .env hoặc khóa riêng cấp bản quyền.
+- Cần kiểm tra vận hành trên SQL Server thực tế của khách sau cập nhật.

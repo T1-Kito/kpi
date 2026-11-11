@@ -69,7 +69,7 @@ final class ProcurementSourceImport
             $current=$item?$this->snapshot($item,$kind):[];$revision=$automatic && $link?(int)$link->source_revision+(hash_equals($link->source_hash,ImportRevision::hash($values))?0:1):(int)$raw['source_revision'];
             $plan=ImportRevision::plan($link?(array)$link:null,$revision,$values,$current,$kind!=='locations');$final=$plan['values'];
             $rules=['name'=>'required|string|max:255','status'=>'required|in:active,inactive'];
-            if($kind==='suppliers')$rules+=['tax_code'=>'nullable|string|max:30|regex:/^[0-9.\s-]+$/','phone'=>'nullable|string|max:50','email'=>'nullable|email|max:255','address'=>'nullable|string|max:255','contact_name'=>'nullable|string|max:255','payment_terms'=>'nullable|string|max:255'];
+            if($kind==='suppliers')$rules+=['tax_code'=>'nullable|string|max:30|regex:/^[0-9.\s-]+$/','phone'=>'nullable|string|max:50|phone_number','email'=>'nullable|email|max:255','address'=>'nullable|string|max:255','contact_name'=>'nullable|string|max:255','payment_terms'=>'nullable|string|max:255'];
             if($kind==='warehouses')$rules+=['address'=>'nullable|string|max:255'];
             if($kind==='locations')$rules+=['code'=>'nullable|string|max:50'];
             Validator::make($final,$rules,ImportValidation::MESSAGES,$labels)->validate();

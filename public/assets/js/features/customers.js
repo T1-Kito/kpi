@@ -1,6 +1,7 @@
 (function () {
 let customerState = { rows: [], q: '', status: '', customerType: '', view: 'list', currentId: null, detailCache: {} };
 customerState.page = 1;
+customerState.duplicatePage = 1;
 customerState.pageSize = 20;
 customerState.extraColumns = false;
 let customerSearchTimer, customerLoadVersion = 0;
@@ -35,6 +36,7 @@ document.addEventListener('change', (event) => {
 });
 document.addEventListener('click', (event) => {
     if (!document.getElementById('customersRoot')) return;
+    const duplicatePage=event.target.closest('[data-duplicate-page]');if(duplicatePage){customerState.duplicatePage=Number(duplicatePage.dataset.duplicatePage);loadCustomerDuplicates();return;}
     const pageButton = event.target.closest('[data-customers-page]');
     if (pageButton) { if(pageButton.disabled)return; customerState.page = Number(pageButton.dataset.customersPage); loadCustomers(); return; }
     if(event.target.closest('[data-customers-refresh]')){loadCustomers();return;}
@@ -209,7 +211,7 @@ async function loadCustomerDuplicates() {
     const root = document.getElementById('customersRoot');
     if (!root) return;
     root.innerHTML = '<div class="customer360-loading">Đang tải hàng chờ xét trùng…</div>';
-    const response = await VKApi.request('/customer-duplicate-reviews', { cache: false });
+    const response = await VKApi.request('/customer-duplicate-reviews?page='+customerState.duplicatePage, { cache: false });
     customerState.duplicateReviews = response.data || [];
     root.innerHTML = `<section class="customer360-page customer-duplicate-page">
         <header class="customer360-hero"><div class="customer360-hero-top">
@@ -217,7 +219,7 @@ async function loadCustomerDuplicates() {
             <button class="btn primary small" type="button" data-customer-duplicates-scan>Quét khách nghi trùng</button>
         </div><div class="customer360-identity"><div><p>Chất lượng dữ liệu</p><h1>Hàng chờ xét khách trùng</h1><span>${VKTable.money(response.meta?.total || 0)} trường hợp cần người có quyền kiểm tra</span></div></div></header>
         <div class="customer-duplicate-list">${customerState.duplicateReviews.length ? customerState.duplicateReviews.map(renderDuplicateReview).join('') : '<article class="customer360-card customer360-empty">Chưa có trường hợp cần xét. Bấm “Quét khách nghi trùng” để kiểm tra dữ liệu hiện có.</article>'}</div>
-    </section>`;
+    </section>`+VKTable.pager(response.meta || {},'data-duplicate-page');
 }
 
 function renderDuplicateReview(review) {
@@ -480,6 +482,8 @@ async function openCustomerModal(id = null, readOnly = false, asPage = false) {
         body.insertAdjacentHTML('beforeend', '<div class="customer-detail-actions"><button type="button" class="btn" data-customer-transactions>Giao dịch & người liên hệ</button><button type="button" class="btn primary" data-customer-detail-edit>Chỉnh sửa khách hàng</button></div>');
         body.querySelector('[data-customer-detail-edit]').onclick = () => openCustomerModal(Number(id));
         body.querySelector('[data-customer-transactions]').onclick = () => openCustomerTransactions(id);
+        const faceIdPanel = window.VKCustomerFaceId?.mount(body, id);
+        if (faceIdPanel) body.querySelector('.customer-detail-actions').prepend(faceIdPanel.button);
         if (asPage) {
             const actions=body.querySelector('.customer-detail-actions');
             actions.classList.add('customer-page-view-actions');

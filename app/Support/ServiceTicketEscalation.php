@@ -19,7 +19,7 @@ final class ServiceTicketEscalation
                 foreach(['response','resolution'] as $kind) {
                     $state=TicketDeadline::describe($ticket,$kind)['state'];
                     if(!in_array($state,['warning','overdue'],true))continue;
-                    $recipients=array_unique(array_filter([$ticket->assignee_id,...($rules['recipient_ids'] ?? [])]));
+                    $recipients=array_unique(array_filter([$ticket->assignee_id,$ticket->coordinator_id,$ticket->supervisor_id,...($rules['recipient_ids'] ?? [])]));
                     foreach($recipients as $id) {
                         $user=User::where('tenant_id',$ticket->tenant_id)->whereKey($id)->where('is_active',true)->first();
                         if(!$user || !$user->hasPermission('service.ticket.view') || !TicketAccess::query($user)->whereKey($ticket->id)->exists())continue;

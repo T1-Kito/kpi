@@ -28,10 +28,16 @@ class BusinessReportController extends Controller
         $summary = [[$report['title']], ['Thời điểm xuất (giờ Việt Nam)', now()->setTimezone('Asia/Ho_Chi_Minh')],
             [$report['meta']['basis']], ['Số dòng', $report['meta']['count']]];
         $labels = ['type' => 'Loại', 'from' => 'Từ ngày', 'to' => 'Đến ngày', 'q' => 'Tìm kiếm', 'status' => 'Trạng thái', 'user_id' => 'ID nhân viên', 'customer_id' => 'ID khách hàng', 'supplier_id' => 'ID nhà cung cấp', 'warehouse_id' => 'ID kho', 'sku_id' => 'ID mã hàng', 'debt_status' => 'Tình trạng nợ'];
-        foreach ($filters as $key => $value) if ($value !== null && $value !== '') $summary[] = [$labels[$key] ?? $key, in_array($key, ['from', 'to']) ? $workbooks->dateCell($value) : (string) $value];
+        foreach ($filters as $key => $value) if ($value !== null && $value !== '') {
+            if ($key === 'type') continue; // The report title already identifies the report.
+            if ($key === 'status') $value = ['new'=>'Mới','open'=>'Đang mở','in_progress'=>'Đang xử lý','pending_customer'=>'Chờ khách phản hồi','resolved'=>'Đã xử lý','closed'=>'Đã đóng','overdue'=>'Quá hạn','completed'=>'Hoàn thành','cancelled'=>'Đã hủy','draft'=>'Bản nháp','approved'=>'Đã duyệt','rejected'=>'Từ chối','confirmed'=>'Đã xác nhận','awaiting_delivery'=>'Chờ giao hàng','delivered'=>'Đã giao hàng','invoiced'=>'Đã xuất hóa đơn','issued'=>'Đã phát hành','paid'=>'Đã thanh toán','partially_paid'=>'Thanh toán một phần','received'=>'Đã nhập kho','receipt'=>'Nhập kho','issue'=>'Xuất kho','stock_take_adjustment'=>'Điều chỉnh kiểm kê'][(string)$value] ?? 'Trạng thái đã chọn';
+            if ($key === 'debt_status') $value = $value === 'overdue' ? 'Quá hạn' : 'Chưa đến hạn';
+            $summary[] = [$labels[$key] ?? $key, in_array($key, ['from', 'to']) ? $workbooks->dateCell($value) : (string) $value];
+        }
         $summary[] = ['Chỉ tiêu', 'Tổng'];
         $header = count($summary);
         foreach ($report['totals'] as $column => $value) $summary[] = [$report['columns'][$column], $value];
+        if (!$report['totals']) $summary[] = ['Kết quả', $report['meta']['count'] ? 'Xem dữ liệu tại trang Chi tiết' : 'Không có dữ liệu phù hợp với bộ lọc'];
         $rows = $report['rows'];
         if (in_array($filters['type'], ['invoices', 'receivables'])) foreach ($rows as &$row) {
             $row[1] = $workbooks->dateCell($row[1]);
@@ -39,7 +45,8 @@ class BusinessReportController extends Controller
         }
         unset($row);
         $details = [[$report['title']], [$report['meta']['basis']], [], $report['columns'], ...$rows];
-        $path = $workbooks->writeSheets([['Tổng hợp', $summary, $header], ['Chi tiết', $details, 4]]);
+        if (!$rows) $details[] = ['Không có dữ liệu phù hợp với bộ lọc đã chọn.'];
+        $path = $workbooks->writeSheets([['Tổng hợp', $summary, $header], ['Chi tiết', $details, 4]], true);
         try {
             app(\App\Support\AuditLogger::class)->record('business_report', null, 'export_business_report', $request->user(), null, [
                 'filters' => $filters, 'row_count' => $report['meta']['count'], 'scope' => $report['meta']['scope'], 'columns' => $report['columns'],

@@ -98,7 +98,7 @@ async function loadSettings(options = {}) {
     const fallback = { data: [], meta: { total: 0 } };
     const [me, slaPolicies, approval, salesApproval, assignment, operational] = await Promise.all([
         safeRequest('/me'),
-        safeRequest('/sla-policies?page_size=100'),
+        VKApi.allPages('/sla-policies').catch(()=>({data:[]})),
         safeRequest('/tenant/procurement-approval'),
         safeRequest('/tenant/sales-quotation-approval'),
         safeRequest('/tenant/work-assignment'),
@@ -472,7 +472,7 @@ function renderCompany(me) {
 }
 
 function renderLogoSetting(me) {
-    const logoUrl = me.tenant?.logo_url || '';
+    const logoUrl = me.tenant?.logo_url || '/assets/branding/vk-software-logo.png';
 
     return `
         <div class="logo-setting">
@@ -487,7 +487,7 @@ function renderLogoSetting(me) {
                     <span>Chọn logo</span>
                 </label>
                 <button class="btn primary" type="button" data-save-logo>Lưu logo</button>
-                <small>Khuyến nghị PNG/WebP nền trong suốt, dung lượng dưới 2MB.</small>
+                <small>Áp dụng cho menu và màn hình đăng nhập. Khuyến nghị PNG/WebP nền trong suốt, dung lượng dưới 2MB.</small>
             </div>
         </div>
     `;

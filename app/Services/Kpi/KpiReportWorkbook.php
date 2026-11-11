@@ -35,7 +35,7 @@ class KpiReportWorkbook
         return $this->writeSheets($sheets);
     }
 
-    public function writeSheets(array $sheets): string
+    public function writeSheets(array $sheets, bool $presentation = false): string
     {
         $path = tempnam(sys_get_temp_dir(), 'kpi-xlsx-');
         try {
@@ -48,7 +48,7 @@ class KpiReportWorkbook
                 $types .= '<Override PartName="/xl/worksheets/sheet'.$id.'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>';
                 $book .= '<sheet name="'.$name.'" sheetId="'.$id.'" r:id="rId'.$id.'"/>';
                 $rels .= '<Relationship Id="rId'.$id.'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'.$id.'.xml"/>';
-                $files['xl/worksheets/sheet'.$id.'.xml'] = $this->sheet($rows, $header);
+                $files['xl/worksheets/sheet'.$id.'.xml'] = $this->sheet($rows, $header, $presentation);
             }
             $files['[Content_Types].xml'] = $types.'</Types>';
             $files['_rels/.rels'] = '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';
@@ -58,6 +58,16 @@ class KpiReportWorkbook
             $files['xl/styles.xml'] = str_replace('<fonts count="2">', '<numFmts count="2"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/><numFmt numFmtId="165" formatCode="dd/mm/yyyy hh:mm"/></numFmts><fonts count="2">', $files['xl/styles.xml']);
             $files['xl/styles.xml'] = str_replace('<cellXfs count="3">', '<cellXfs count="6">', $files['xl/styles.xml']);
             $files['xl/styles.xml'] = str_replace('</cellXfs>', '<xf fontId="0" fillId="0" borderId="0" xfId="0" numFmtId="164" applyNumberFormat="1"/><xf fontId="0" fillId="0" borderId="0" xfId="0" numFmtId="165" applyNumberFormat="1"/><xf fontId="0" fillId="0" borderId="0" xfId="0" numFmtId="3" applyNumberFormat="1"/></cellXfs>', $files['xl/styles.xml']);
+            if ($presentation) {
+                $style = $files['xl/styles.xml'];
+                $style = str_replace('<fonts count="2">', '<fonts count="3">', $style);
+                $style = str_replace('</fonts>', '<font><b/><sz val="15"/><color rgb="FF18385C"/><name val="Calibri"/></font></fonts>', $style);
+                $style = str_replace('<borders count="1"><border/></borders>', '<borders count="2"><border/><border><left style="thin"><color rgb="FFE1E7EF"/></left><right style="thin"><color rgb="FFE1E7EF"/></right><top style="thin"><color rgb="FFE1E7EF"/></top><bottom style="thin"><color rgb="FFE1E7EF"/></bottom></border></borders>', $style);
+                $style = str_replace('borderId="0" xfId="0"', 'borderId="1" xfId="0"', $style);
+                $style = str_replace('<cellXfs count="6">', '<cellXfs count="7">', $style);
+                $style = str_replace('</cellXfs>', '<xf fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"><alignment vertical="center"/></xf></cellXfs>', $style);
+                $files['xl/styles.xml'] = $style;
+            }
             if (file_put_contents($path, $this->zip($files)) === false) {
                 throw new RuntimeException('Không thể hoàn tất Excel.');
             }
@@ -91,12 +101,19 @@ class KpiReportWorkbook
         return $body.$central.pack('VvvvvVVv', 0x06054b50, 0, 0, $count, $count, strlen($central), strlen($body), 0);
     }
 
-    private function sheet(array $rows, int $header): string
+    private function sheet(array $rows, int $header, bool $presentation = false): string
     {
         $xml = '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="'.$header.'" topLeftCell="A'.($header + 1).'" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols><col min="1" max="3" width="28" customWidth="1"/><col min="4" max="26" width="22" customWidth="1"/></cols><sheetData>';
+        $merges = [];
+        $width = max(2, count($rows[$header - 1]));
+        if ($presentation) {
+            $xml = str_replace('<sheetView workbookViewId="0">', '<sheetView workbookViewId="0" showGridLines="0">', $xml);
+            $xml = str_replace('<cols><col min="1" max="3" width="28" customWidth="1"/><col min="4" max="26" width="22" customWidth="1"/></cols>', $width === 2 ? '<cols><col min="1" max="1" width="34" customWidth="1"/><col min="2" max="2" width="80" customWidth="1"/></cols>' : '<cols><col min="1" max="1" width="24" customWidth="1"/><col min="2" max="26" width="28" customWidth="1"/></cols>', $xml);
+        }
         foreach ($rows as $index => $row) {
             $number = $index + 1;
-            $xml .= '<row r="'.$number.'">';
+            if ($presentation && count($row) === 1 && $row !== [] && $number !== $header) $merges[] = 'A'.$number.':'.$this->columnName($width).$number;
+            $xml .= '<row r="'.$number.'"'.($presentation ? ' ht="'.($number === 1 ? 28 : ($number === $header ? 24 : (count($row) === 1 ? 30 : 20))).'" customHeight="1"' : '').'>';
             foreach ($row as $column => $value) {
                 $ref = $this->columnName($column + 1).$number;
                 $dateOnly = is_array($value) && ($value['date_only'] ?? false);
@@ -110,14 +127,14 @@ class KpiReportWorkbook
                     $xml .= '<c r="'.$ref.'" s="'.(is_int($value) ? 5 : 2).'"><v>'.$value.'</v></c>';
                 } else {
                     $clean = preg_replace('/[^\x{9}\x{A}\x{D}\x{20}-\x{D7FF}\x{E000}-\x{FFFD}\x{10000}-\x{10FFFF}]/u', '', (string) $value);
-                    $xml .= '<c r="'.$ref.'" t="inlineStr" s="'.($number === $header ? 1 : 0).'"><is><t xml:space="preserve">'.htmlspecialchars($clean, ENT_XML1 | ENT_QUOTES, 'UTF-8').'</t></is></c>';
+                    $xml .= '<c r="'.$ref.'" t="inlineStr" s="'.($number === $header ? 1 : ($presentation && $number === 1 ? 6 : 0)).'"><is><t xml:space="preserve">'.htmlspecialchars($clean, ENT_XML1 | ENT_QUOTES, 'UTF-8').'</t></is></c>';
                 }
             }
             $xml .= '</row>';
         }
         $lastColumn = $this->columnName(count($rows[$header - 1]));
 
-        return $xml.'</sheetData><autoFilter ref="A'.$header.':'.$lastColumn.max($header, count($rows)).'"/></worksheet>';
+        return $xml.'</sheetData><autoFilter ref="A'.$header.':'.$lastColumn.max($header, count($rows)).'"/>'.($merges ? '<mergeCells count="'.count($merges).'">'.implode('',array_map(fn($ref)=>'<mergeCell ref="'.$ref.'"/>',$merges)).'</mergeCells>' : '').($presentation ? '<pageMargins left="0.3" right="0.3" top="0.4" bottom="0.4" header="0.2" footer="0.2"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>' : '').'</worksheet>';
     }
 
     private function status(string $value): string

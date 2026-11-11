@@ -7,6 +7,7 @@ $licensePublicKey=$protected?file_get_contents($root.'/deployment/installer/lice
 if($protected && !openssl_pkey_get_public($licensePublicKey))throw new RuntimeException('Missing valid license public key');
 $releaseVersion=$argv[1] ?? '0.8.10';
 $includeDefaultAccounts=in_array('--include-authorized-default-accounts',$argv,true);
+$excludeHospitalityPreview=in_array('--exclude-hospitality-preview',$argv,true);
 if($includeDefaultAccounts && !is_file($root.'/deployment/windows/default-accounts.json'))throw new RuntimeException('Authorized account profile is missing.');
 if(!preg_match('/^[0-9]+\.[0-9]+\.[0-9]+$/D',$releaseVersion))throw new RuntimeException('Invalid release version');
 $output=$root.'/storage/app/private/release-packages';
@@ -15,9 +16,29 @@ $name='vk-crm-uat-source-'.gmdate('Ymd-His').'-'.bin2hex(random_bytes(3)).'.zip'
 $zip=new ZipArchive();
 if ($zip->open($output.'/'.$name,ZipArchive::CREATE|ZipArchive::EXCL)!==true) throw new RuntimeException('Cannot create package');
 $manifest=[];
-$add=function(string $path,string $relative) use($zip,&$manifest,$protected,$licensePublicKey):void {
+$add=function(string $path,string $relative) use($zip,&$manifest,$protected,$licensePublicKey,$excludeHospitalityPreview):void {
     if (is_link($path)) throw new RuntimeException('Refusing symlink: '.$relative);
+    if ($excludeHospitalityPreview && (str_starts_with($relative,'app/Services/Hospitality/') || in_array($relative,[
+        'app/Http/Controllers/Api/V1/HospitalityPreviewController.php',
+        'app/Http/Controllers/Api/V1/CustomerFaceIdController.php',
+        'config/hospitality.php',
+        'resources/views/pages/integrations/hospitality.blade.php',
+        'resources/views/partials/hospitality-integration-nav.blade.php',
+        'public/assets/css/hospitality-integration.css',
+        'public/assets/js/features/hospitality-integration.js',
+        'public/assets/js/customer-faceid.js',
+        'public/assets/css/customer-faceid.css',
+    ],true))) return;
     $content=file_get_contents($path);
+    if ($excludeHospitalityPreview && in_array($relative,['routes/api.php','routes/web.php','resources/views/partials/sidebar.blade.php','public/assets/js/layout.js'],true)) {
+        $content=preg_replace('~^[^\r\n]*(?:/integrations/hospitality|hospitality-integration)[^\r\n]*\r?\n~m','',$content);
+    }
+    if ($excludeHospitalityPreview && $relative==='routes/api.php') {
+        $content=preg_replace('~^([ \t]*)Route::prefix\(\x27/customers/\{customer\}/faceid\x27\)[^\r\n]*\r?\n.*?^\1\}\);\r?\n~ms','',$content);
+    }
+    if ($excludeHospitalityPreview && $relative==='resources/views/layouts/app.blade.php') {
+        $content=preg_replace('~^[^\r\n]*/assets/(?:js|css)/customer-faceid\.[^\r\n]*\r?\n~m','',$content);
+    }
     if($protected && $relative==='config/installation-license.php')$content='<?php return '.var_export(['required'=>true,'public_key'=>$licensePublicKey],true).';';
     // Migration history must retain exact bytes for safe upgrades from existing installations.
     if($protected && str_ends_with($relative,'.php') && !str_ends_with($relative,'.blade.php') && !str_starts_with($relative,'database/migrations/'))$content=obfuscateReleasePhp($content);

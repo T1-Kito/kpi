@@ -7,5 +7,5 @@
 <div id="importCenterRoot" aria-live="polite"></div>
 @endsection
 @push('scripts')
-<script src="/assets/js/features/import-center.js?v=20261023-procurement1"></script>
+<script src="/assets/js/features/import-center.js?v=20261031-full-pagination12"></script>
 @endpush

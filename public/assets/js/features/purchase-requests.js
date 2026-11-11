@@ -1,7 +1,9 @@
 (function () {
-let prState = { rows: [], q: '', status: '', view: 'list', detailCache: {} };
+let prState = { page:1,total:0, rows: [], q: '', status: '', view: 'list', detailCache: {} };
 let purchaseRequestSkus = [];
 
+let listSearchTimer,listRequestVersion=0;
+document.addEventListener('click',event=>{if(!document.getElementById('purchaseRequestsRoot'))return;const pager=event.target.closest('[data-module-page]');if(pager){prState.page=Number(pager.dataset.modulePage);loadPurchaseRequests();}});
 document.addEventListener('vk:ready', () => loadPurchaseRequests());
 document.addEventListener('vk:flow-updated', () => loadPurchaseRequests());
 document.addEventListener('input', (event) => {
@@ -9,7 +11,7 @@ document.addEventListener('input', (event) => {
     if (event.target.matches('[name="sku_id"], [name="quantity"]')) renderSelectedPurchaseItem();
     if (event.target.matches('[data-list-search]')) {
         prState.q = event.target.value.toLowerCase();
-        renderPurchaseRequests();
+        prState.page=1;++listRequestVersion;clearTimeout(listSearchTimer);listSearchTimer=setTimeout(loadPurchaseRequests,280);
     }
 });
 document.addEventListener('change', (event) => {
@@ -17,7 +19,7 @@ document.addEventListener('change', (event) => {
     if (event.target.matches('[name="sku_id"], [name="quantity"]')) renderSelectedPurchaseItem();
     if (event.target.matches('[data-list-status]')) {
         prState.status = event.target.value;
-        renderPurchaseRequests();
+        prState.page=1;++listRequestVersion;clearTimeout(listSearchTimer);listSearchTimer=setTimeout(loadPurchaseRequests,280);
     }
 });
 document.addEventListener('click', (event) => {
@@ -42,19 +44,27 @@ async function loadPurchaseRequests(options = {}) {
             renderPurchaseRequests();
         }
     }
-    const requests = await VKApi.request('/purchase-requests');
+    const listVersion=++listRequestVersion;
+    const requests = await VKApi.request('/purchase-requests?'+new URLSearchParams({page_size:20,page:prState.page,q:prState.q,status:prState.status}),{cache:false});
     if (document.getElementById('purchaseRequestsRoot') !== root) return;
+    if(listVersion!==listRequestVersion || !document.getElementById('purchaseRequestsRoot'))return;
+    prState.total=requests.meta?.total ?? requests.data?.length ?? 0;
     prState.rows = requests.data || [];
     if (prState.view === 'detail' && prState.currentId) {
         openPurchaseRequestDetail(prState.currentId);
         return;
     }
+    const requestedRequest = new URLSearchParams(window.location.search).get('request');
+    if (requestedRequest && /^\d+$/.test(requestedRequest)) {
+        openPurchaseRequestDetail(requestedRequest);
+        return;
+    }
     renderPurchaseRequests(requests.meta.total);
 }
 
-function renderPurchaseRequests(total = prState.rows.length) {
-    const rows = filterRows();
-    document.getElementById('purchaseRequestsRoot').innerHTML = VKTable.fullList({
+function renderPurchaseRequests(total = prState.total) {
+    const rows = prState.rows;
+    VKTable.updateList(document.getElementById('purchaseRequestsRoot'), VKTable.fullList({
         title: 'Danh sách yêu cầu mua',
         subtitle: 'Theo dõi nhu cầu mua phát sinh từ thiếu tồn hoặc yêu cầu nội bộ.',
         meta: `${VKTable.money(rows.length)} / ${VKTable.money(total)} yêu cầu`,
@@ -66,7 +76,8 @@ function renderPurchaseRequests(total = prState.rows.length) {
             ],
         }),
         table: renderPurchaseRequestTable(rows),
-    });
+    }));
+    document.getElementById('purchaseRequestsRoot').insertAdjacentHTML('beforeend',VKTable.pager({page:prState.page,total:prState.total,page_size:20},'data-module-page'));
     restoreFilters();
 }
 

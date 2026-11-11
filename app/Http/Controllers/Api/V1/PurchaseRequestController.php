@@ -30,6 +30,7 @@ class PurchaseRequestController extends Controller
             $query->where('status', $status);
         }
 
+        if ($search = trim((string)$request->query('q',''))) {$term='%'.$search.'%';$query->where(function($q)use($term){$q->where('code','like',$term)->orWhere('reason','like',$term)->orWhere('source_type','like',$term)->orWhereHas('requester',fn($u)=>$u->where('name','like',$term));});}
         $rows = $query->latest('id')->paginate($pageSize);
 
         return response()->json([
@@ -66,7 +67,7 @@ class PurchaseRequestController extends Controller
                         'label' => 'Đơn mua',
                         'code' => $po->code,
                         'status' => $po->status,
-                        'path' => '/purchase-orders/'.$po->id,
+                        'path' => '/purchase-orders?order='.$po->id,
                     ])
                     ->all(),
             ),

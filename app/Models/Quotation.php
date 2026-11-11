@@ -14,14 +14,14 @@ class Quotation extends Model
         'tenant_id', 'code', 'customer_id', 'lead_id', 'deal_id', 'price_book_id', 'payment_term_id', 'duplicated_from_id', 'sales_owner_id',
         'subtotal_amount', 'tax_amount', 'total_amount', 'total_cost', 'margin_percent',
         'valid_until', 'payment_terms', 'payment_plan', 'delivery_terms', 'note', 'status',
-        'workflow_version', 'created_by', 'contact_id', 'revision_root_id', 'revision_number',
+        'prices_include_vat', 'workflow_version', 'created_by', 'contact_id', 'revision_root_id', 'revision_number',
         'discount_percent', 'discount_amount', 'document_snapshot', 'approval_steps',
         'approval_policy_snapshot', 'submitted_at', 'issued_at', 'accepted_at',
     ];
 
     protected function casts(): array
     {
-        return [
+        return ['prices_include_vat'=>'boolean',
             'tenant_id'=>'integer','customer_id'=>'integer','sales_owner_id'=>'integer','created_by'=>'integer',
             'revision_root_id'=>'integer','revision_number'=>'integer','lead_id'=>'integer','deal_id'=>'integer',
             'duplicated_from_id' => 'integer',

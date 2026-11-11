@@ -1,20 +1,22 @@
 (function () {
-let giState = { rows: [], q: '', status: '', view: 'list', detailCache: {} };
+let giState = { page:1,total:0, rows: [], q: '', status: '', view: 'list', detailCache: {} };
 
+let listSearchTimer,listRequestVersion=0;
+document.addEventListener('click',event=>{if(!document.getElementById('goodsIssuesRoot'))return;const pager=event.target.closest('[data-module-page]');if(pager){giState.page=Number(pager.dataset.modulePage);loadGoodsIssues();}});
 document.addEventListener('vk:ready', () => loadGoodsIssues());
 document.addEventListener('vk:flow-updated', () => loadGoodsIssues());
 document.addEventListener('input', (event) => {
     if (!document.getElementById('goodsIssuesRoot')) return;
     if (event.target.matches('[data-list-search]')) {
         giState.q = event.target.value.toLowerCase();
-        renderGoodsIssues();
+        giState.page=1;++listRequestVersion;clearTimeout(listSearchTimer);listSearchTimer=setTimeout(loadGoodsIssues,280);
     }
 });
 document.addEventListener('change', (event) => {
     if (!document.getElementById('goodsIssuesRoot')) return;
     if (event.target.matches('[data-list-status]')) {
         giState.status = event.target.value;
-        renderGoodsIssues();
+        giState.page=1;++listRequestVersion;clearTimeout(listSearchTimer);listSearchTimer=setTimeout(loadGoodsIssues,280);
     }
 });
 document.addEventListener('click', (event) => {
@@ -38,7 +40,10 @@ async function loadGoodsIssues(options = {}) {
         giState.view = 'list';
         giState.currentId = null;
     }
-    const issues = await VKApi.request('/goods-issues');
+    const listVersion=++listRequestVersion;
+    const issues = await VKApi.request('/goods-issues?'+new URLSearchParams({page_size:20,page:giState.page,q:giState.q,status:giState.status}),{cache:false});
+    if(listVersion!==listRequestVersion || !document.getElementById('goodsIssuesRoot'))return;
+    giState.total=issues.meta?.total ?? issues.data?.length ?? 0;
     giState.rows = issues.data || [];
     if (giState.view === 'detail' && giState.currentId) {
         openGoodsIssueDetail(giState.currentId);
@@ -47,9 +52,9 @@ async function loadGoodsIssues(options = {}) {
     renderGoodsIssues(issues.meta.total);
 }
 
-function renderGoodsIssues(total = giState.rows.length) {
-    const rows = filterRows();
-    document.getElementById('goodsIssuesRoot').innerHTML = VKTable.fullList({
+function renderGoodsIssues(total = giState.total) {
+    const rows = giState.rows;
+    VKTable.updateList(document.getElementById('goodsIssuesRoot'), VKTable.fullList({
         title: 'Danh sách phiếu xuất',
         subtitle: 'Phiếu tự sinh từ đơn bán đã giữ hàng. Kho kiểm tra chứng từ và hàng thực xuất trước khi xác nhận.',
         meta: `${VKTable.money(rows.length)} / ${VKTable.money(total)} phiếu`,
@@ -61,7 +66,8 @@ function renderGoodsIssues(total = giState.rows.length) {
             ],
         }),
         table: renderIssueTable(rows),
-    });
+    }));
+    document.getElementById('goodsIssuesRoot').insertAdjacentHTML('beforeend',VKTable.pager({page:giState.page,total:giState.total,page_size:20},'data-module-page'));
     restoreFilters();
 }
 

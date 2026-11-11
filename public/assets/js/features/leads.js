@@ -5,6 +5,12 @@ let leadLoadSequence = 0;
 
 document.addEventListener('vk:ready', () => loadLeads());
 document.addEventListener('input', (event) => {
+    if (event.target.closest('.lead-create-modal') && ['expected_service_date','guest_count','interested_services','region'].includes(event.target.name)) {
+        const form=event.target.closest('form'), summary=form?.querySelector('[data-lead-needs-summary]');
+        if(summary)summary.textContent=leadNeedsSummary(Object.fromEntries(new FormData(form)));
+        const reminder=form?.querySelector('[data-lead-needs-reminder]');
+        if(reminder && form.elements.needs?.value.trim())reminder.hidden=false;
+    }
     if (!document.getElementById('leadsRoot')) return;
     if (event.target.matches('[data-list-search]')) {
         leadState.q = event.target.value;
@@ -22,8 +28,13 @@ document.addEventListener('change', (event) => {
     }
 });
 document.addEventListener('click', (event) => {
+    if (event.target.closest('[data-lead-pool-settings]')) { openLeadPoolSettings(); return; }
+    if (event.target.closest('[data-lead-handover]')) { openLeadHandover(); return; }
+    if (event.target.closest('[data-lead-respond]')) { openLeadHandoverResponse(); return; }
+    if (event.target.closest('[data-lead-merge]')) { openLeadMerge(); return; }
+    if (event.target.closest('[data-lead-edit]')) { openLeadEditModal(); return; }
     if (!document.getElementById('leadsRoot')) return;
-    if (event.target.closest('[data-lead-back]')) { leadState.detail = null; renderLeads(); return; }
+    if (event.target.closest('[data-lead-back]')) { leadState.detail = null; history.replaceState({},'', '/leads'); loadLeads(); return; }
     const detailTab = event.target.closest('[data-lead-tab]');
     if (detailTab) { leadState.detailTab = detailTab.dataset.leadTab; renderLeadDetail(); return; }
     const followUp = event.target.closest('[data-lead-follow-up]');
@@ -57,6 +68,8 @@ async function loadLeads() {
         leadState.rows = leads.data || [];
         leadState.total = leads.meta?.total || 0;
         leadState.stats = leads.meta?.stats || {};
+        const requested = new URLSearchParams(window.location.search).get('open');
+        if (requested && /^\d+$/.test(requested)) { await openLeadDetail(requested); return; }
         renderLeads();
     } catch (error) {
         if (version !== leadLoadSequence || document.getElementById('leadsRoot') !== root) return;
@@ -89,7 +102,7 @@ function renderLeads() {
         subtitle: 'Theo dõi nguồn, người phụ trách và hạn chăm sóc tiếp theo.',
         meta: `${VKTable.money(rows.length)} / ${VKTable.money(leadState.total)} khách hàng tiềm năng`,
         filters: VKTable.filterBar({
-            searchPlaceholder: 'Tìm tên, số điện thoại, email...',
+            searchPlaceholder: 'Tên không dấu, mã, điện thoại, nguồn, chiến dịch…',
             status: [
                 { value: 'new', label: 'Mới' },
                 { value: 'assigned', label: 'Đã giao' },
@@ -129,8 +142,8 @@ function renderLeadTable(rows) {
         { label: 'Việc tiếp theo', render: row => renderLeadNextTask(row) },
         { label: 'Trạng thái', render: row => VKTable.statusBadge(row.status) },
         { label: '', render: row => VKTable.rowActions([
-            canManage && row.status !== 'qualified' ? VKTable.smallButton(row.assigned_to ? 'Phân công lại' : 'Phân công', `data-assign-lead="${row.id}"`) : '',
-            canManage && row.status !== 'qualified' ? VKTable.smallButton('Chuyển cơ hội', `data-qualify-lead="${row.id}"`) : '',
+            canManage && row.can_write && row.handover_status !== 'pending' && row.status !== 'qualified' ? VKTable.smallButton(row.assigned_to ? 'Phân công lại' : 'Phân công', `data-assign-lead="${row.id}"`) : '',
+            canManage && row.can_write && row.handover_status !== 'pending' && row.status !== 'qualified' ? VKTable.smallButton('Chuyển cơ hội', `data-qualify-lead="${row.id}"`) : '',
             VKTable.smallButton('Mở', `data-lead-detail="${row.id}"`),
         ].filter(Boolean)) },
     ], rows, 'Chưa có khách hàng tiềm năng', { rowAttr: row => `data-row-detail="${row.id}"` });
@@ -141,10 +154,12 @@ function leadSourceLabel(source) {
 }
 
 function renderLeadNextTask(row) {
+    if (row.handover_status === 'pending') return '<span class="lead-next warning">Chờ Sales tiếp nhận</span>';
+    if (row.handover_status === 'returned') return '<span class="lead-next danger">Sales đã trả lại · Cần bổ sung</span>';
     if (row.status === 'qualified') return '<span class="lead-next done">Đã chuyển cơ hội</span>';
     if (!row.assigned_to) return '<span class="lead-next warning">Cần phân công</span>';
     const task = row.next_task;
-    if (!task) return '<span class="lead-next warning">Chưa có việc tiếp theo</span>';
+    if (!task) return row.latest_completed_task ? `<span class="lead-next done">Đã hoàn thành: ${VKTable.escapeHtml(row.latest_completed_task.title)}</span><small class="lead-next-due">Chưa đặt việc tiếp theo</small>` : '<span class="lead-next warning">Chưa có việc tiếp theo</span>';
     const overdue = task.due_at && new Date(task.due_at).getTime() < Date.now();
     const due = task.due_at ? new Date(task.due_at).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'Chưa đặt hạn';
     return `<span class="lead-next ${overdue ? 'danger' : 'info'}">${VKTable.escapeHtml(task.title)}</span><small class="lead-next-due">${overdue ? 'Quá hạn · ' : 'Hạn · '}${VKTable.escapeHtml(due)}</small>`;
@@ -188,10 +203,19 @@ async function openLeadModal() {
             ${VKModal.select('assigned_to', 'Nhân viên phụ trách', canAssignOthers ? [{ value: '', label: 'Tự phân công theo cấu hình; chưa có thì vào hàng chờ' }, ...(users.data || []).map(user => ({ value: user.id, label: user.name }))] : [{ value: me.data.id, label: me.data.name }])}
         </div>
         <details class="crm-optional-fields"><summary>Thông tin chiến dịch (không bắt buộc)</summary>${VKModal.field('campaign_code', 'Mã chiến dịch')}</details>
+        ${leadNeedsFields({})}
         <p class="crm-auto-note">Mã hồ sơ tự sinh. Khi có người phụ trách, hệ thống tự tạo việc chăm sóc và đặt hạn theo cấu hình SLA.</p>
     `, async (form) => {
-        const response = await VKApi.request('/leads', { method: 'POST', headers: {'Idempotency-Key': requestKey}, body: JSON.stringify(Object.fromEntries(new FormData(form))) });
-        VKModal.toast(response.data.assigned_to ? 'Đã tạo hồ sơ, phân công và tạo việc chăm sóc.' : 'Đã tạo hồ sơ trong hàng chờ phân công.');
+        const data = Object.fromEntries(new FormData(form));
+        let response;
+        try { response = await VKApi.request('/leads', { method: 'POST', headers: {'Idempotency-Key': requestKey}, body: JSON.stringify(data) }); }
+        catch (error) {
+            if (error.status !== 409 || !error.data?.duplicates) throw error;
+            const proceed = await VKModal.confirm({title:'Phát hiện hồ sơ có thể trùng',message:'Kiểm tra các hồ sơ dưới đây. Chỉ tạo riêng khi đây là một yêu cầu khác của khách.',details:error.data.duplicates.map(row=>`${row.code} — ${row.name}`),confirmText:'Tạo yêu cầu riêng',cancelText:'Quay lại kiểm tra'});
+            if (!proceed) return;
+            response = await VKApi.request('/leads', {method:'POST',headers:{'Idempotency-Key':requestKey},body:JSON.stringify({...data,allow_duplicate:true})});
+        }
+        VKModal.toast(response.meta?.duplicate_phone_warning ? 'Đã tạo hồ sơ. Số điện thoại đã có ở hồ sơ khác; vui lòng kiểm tra trùng.' : (response.data.assigned_to ? 'Đã tạo hồ sơ, phân công và tạo việc chăm sóc.' : 'Đã tạo hồ sơ trong hàng chờ phân công.'), response.meta?.duplicate_phone_warning ? 'warning' : 'success');
         VKModal.close();
         loadLeads();
     }, { className: 'lead-create-modal', submitText: 'Tạo khách hàng tiềm năng' });
@@ -244,12 +268,25 @@ function renderLeadDetail() {
     } else if (leadState.detailTab === 'documents') {
         content = `<article class="customer360-card"><div class="customer360-card-title"><span>▤</span><h2>Chứng từ liên quan</h2><small>${docs.length} chứng từ</small></div>${docs.length ? docs.map(doc => lead360Item(`${doc.label || 'Chứng từ'} ${doc.code || ''}`, VKTable.translateStatus(doc.status), doc.path)).join('') : lead360Empty('Chưa có chứng từ liên quan.')}</article>`;
     } else {
-        content = `<section class="customer360-metrics lead360-metrics"><article class="customer360-metric blue"><span>Trạng thái</span><strong>${e(VKTable.translateStatus(lead.status || 'new'))}</strong><small>Giai đoạn hiện tại</small></article><article class="customer360-metric green"><span>Người phụ trách</span><strong>${e(lead.assignee?.name || 'Chưa phân công')}</strong><small>Đầu mối chăm sóc</small></article><article class="customer360-metric orange"><span>Việc cần xử lý</span><strong>${openTasks.length}</strong><small>Công việc đang mở</small></article><article class="customer360-metric purple"><span>Chứng từ</span><strong>${docs.length}</strong><small>Chứng từ liên quan</small></article></section>${lead.converted_customer || lead.converted_deal ? `<div class="lead360-converted"><strong>Đã chuyển đổi</strong>${lead.converted_customer ? `<a href="/customers?open=${encodeURIComponent(lead.converted_customer.id)}">Khách hàng: ${e(lead.converted_customer.code)} · ${e(lead.converted_customer.name)} →</a>` : ''}${lead.converted_deal ? `<a href="/deals?open=${encodeURIComponent(lead.converted_deal.id)}">Cơ hội: ${e(lead.converted_deal.code)} · ${e(lead.converted_deal.name)} →</a>` : ''}</div>` : ''}<div class="customer360-grid lead360-grid"><article class="customer360-card"><div class="customer360-card-title"><span>◉</span><h2>Thông tin hồ sơ</h2><small>Dữ liệu lead</small></div>${lead360Info('Mã lead', lead.code)}${lead360Info('Số điện thoại', lead.phone)}${lead360Info('Email', lead.email)}${lead360Info('Nguồn', leadSourceLabel(lead.source))}${lead360Info('Chiến dịch', lead.campaign_code)}${lead360Info('Ngày tạo', lead360Date(lead.created_at))}</article><article class="customer360-card"><div class="customer360-card-title"><span>⌁</span><h2>Hoạt động gần đây</h2><small>${tasks.length + docs.length} mục</small>${lead.assigned_to && lead.status !== 'qualified' ? '<button type="button" data-lead-follow-up>+ Thêm việc</button>' : ''}</div>${tasks.slice(0, 3).map(task => lead360Item(task.title, `${VKTable.translateStatus(task.status)} · ${lead360Date(task.due_at)}`)).join('')}${docs.slice(0, 2).map(doc => lead360Item(`${doc.label || 'Chứng từ'} ${doc.code || ''}`, VKTable.translateStatus(doc.status), doc.path)).join('')}${!tasks.length && !docs.length ? lead360Empty('Chưa có hoạt động. Hãy phân công để bắt đầu chăm sóc.') : ''}</article></div>`;
+        content = `<div class="lead-profile-counts"><span>Việc cần xử lý <b>${openTasks.length}</b></span><span>Chứng từ liên quan <b>${docs.length}</b></span></div>${lead.converted_customer || lead.converted_deal ? `<div class="lead360-converted"><strong>Đã chuyển đổi</strong>${lead.converted_customer ? `<a href="/customers?open=${encodeURIComponent(lead.converted_customer.id)}">Khách hàng: ${e(lead.converted_customer.code)} · ${e(lead.converted_customer.name)} →</a>` : ''}${lead.converted_deal ? `<a href="/deals?open=${encodeURIComponent(lead.converted_deal.id)}">Cơ hội: ${e(lead.converted_deal.code)} · ${e(lead.converted_deal.name)} →</a>` : ''}</div>` : ''}<div class="customer360-grid lead360-grid"><article class="customer360-card"><div class="customer360-card-title"><span>◉</span><h2>Thông tin hồ sơ</h2><small>Dữ liệu lead</small></div>${lead360Info('Mã lead', lead.code)}${lead360Info('Số điện thoại', lead.phone)}${lead360Info('Email', lead.email)}${lead360Info('Nguồn', leadSourceLabel(lead.source))}${lead360Info('Chiến dịch', lead.campaign_code)}${lead360Info('Ngày tạo', lead360Date(lead.created_at))}</article><article class="customer360-card"><div class="customer360-card-title"><span>⌁</span><h2>Hoạt động gần đây</h2><small>${tasks.length + docs.length} mục</small>${lead.assigned_to && lead.status !== 'qualified' ? '<button type="button" data-lead-follow-up>+ Thêm việc</button>' : ''}</div>${tasks.slice(0, 3).map(task => lead360Item(task.title, `${VKTable.translateStatus(task.status)} · ${lead360Date(task.due_at)}`)).join('')}${docs.slice(0, 2).map(doc => lead360Item(`${doc.label || 'Chứng từ'} ${doc.code || ''}`, VKTable.translateStatus(doc.status), doc.path)).join('')}${!tasks.length && !docs.length ? lead360Empty('Chưa có hoạt động. Hãy phân công để bắt đầu chăm sóc.') : ''}</article></div>`;
     }
-    document.getElementById('leadsRoot').innerHTML = `<section class="customer360-page lead360-page"><header class="customer360-hero"><div class="customer360-hero-top"><button class="customer360-back" type="button" data-lead-back>← Danh sách khách hàng tiềm năng</button><div class="customer360-hero-actions"><span class="customer360-id">${e(lead.code || 'LEAD')}</span>${lead.status !== 'qualified' ? `<button class="btn small" type="button" data-assign-lead="${lead.id}">Phân công</button><button class="btn small" type="button" data-qualify-lead="${lead.id}">Chuyển cơ hội</button>` : ''}</div></div><div class="customer360-identity"><div class="customer360-avatar">${e((lead.name || 'K').trim().slice(0, 1).toUpperCase())}</div><div><p>Hồ sơ khách hàng tiềm năng</p><h1>${e(lead.name || 'Khách hàng tiềm năng')}</h1><span>${e(lead.phone || 'Chưa có số điện thoại')} · ${e(lead.email || 'Chưa có email')} · ${e(leadSourceLabel(lead.source))}</span></div><div class="customer360-owner"><span>Người phụ trách</span><strong>${e(lead.assignee?.name || 'Chưa phân công')}</strong><em class="customer360-status active">${e(VKTable.translateStatus(lead.status || 'new'))}</em></div></div></header><nav class="customer360-tabs" aria-label="Hồ sơ khách hàng tiềm năng">${tabs.map(([key, label]) => `<button type="button" class="${leadState.detailTab === key ? 'active' : ''}" data-lead-tab="${key}">${label}</button>`).join('')}</nav><div class="customer360-body">${content}</div></section>`;
-    if (!window.VKLayout?.hasPermission('sales.lead.manage')) {
-        document.querySelectorAll('#leadsRoot [data-assign-lead], #leadsRoot [data-qualify-lead], #leadsRoot [data-lead-follow-up], #leadsRoot [data-lead-task-status]').forEach(node => node.remove());
+    document.getElementById('leadsRoot').innerHTML = `<section class="customer360-page lead360-page"><header class="lead-profile-header"><div class="lead-profile-top"><div class="customer360-hero-actions"><button class="btn small" type="button" data-lead-edit>Sửa hồ sơ</button><details class="lead-profile-menu"><summary>Thao tác khác <span aria-hidden="true">⋯</span></summary><div><button type="button" data-assign-lead="${lead.id}">Phân công phụ trách</button><button type="button" data-qualify-lead="${lead.id}">Chuyển thành cơ hội</button></div></details></div></div><div class="lead-profile-main"><div class="lead-profile-name"><h1>${e(lead.name || 'Khách hàng tiềm năng')}</h1><div class="lead-profile-contact"><span class="record-code-text">${e(lead.code)}</span><span>${e(lead.phone || 'Chưa có số điện thoại')}</span><span>${e(lead.email || 'Chưa có email')}</span><span>${e(leadSourceLabel(lead.source))}</span></div></div><div class="lead-profile-owner"><span>Người phụ trách</span><strong>${e(lead.assignee?.name || 'Chưa phân công')}</strong>${VKTable.statusBadge(lead.status || 'new')}</div></div></header><nav class="customer360-tabs" aria-label="Hồ sơ khách hàng tiềm năng">${tabs.map(([key, label]) => `<button type="button" class="${leadState.detailTab === key ? 'active' : ''}" data-lead-tab="${key}">${label}</button>`).join('')}</nav><div class="customer360-body">${content}</div></section>`;
+    const body = document.querySelector('#leadsRoot .customer360-body');
+    if (leadState.detailTab === 'overview') body?.insertAdjacentHTML('afterbegin', leadNeedsCard(lead));
+    const actions = document.querySelector('#leadsRoot .customer360-hero-actions');
+    const canManage = window.VKLayout?.hasPermission('sales.lead.manage');
+    if (canManage && lead.can_write && lead.status !== 'qualified' && lead.handover_status !== 'pending') {
+        actions?.insertAdjacentHTML('afterbegin','<button type="button" class="btn primary small" data-lead-handover>Bàn giao Sales</button>');
+        actions?.querySelector('.lead-profile-menu > div')?.insertAdjacentHTML('beforeend','<button type="button" data-lead-merge>Kiểm tra trùng / Gộp</button>');
     }
+    if (canManage && lead.handover_status === 'pending' && Number(lead.handover_to) === Number(window.VKUser?.id)) actions?.insertAdjacentHTML('beforeend','<button type="button" class="btn primary small" data-lead-respond>Tiếp nhận / Trả lại</button>');
+    if (!canManage || !lead.can_write) {
+        document.querySelectorAll('#leadsRoot [data-lead-edit], #leadsRoot [data-assign-lead], #leadsRoot [data-qualify-lead], #leadsRoot [data-lead-follow-up], #leadsRoot [data-lead-task-status]').forEach(node => node.remove());
+    }
+    if (lead.handover_status === 'pending') document.querySelectorAll('#leadsRoot [data-assign-lead], #leadsRoot [data-qualify-lead]').forEach(node=>node.remove());
+    if (lead.status === 'qualified') document.querySelectorAll('#leadsRoot [data-lead-edit], #leadsRoot [data-assign-lead], #leadsRoot [data-qualify-lead]').forEach(node=>node.remove());
+    const more=actions?.querySelector('.lead-profile-menu');
+    if (more && !more.querySelector('button')) more.remove();
 }
 
 function lead360Info(label, value) {
@@ -276,6 +313,18 @@ function openLeadFollowUpModal() {
 async function updateLeadTaskStatus(taskId, status) {
     const leadId = leadState.detail?.id;
     if (!leadId) return;
+    if (status === 'completed') {
+        VKModal.open('Ghi nhận kết quả chăm sóc', `${VKModal.field('reason', 'Kết quả trao đổi với khách')}`, async form => {
+            const reason = form.elements.reason.value.trim();
+            if (!reason) throw new Error('Cần ghi kết quả chăm sóc trước khi hoàn thành.');
+            await VKApi.request(`/leads/${leadId}/follow-ups/${taskId}/status`, {method:'POST', body:JSON.stringify({status, reason})});
+            VKModal.close();
+            await openLeadDetail(leadId);
+            leadState.detailTab = 'activity'; renderLeadDetail();
+            VKModal.toast('Đã lưu kết quả và hoàn thành công việc.');
+        }, {submitText:'Lưu kết quả'});
+        return;
+    }
     try {
         await VKApi.request(`/leads/${leadId}/follow-ups/${taskId}/status`, { method: 'POST', body: JSON.stringify({ status }) });
         await openLeadDetail(leadId);
@@ -287,6 +336,95 @@ async function updateLeadTaskStatus(taskId, status) {
 
 function lead360Empty(message) {
     return `<p class="customer360-empty-timeline">${VKTable.escapeHtml(message)}</p>`;
+}
+
+function openLeadEditModal() {
+    const lead = leadState.detail;
+    if (!lead) return;
+    VKModal.open(`Sửa ${lead.code}`, `<div class="form-grid">${VKModal.field('name','Tên khách hàng tiềm năng','text',lead.name)}${VKModal.field('phone','Số điện thoại','tel',lead.phone)}${VKModal.field('email','Email','email',lead.email || '')}${VKModal.field('source','Nguồn','text',lead.source || '')}${VKModal.field('campaign_code','Mã chiến dịch','text',lead.campaign_code || '')}</div>${leadNeedsFields(lead)}`, async form => {
+        const data=Object.fromEntries(new FormData(form));
+        try { await VKApi.request(`/leads/${lead.id}`,{method:'PUT',body:JSON.stringify(data)}); }
+        catch(error) {
+            if (!error.data?.duplicates?.length) throw error;
+            const okay=await VKModal.confirm({title:'Thông tin liên hệ có thể trùng',message:error.data.duplicates.map(row=>`${row.code} — ${row.name}`).join('\n')+'\nNếu đã đối chiếu và đây là nhu cầu riêng, bạn có thể tiếp tục lưu.',confirmText:'Vẫn lưu',cancelText:'Kiểm tra lại'});
+            if (!okay) return;
+            await VKApi.request(`/leads/${lead.id}`,{method:'PUT',body:JSON.stringify({...data,allow_duplicate:true})});
+        }
+        VKModal.close(); await openLeadDetail(lead.id); VKModal.toast('Đã cập nhật khách hàng tiềm năng.');
+    },{className:'lead-create-modal',submitText:'Lưu thay đổi'});
+}
+
+function leadNeedsFields(row) {
+    const e=VKTable.escapeHtml;
+    return `<section class="lead-needs-form"><h3>Nhu cầu & lịch dự kiến</h3><div class="form-grid two">${VKModal.field('region','Khu vực','text',row.region || '')}${VKModal.field('expected_service_date','Ngày dự kiến sử dụng','date',(row.expected_service_date || '').slice(0,10))}${VKModal.field('guest_count','Số khách dự kiến','number',row.guest_count || '')}${VKModal.field('interested_services','Dịch vụ quan tâm','text',row.interested_services || '')}<div class="full lead-current-summary"><span>Tóm tắt tự động</span><strong data-lead-needs-summary>${e(leadNeedsSummary(row))}</strong></div><p class="full lead-needs-reminder" data-lead-needs-reminder hidden>Thông tin dự kiến vừa thay đổi. Kiểm tra lại ngày và số khách trong mô tả nhu cầu trước khi lưu.</p><label class="full">Mô tả nhu cầu<textarea name="needs" rows="3" maxlength="4000">${e(row.needs || '')}</textarea></label><label class="full">Ghi chú bàn giao<textarea name="notes" rows="2" maxlength="5000">${e(row.notes || '')}</textarea></label></div></section>`;
+}
+function leadNeedsSummary(row) {
+    const date=(row.expected_service_date || '').slice(0,10);
+    return [row.guest_count ? `${row.guest_count} khách` : '',date ? `Dự kiến ${date.split('-').reverse().join('/')}` : '',row.interested_services,row.region].filter(Boolean).join(' · ') || 'Bổ sung ngày dự kiến, số khách và dịch vụ quan tâm.';
+}
+function leadNeedsCard(row) {
+    const e=VKTable.escapeHtml;
+    const status={pending:'Chờ Sales tiếp nhận',accepted:'Sales đã tiếp nhận',returned:'Sales đã trả lại'}[row.handover_status];
+    return `<article class="customer360-card lead-needs-card"><div class="customer360-card-title"><h2>Nhu cầu & bàn giao</h2>${status?`<span class="badge">${e(status)}</span>`:''}</div><div class="lead-current-summary"><span>Yêu cầu hiện tại · Tự cập nhật</span><strong>${e(leadNeedsSummary(row))}</strong></div>${leadResponsibility(row)}<div class="lead-needs-grid">${[['Mô tả nhu cầu',row.needs],['Khu vực',row.region],['Ngày dự kiến',row.expected_service_date],['Số khách',row.guest_count],['Dịch vụ quan tâm',row.interested_services],['Sales nhận',row.handover_recipient],['Ghi chú',row.notes]].map(([label,value])=>lead360Info(label,value)).join('')}</div>${(row.workflow_history || []).length?`<details class="lead-handover-history"><summary>Lịch sử bàn giao và thay đổi</summary>${row.workflow_history.map(leadWorkflowEntry).join('')}</details>`:''}</article>`;
+}
+function leadResponsibility(row) {
+    const e=VKTable.escapeHtml,owner=row.assignee?.name || 'Chưa phân công';
+    let text='';
+    if(row.handover_status==='pending') text=`${owner} tiếp tục phụ trách khách. Đang chờ ${row.handover_recipient || 'Sales được giao'} tiếp nhận.`;
+    if(row.handover_status==='accepted') text=`${owner} đã tiếp nhận và đang phụ trách khách.`;
+    if(row.handover_status==='returned') text=`Sales đã trả lại hồ sơ. ${owner} tiếp tục phụ trách và bổ sung thông tin trước khi bàn giao lại.`;
+    return text?`<p class="lead-responsibility">${e(text)}</p>`:'';
+}
+function leadWorkflowEntry(item) {
+    const e=VKTable.escapeHtml, details=item.details || {};
+    const labels={name:'Tên khách',phone:'Số điện thoại',email:'Email',source:'Nguồn',campaign_code:'Chiến dịch',needs:'Nhu cầu',region:'Khu vực',expected_service_date:'Ngày dự kiến',guest_count:'Số khách',interested_services:'Dịch vụ quan tâm',notes:'Ghi chú'};
+    const changes=details.after ? Object.entries(details.after).filter(([key,value])=>String(details.before?.[key] ?? '')!==String(value ?? '')).map(([key,value])=>`${labels[key] || key}: ${details.before?.[key] || 'Chưa có'} → ${value || 'Để trống'}`) : [];
+    const note=[details.recipient_name ? `Người nhận: ${details.recipient_name}` : '',details.source_code ? `Từ hồ sơ: ${details.source_code}` : '',details.note || details.reason || '',...changes].filter(Boolean).join('\n');
+    return `<div><strong>${e(item.action)}</strong><small>${e(item.actor_name)} · ${e(lead360Date(item.at))}</small>${note?`<p>${e(note)}</p>`:''}</div>`;
+}
+async function openLeadHandover() {
+    try {
+        const lead=leadState.detail, response=await VKApi.request('/leads/handover-candidates',{cache:false});
+        if (!response.data.length) return VKModal.toast(response.meta?.configured ? 'Nhóm đã chọn chưa có Sales đang hoạt động, đủ quyền nhận bàn giao.' : 'Chưa thiết lập nhóm nhận bàn giao. Quản trị mở “Nhóm nhận bàn giao” trên trang này để chọn vai trò Sales.','warning');
+        VKModal.open(`Bàn giao ${lead.code}`, `<div class="lead-transfer-summary"><span class="record-code-text">${VKTable.escapeHtml(lead.code)}</span><strong>${VKTable.escapeHtml(lead.name)}</strong><p>Người phụ trách hiện tại tiếp tục theo khách đến khi Sales tiếp nhận.</p></div>${VKModal.select('recipient_id','Sales tiếp nhận',[{value:'',label:'Chọn người nhận'},...response.data.map(row=>({value:row.id,label:`${row.name} — ${row.department || 'Chưa gán phòng ban'}`}))])}<label class="lead-transfer-note">Nội dung bàn giao<textarea name="note" rows="3" maxlength="2000" required placeholder="Thông tin đã trao đổi và việc Sales cần tiếp tục…"></textarea></label>`, async form=>{
+            if (!form.elements.recipient_id.value) throw new Error('Vui lòng chọn người nhận bàn giao.');
+            await VKApi.request(`/leads/${lead.id}/handover`,{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(form)))});
+            VKModal.close();await openLeadDetail(lead.id);VKModal.toast('Đã gửi bàn giao và thông báo cho Sales.');
+        },{className:'lead-handover-modal',submitText:'Gửi bàn giao'});
+    } catch(error) { VKModal.toast(error.message,'danger'); }
+}
+async function openLeadPoolSettings() {
+    try {
+        const response=await VKApi.request('/tenant/lead-handover',{cache:false});
+        const selected=(response.data.role_ids || []).map(Number),e=VKTable.escapeHtml;
+        VKModal.open('Nhóm nhận bàn giao Sales',`<p class="form-note">Chọn các vai trò được nhận lead từ Marketing. Thành viên cần đang hoạt động và có quyền quản lý khách hàng tiềm năng, cơ hội.</p><div class="lead-pool-roles">${response.roles.map(role=>`<label><input type="checkbox" name="role_ids" value="${Number(role.id)}" ${selected.includes(Number(role.id))?'checked':''}><span><strong>${e(role.name)}</strong><small>${e(role.code)}</small></span></label>`).join('') || '<p>Chưa có vai trò để chọn.</p>'}</div>`,async form=>{
+            const role_ids=new FormData(form).getAll('role_ids').map(Number);
+            await VKApi.request('/tenant/lead-handover',{method:'POST',body:JSON.stringify({role_ids})});
+            VKModal.close();VKModal.toast('Đã lưu nhóm nhận bàn giao Sales.');
+        },{className:'lead-handover-modal',submitText:'Lưu thiết lập'});
+    } catch(error) { VKModal.toast(error.message,'danger'); }
+}
+function openLeadHandoverResponse() {
+    const lead=leadState.detail;
+    VKModal.open(`Tiếp nhận ${lead.code}`,`${VKModal.select('decision','Xử lý',[{value:'accepted',label:'Tiếp nhận phụ trách'},{value:'returned',label:'Trả lại người bàn giao'}])}${VKModal.field('note','Xác nhận / Lý do trả lại')}`,async form=>{
+        await VKApi.request(`/leads/${lead.id}/handover-response`,{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(form)))});
+        VKModal.close();await openLeadDetail(lead.id);VKModal.toast('Đã cập nhật bàn giao.');
+    },{submitText:'Xác nhận'});
+}
+async function openLeadMerge() {
+    try {
+        const lead=leadState.detail;
+        const response=await VKApi.request('/leads/duplicate-check?'+new URLSearchParams({phone:lead.phone || '',email:lead.email || ''}),{cache:false});
+        const rows=response.data.filter(row=>Number(row.id)!==Number(lead.id));
+        if (!rows.length) return VKModal.toast('Không tìm thấy lead trùng điện thoại hoặc email trong phạm vi được xem.');
+        VKModal.open(`Gộp ${lead.code}`, `<p class="form-note">Hồ sơ đang mở sẽ được lưu thành bản gốc đã gộp. Công việc và lịch sử chuyển vào hồ sơ giữ lại; thông tin đang có ở hồ sơ giữ lại không bị ghi đè. Hồ sơ có báo giá/cơ hội hoặc đang bàn giao sẽ không được gộp.</p>${VKModal.select('target_id','Hồ sơ giữ lại',rows.map(row=>({value:row.id,label:`${row.code} — ${row.name}`})))}${VKModal.field('reason','Lý do gộp và thông tin đã đối chiếu')}`,async form=>{
+            const data=Object.fromEntries(new FormData(form));
+            const okay=await VKModal.confirm({title:'Xác nhận gộp hồ sơ',message:`Gộp ${lead.code} vào hồ sơ đã chọn? Lịch sử được giữ lại.`,confirmText:'Gộp hồ sơ',cancelText:'Quay lại'});
+            if (!okay) return;
+            const result=await VKApi.request(`/leads/${lead.id}/merge`,{method:'POST',body:JSON.stringify(data)});
+            VKModal.close();history.replaceState({},'',`/leads?open=${result.data.id}`);await openLeadDetail(result.data.id);VKModal.toast('Đã gộp và giữ lịch sử hồ sơ.');
+        },{submitText:'Kiểm tra và gộp'});
+    } catch(error) { VKModal.toast(error.message,'danger'); }
 }
 
 function lead360Date(value) {

@@ -52,7 +52,7 @@ class AssignedKpiService
             'tasks_completed' => Task::where('tenant_id', $tenant)->where('assignee_id', $user->id)->where('status', 'completed')
                 ->whereRaw('(select MAX(created_at) from task_status_histories where task_status_histories.task_id = tasks.id and to_status = ?) >= ?', ['completed', $start])
                 ->whereRaw('(select MAX(created_at) from task_status_histories where task_status_histories.task_id = tasks.id and to_status = ?) < ?', ['completed', $until])->count(),
-            'leads_assigned' => Lead::where('tenant_id', $tenant)->where('assigned_to', $user->id)->where('created_at', '>=', $start)->where('created_at', '<', $until)->count(),
+            'leads_assigned' => Lead::where('tenant_id', $tenant)->whereNull('merged_into_id')->where('assigned_to', $user->id)->where('created_at', '>=', $start)->where('created_at', '<', $until)->count(),
             'orders_completed_amount' => (float) SalesOrder::where('tenant_id', $tenant)->where('sales_owner_id', $user->id)->where('status', 'completed')->where('completed_at', '>=', $start)->where('completed_at', '<', $until)->sum('total_amount'),
             'receipts_confirmed' => GoodsReceipt::where('tenant_id', $tenant)->where('confirmed_by', $user->id)->where('status', 'confirmed')->where('confirmed_at', '>=', $start)->where('confirmed_at', '<', $until)->count(),
             'issues_confirmed' => GoodsIssue::where('tenant_id', $tenant)->where('confirmed_by', $user->id)->where('status', 'confirmed')->where('confirmed_at', '>=', $start)->where('confirmed_at', '<', $until)->count(),

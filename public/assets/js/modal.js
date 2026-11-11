@@ -1,7 +1,26 @@
 (function () {
+    const isPhoneInput = input => input?.tagName === 'INPUT'
+        && !input.readOnly && !input.disabled
+        && (input.type === 'tel' || /^(?:phone|contact_phone|customer_phone|recipient_phone|company_phone)$/.test(input.name || input.id || ''));
+    document.addEventListener('focusin', event => {
+        if (isPhoneInput(event.target)) {
+            event.target.type = 'tel';
+            event.target.inputMode = 'tel';
+        }
+    });
+    document.addEventListener('input', event => {
+        const input = event.target;
+        if (!isPhoneInput(input) || event.isComposing) return;
+        const original = input.value;
+        input.setCustomValidity(/^[+0-9().\s-]*$/.test(original) && !/(?!^)\+/.test(original) ? '' : 'Số điện thoại không được chứa chữ hoặc ký tự không hợp lệ.');
+    }, true);
     let submitHandler = null;
     let toastTimer = null;
     let inlineMount = null;
+    let dirty = false;
+    let closePending = false;
+    document.addEventListener('input', event => { if (event.target.closest?.('#modalForm')) dirty = true; });
+    document.addEventListener('change', event => { if (event.target.closest?.('#modalForm')) dirty = true; });
     const closeIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 
     function open(title, bodyHtml, handler, options = {}) {
@@ -29,6 +48,7 @@
         }
         if (cancel) cancel.textContent = options.cancelText || 'Hủy';
         submitHandler = handler;
+        dirty = false;
     }
 
     function close() {
@@ -54,6 +74,7 @@
         }
         if (cancel) cancel.textContent = 'Hủy';
         submitHandler = null;
+        dirty = false;
         if (onClose) onClose();
     }
 
@@ -112,8 +133,15 @@
             hideToast();
             return;
         }
-        if (event.target.closest('[data-modal-close]') || event.target.id === 'modalBackdrop') {
-            close();
+        if (event.target.id === 'modalBackdrop') return;
+        if (event.target.closest('[data-modal-close]')) {
+            if (!dirty) { close(); return; }
+            if (closePending) return;
+            closePending = true;
+            confirm({title:'Bỏ thay đổi chưa lưu?',message:'Thông tin bạn vừa nhập chưa được lưu.',confirmText:'Bỏ thay đổi',cancelText:'Tiếp tục nhập'}).then(discard => {
+                closePending = false;
+                if (discard) close();
+            });
         }
     });
 
@@ -130,6 +158,12 @@
         } finally {
             submit.disabled = false;
         }
+    });
+
+    document.addEventListener('keydown', event => {
+        if (event.key !== 'Escape' || closePending || !document.getElementById('modalBackdrop')?.classList.contains('open')) return;
+        event.preventDefault();
+        document.querySelector('#modalBackdrop .modal-head [data-modal-close]')?.click();
     });
 
     function mountPage(target, onClose = null) {

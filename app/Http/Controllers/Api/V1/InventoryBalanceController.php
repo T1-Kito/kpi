@@ -12,7 +12,7 @@ class InventoryBalanceController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $pageSize = min((int) $request->query('page_size', 20), 100);
+        $pageSize = max(1,min((int) $request->query('page_size', 20), 100));
         $query = InventoryBalance::query()
             ->where('tenant_id', $request->user()->tenant_id)
             ->with(['sku:id,sku_code,name,unit,min_stock,max_stock', 'warehouse:id,code,name']);
@@ -26,6 +26,10 @@ class InventoryBalanceController extends Controller
             $query->where('sku_id', $skuId);
         }
 
+        if ($search = trim((string)$request->query('q',''))) $query->where(fn($q)=>$q->where('lot_no','like',"%{$search}%")->orWhereHas('sku',fn($sku)=>$sku->where('sku_code','like',"%{$search}%")->orWhere('name','like',"%{$search}%"))->orWhereHas('warehouse',fn($warehouse)=>$warehouse->where('name','like',"%{$search}%")));
+        $status=$request->query('status');
+        if($status==='reserved')$query->where('reserved','>',0);
+        if(in_array($status,['low','ok'],true))$query->whereHas('sku',fn($sku)=>$sku->whereColumn('inventory_balances.available',$status==='low'?'<=':'>','skus.min_stock'));
         $balances = $query->latest('id')->paginate($pageSize);
 
         return response()->json([

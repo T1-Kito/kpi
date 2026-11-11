@@ -10,5 +10,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/sales-orders.js?v=20261028-auto-order2"></script>
+<script src="/assets/js/features/sales-orders.js?v=20261104-intake33"></script>
 @endpush

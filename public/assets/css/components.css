@@ -353,7 +353,7 @@ button {
 
 .btn:disabled {
     opacity: .6;
-    cursor: wait;
+    cursor: default;
 }
 
 .btn.compact {

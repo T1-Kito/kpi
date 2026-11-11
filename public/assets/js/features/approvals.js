@@ -1,9 +1,10 @@
 (function () {
 const labels = { quotation: 'Báo giá', purchase_request: 'Yêu cầu mua', purchase_order: 'Đơn mua', kpi_adjustment: 'Phiếu điểm', kpi_exception: 'Ngoại lệ KPI' };
 const esc = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
-let approvalLoadVersion = 0;
+let approvalLoadVersion = 0, approvalPage=1, approvalHistoryPage=1;
 
 document.addEventListener('click', (event) => {
+    const pager=event.target.closest('[data-approval-page], [data-approval-history-page]');if(pager){if(pager.hasAttribute('data-approval-page'))approvalPage=Number(pager.dataset.approvalPage);else approvalHistoryPage=Number(pager.dataset.approvalHistoryPage);loadApprovals(new FormData(document.querySelector('[data-approval-filter]')));return;}
     const button = event.target.closest('[data-approval-decision]');
     if (!button || !document.querySelector('.approval-center')) return;
     openDecisionModal(button.dataset);
@@ -13,12 +14,12 @@ document.addEventListener('submit', (event) => {
     const form = event.target.closest('[data-approval-filter]');
     if (!form) return;
     event.preventDefault();
-    loadApprovals(new FormData(form));
+    approvalPage=approvalHistoryPage=1;loadApprovals(new FormData(form));
 });
 
 document.addEventListener('reset', (event) => {
     if (!event.target.matches('[data-approval-filter]')) return;
-    setTimeout(() => loadApprovals(), 0);
+    approvalPage=approvalHistoryPage=1;setTimeout(() => loadApprovals(), 0);
 });
 
 function openDecisionModal(data) {
@@ -90,7 +91,7 @@ function render(data) {
         const node = document.querySelector(`[data-metric="${key}"]`);
         if (node) node.textContent = value;
     });
-    document.querySelector('[data-approval-count]').textContent = `${(data.pending || []).length} hồ sơ`;
+    document.querySelector('[data-approval-count]').textContent = `${data.pagination?.total ?? (data.pending || []).length} hồ sơ`;
     const list = document.querySelector('[data-approval-list]');
     list.innerHTML = data.pending?.length ? `<div class="approval-list">${data.pending.map((row) => {
         const timer = age(row);
@@ -104,17 +105,19 @@ function render(data) {
 
     const history = document.querySelector('[data-approval-history]');
     history.innerHTML = data.recent?.length ? data.recent.map((row) => `<div class="approval-history-row"><span class="approval-history-mark ${esc(row.status)}"></span><div><strong class="record-code-text">${esc(row.code)}</strong><small>${esc(labels[row.type] || row.type)} · ${esc(row.owner)}</small></div><span class="badge ${row.status === 'approved' ? 'success' : 'danger'}">${row.status === 'approved' ? 'Đã duyệt' : 'Từ chối'}</span><time>${dateTime(row.decided_at)}</time><a href="${esc(row.path)}">Xem</a></div>`).join('') : '<div class="empty-state"><strong>Chưa có quyết định gần đây</strong></div>';
+    list.insertAdjacentHTML('beforeend',VKTable.pager(data.pagination || {},'data-approval-page'));
+    history.insertAdjacentHTML('beforeend',VKTable.pager(data.history_pagination || {},'data-approval-history-page'));
 }
 
 async function loadApprovals(formData) {
     const root = document.querySelector('.approval-center');
     if (!root) return;
     const version = ++approvalLoadVersion;
-    const params = new URLSearchParams();
+    const params = new URLSearchParams({page:approvalPage,history_page:approvalHistoryPage,page_size:20});
     // PJAX supplies navigation options, while the filter supplies FormData.
     if (typeof formData?.entries === 'function') for (const [key, value] of formData.entries()) if (value) params.set(key, value);
     try {
-        const response = await VKApi.request(`/approval-center${params.size ? `?${params}` : ''}`);
+        const response = await VKApi.request(`/approval-center?${params}`,{cache:false});
         if (version !== approvalLoadVersion || !root.isConnected || document.querySelector('.approval-center') !== root) return;
         render(response.data || response);
     } catch (error) {

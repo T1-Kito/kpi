@@ -1,5 +1,6 @@
 (function () {
-let inventoryState = { balances: [], transactions: [], q: '', status: '' };
+let inventoryState = { balances: [], transactions: [], q: '', status: '', page:1,total:0 };
+let inventoryTimer, inventoryVersion=0;
 let movementState = { page: 1, q: '', type: '', from: '', to: '' }, movementSequence = 0;
 
 document.addEventListener('vk:ready', () => loadInventory());
@@ -7,17 +8,18 @@ document.addEventListener('input', (event) => {
     if (!document.getElementById('inventoryRoot')) return;
     if (event.target.matches('[data-list-search]')) {
         inventoryState.q = event.target.value.toLowerCase();
-        renderInventory();
+        inventoryState.page=1;++inventoryVersion;clearTimeout(inventoryTimer);inventoryTimer=setTimeout(()=>loadInventory(true),280);
     }
 });
 document.addEventListener('change', (event) => {
     if (!document.getElementById('inventoryRoot')) return;
     if (event.target.matches('[data-list-status]')) {
         inventoryState.status = event.target.value;
-        renderInventory();
+        inventoryState.page=1;loadInventory();
     }
 });
 document.addEventListener('click', (event) => {
+    const pager=event.target.closest('[data-inventory-page]');if(pager){inventoryState.page=Number(pager.dataset.inventoryPage);loadInventory();return;}
     const card = event.target.closest('[data-stock-card]');
     if (card) { openStockCard(card.dataset.stockCard); return; }
     const page = event.target.closest('[data-movement-page]');
@@ -30,15 +32,18 @@ document.addEventListener('click', (event) => {
     loadInventory();
 });
 
-async function loadInventory() {
+async function loadInventory(quiet=false) {
     const root = document.getElementById('inventoryRoot');
     if (!root) return;
     if (root.dataset.inventoryMode === 'transactions') { await loadMovements(); return; }
 
-    root.innerHTML = VKTable.skeleton ? VKTable.skeleton() : '<div class="list-loading">Đang tải dữ liệu tồn kho...</div>';
+    const version=++inventoryVersion;
+    if(!quiet)root.innerHTML = VKTable.skeleton ? VKTable.skeleton() : '<div class="list-loading">Đang tải dữ liệu tồn kho...</div>';
 
     try {
-        const balances = await VKApi.request('/inventory-balances?page_size=100');
+        const balances = await VKApi.request('/inventory-balances?'+new URLSearchParams({page_size:20,page:inventoryState.page,q:inventoryState.q,status:inventoryState.status}),{cache:false});
+        if(version!==inventoryVersion || document.getElementById('inventoryRoot')!==root)return;
+        inventoryState.total=balances.meta?.total || 0;
         inventoryState.balances = balances.data || [];
         renderInventory(balances.meta?.total ?? inventoryState.balances.length);
 
@@ -55,8 +60,9 @@ async function loadInventory() {
     }
 }
 
-function renderInventory(total = inventoryState.balances.length) {
-    const rows = filterBalances();
+function renderInventory(total = inventoryState.total) {
+    const focused=document.activeElement?.matches('[data-list-search]'), caret=focused?document.activeElement.selectionStart:null;
+    const rows = inventoryState.balances;
     document.getElementById('inventoryRoot').innerHTML = `
         ${VKTable.fullList({
             title: 'Tồn kho hiện tại',
@@ -74,7 +80,9 @@ function renderInventory(total = inventoryState.balances.length) {
             table: renderBalances(rows),
         })}
     `;
+    document.getElementById('inventoryRoot').insertAdjacentHTML('beforeend',VKTable.pager({page:inventoryState.page,total:inventoryState.total,page_size:20},'data-inventory-page'));
     restoreFilters();
+    if(focused){const input=document.querySelector('[data-list-search]');input?.focus();if(caret!==null)input?.setSelectionRange(caret,caret);}
 }
 
 function renderBalances(rows) {
@@ -115,7 +123,7 @@ function movementFilters(values, card = false) {
 }
 
 function movementPager(meta, card = false) {
-    return `<div class="stock-movement-pager"><span>${VKTable.money(meta.total)} giao dịch · Trang ${meta.page} / ${meta.last_page}</span>
+    return `<div class="stock-movement-pager${card ? '' : ' customer-list-pagination'}"><span>${VKTable.money(meta.total)} giao dịch · Trang ${meta.page} / ${meta.last_page}</span>
         <div><button type="button" class="btn small" ${card ? 'data-card-page' : 'data-movement-page'}="${meta.page - 1}" ${meta.page <= 1 ? 'disabled' : ''}>Trước</button>
         <button type="button" class="btn small" ${card ? 'data-card-page' : 'data-movement-page'}="${meta.page + 1}" ${meta.page >= meta.last_page ? 'disabled' : ''}>Sau</button></div></div>`;
 }

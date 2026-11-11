@@ -7,6 +7,13 @@ use Illuminate\Database\Connection;
 final class AdditiveDatabaseUpgrade
 {
     public const STEPS=[
+        '2026_11_10_110000_create_faceid_sync_tables'=>['@faceid_sync'=>'faceid_source_records','@faceid_sync_state'=>'faceid_sync_states'],
+        '2026_11_10_100000_create_customer_faceid_links'=>['@faceid_links'=>'customer_faceid_links'],
+        '2026_11_04_100000_allow_unlinked_service_requests'=>['@independent_service'=>'customer_id'],
+        '2026_11_03_110000_add_service_request_workflow'=>['@service_request'=>'request_details'],
+        '2026_11_03_100000_add_quotation_vat_mode_and_contract_type'=>['@vat_contract'=>'prices_include_vat'],
+        '2026_10_31_100000_add_lead_workflow_and_search'=>['@lead_workflow'=>'needs'],
+        '2026_10_29_160000_add_user_avatar'=>['@user_avatar'=>'avatar_path'],
         '2026_10_28_160000_link_product_category_services'=>['@category_service'=>'service_interest_id'],
         '2026_10_28_150000_add_product_category_parent'=>['@category_parent'=>'parent_id'],
         '2026_10_28_140000_repair_installed_dashboard_permissions'=>['@dashboard_permissions'=>'permission'],
@@ -35,6 +42,29 @@ final class AdditiveDatabaseUpgrade
         if(array_diff($pending,array_keys(self::STEPS))) throw new \RuntimeException('UPGRADE_BASELINE');
         if($pending && !$db->getSchemaBuilder()->hasTable('service_tickets')) throw new \RuntimeException('UPGRADE_BASELINE');
         foreach($pending as $name) {
+            if(isset(self::STEPS[$name]['@independent_service'])) {
+                if(!$db->getSchemaBuilder()->hasColumn('service_tickets','customer_id'))throw new \RuntimeException('UPGRADE_BASELINE');
+                continue;
+            }
+            if(isset(self::STEPS[$name]['@service_request'])) {
+                foreach(ServiceRequestSchema::COLUMNS as $column) if($db->getSchemaBuilder()->hasColumn('service_tickets',$column))throw new \RuntimeException('UPGRADE_SCHEMA_CONFLICT');
+                continue;
+            }
+            if(isset(self::STEPS[$name]['@vat_contract'])) {
+                foreach(['quotations'=>'prices_include_vat','contracts'=>'contract_type'] as $table=>$column) if(!$db->getSchemaBuilder()->hasTable($table) || $db->getSchemaBuilder()->hasColumn($table,$column))throw new \RuntimeException('UPGRADE_SCHEMA_CONFLICT');
+                continue;
+            }
+            if(isset(self::STEPS[$name]['@lead_workflow'])) {
+                foreach (['leads','customers','customer_contacts'] as $table) {
+                    if (!$db->getSchemaBuilder()->hasTable($table) || $db->getSchemaBuilder()->hasColumn($table,'search_text')) throw new \RuntimeException('UPGRADE_SCHEMA_CONFLICT');
+                }
+                if ($db->getSchemaBuilder()->hasColumn('leads','needs')) throw new \RuntimeException('UPGRADE_SCHEMA_CONFLICT');
+                continue;
+            }
+            if(isset(self::STEPS[$name]['@user_avatar'])) {
+                if(!$db->getSchemaBuilder()->hasTable('users') || $db->getSchemaBuilder()->hasColumn('users','avatar_path'))throw new \RuntimeException('UPGRADE_SCHEMA_CONFLICT');
+                continue;
+            }
             if(isset(self::STEPS[$name]['@category_service'])){
                 if(!$db->getSchemaBuilder()->hasTable('product_categories') || $db->getSchemaBuilder()->hasColumn('product_categories','service_interest_id'))throw new \RuntimeException('UPGRADE_SCHEMA_CONFLICT');
                 continue;
@@ -84,7 +114,22 @@ final class AdditiveDatabaseUpgrade
         $db->transaction(function()use($db,$pending,$fault){
             $batch=(int)$db->table('migrations')->max('batch')+1;
             foreach($pending as $name) {
-                if(isset(self::STEPS[$name]['@category_service'])){
+                if(isset(self::STEPS[$name]['@faceid_sync'])) {
+                    FaceIdSyncSchema::up($db->getSchemaBuilder());
+                } elseif(isset(self::STEPS[$name]['@faceid_links'])) {
+                    CustomerFaceIdSchema::up($db->getSchemaBuilder());
+                } elseif(isset(self::STEPS[$name]['@independent_service'])) {
+                    $db->getSchemaBuilder()->table('service_tickets',fn($t)=>$t->unsignedBigInteger('customer_id')->nullable()->change());
+                } elseif(isset(self::STEPS[$name]['@service_request'])) {
+                    ServiceRequestSchema::up($db);
+                } elseif(isset(self::STEPS[$name]['@vat_contract'])) {
+                    $db->getSchemaBuilder()->table('quotations',fn($t)=>$t->boolean('prices_include_vat')->default(false));
+                    $db->getSchemaBuilder()->table('contracts',fn($t)=>$t->string('contract_type',100)->nullable());
+                } elseif(isset(self::STEPS[$name]['@lead_workflow'])){
+                    LeadWorkflowSchema::up($db);
+                }elseif(isset(self::STEPS[$name]['@user_avatar'])){
+                    $db->getSchemaBuilder()->table('users',fn($t)=>$t->string('avatar_path')->nullable());
+                }elseif(isset(self::STEPS[$name]['@category_service'])){
                     $db->getSchemaBuilder()->table('product_categories',fn($t)=>$t->unsignedBigInteger('service_interest_id')->nullable());
                 }elseif(isset(self::STEPS[$name]['@category_parent'])){
                     $db->getSchemaBuilder()->table('product_categories',fn($t)=>$t->unsignedBigInteger('parent_id')->nullable()->index());

@@ -41,6 +41,9 @@
 
     function bindEvents() {
         const dom = els();
+        dom.list?.addEventListener('click', (event) => {
+            if (event.target.closest('[data-notification-retry]')) loadNotifications();
+        });
 
         dom.toggle?.addEventListener('click', () => {
             const isOpen = dom.popover.classList.toggle('open');
@@ -52,12 +55,11 @@
         });
 
         dom.readAll?.addEventListener('click', async () => {
-            const unread = state.notifications.filter((item) => item.status === 'unread');
-            if (!unread.length || state.loading) return;
+            if (!state.unreadTotal || state.loading) return;
 
             dom.readAll.disabled = true;
             try {
-                await Promise.all(unread.map((item) => markRead(item.id, false)));
+                await VKApi.request('/notifications/read-all', { method: 'POST' });
                 await loadNotifications();
                 showToast('Đã đánh dấu tất cả thông báo là đã đọc.');
             } catch (error) {
@@ -208,7 +210,11 @@
     function renderError(message) {
         const dom = els();
         if (!dom.list) return;
-        dom.list.innerHTML = `<div class="notification-empty">${escapeHtml(message)}</div>`;
+        const detail = /failed to fetch|networkerror|load failed/i.test(message)
+            ? 'Mất kết nối tới máy chủ CRM. Kiểm tra máy chủ đang chạy và kết nối mạng rồi thử lại.'
+            : message;
+        dom.list.innerHTML = `<div class="notification-empty"><p>${escapeHtml(detail)}</p><button class="btn secondary small" type="button" data-notification-retry>Thử lại</button></div>`;
+        if (dom.readAll) dom.readAll.disabled = true;
         if (dom.summary) {
             dom.summary.textContent = 'Không tải được thông báo';
         }
@@ -222,14 +228,19 @@
     }
 
     function showToast(message) {
-        if (window.VKTable?.toast) {
-            window.VKTable.toast(message);
+        if (window.VKModal?.toast) {
+            window.VKModal.toast(message);
             return;
         }
 
         const toast = qs('#toast');
         if (!toast) return;
-        toast.textContent = message;
+        toast.replaceChildren();
+        const text = document.createElement('span');
+        text.className = 'toast-message';
+        text.style.gridColumn = '1 / -1';
+        text.textContent = message;
+        toast.appendChild(text);
         toast.classList.add('show');
         window.setTimeout(() => toast.classList.remove('show'), 2500);
     }

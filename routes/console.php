@@ -233,3 +233,22 @@ Artisan::command('kpi:rollout-bundles', function (KpiBundleRolloutService $rollo
 })->purpose('Create KPI assignments for active recurring bundle plans');
 
 Schedule::command('kpi:rollout-bundles')->dailyAt('00:10')->withoutOverlapping();
+
+if (class_exists(\App\Services\Hospitality\FaceIdSync::class)) {
+    Artisan::command('faceid:sync', function (\App\Services\Hospitality\FaceIdSync $sync) {
+        $tenant = (int) config('hospitality.tenant_id');
+        if (!$sync::configured($tenant)) return 0;
+        try {
+            $counts = $sync->run($tenant);
+            $this->info('Đã đồng bộ FaceID: '.array_sum($counts).' bản ghi.');
+            return 0;
+        } catch (\Illuminate\Contracts\Cache\LockTimeoutException) {
+            $this->info('FaceID đang đồng bộ.');
+            return 0;
+        } catch (\Throwable) {
+            $this->error('Đồng bộ FaceID chưa thành công.');
+            return 1;
+        }
+    })->purpose('Đọc dữ liệu FaceID vào danh sách CRM');
+    Schedule::command('faceid:sync')->everyFifteenMinutes()->withoutOverlapping(30);
+}

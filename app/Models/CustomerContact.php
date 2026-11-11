@@ -7,11 +7,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CustomerContact extends Model
 {
+    use \App\Models\Concerns\HasVietnameseSearch;
     use \App\Models\Concerns\CastsDatabaseIdentifiers;
 
     protected $fillable = ['customer_id', 'name', 'phone', 'email', 'position', 'is_primary'];
 
     protected $casts = ['is_primary' => 'boolean'];
+    protected $hidden = ['search_text'];
 
     protected static function booted(): void
     {
@@ -22,7 +24,8 @@ class CustomerContact extends Model
                 foreach (['phone', 'email'] as $field) {
                     if (array_key_exists($field, $contact->getAttributes())) $projection[$field] = $contact->$field;
                 }
-                $contact->customer()->update($projection);
+                $customer=$contact->customer;
+                if ($customer) $customer->update($projection);
             }
         });
     }

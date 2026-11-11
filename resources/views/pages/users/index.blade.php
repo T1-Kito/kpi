@@ -15,5 +15,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/users.js?v=20261023-organization1"></script>
+<script src="/assets/js/features/users.js?v=20261101-full-pagination12"></script>
 @endpush

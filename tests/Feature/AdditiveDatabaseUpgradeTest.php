@@ -6,18 +6,32 @@ use Tests\TestCase;
 
 class AdditiveDatabaseUpgradeTest extends TestCase
 {
+    public function test_upgrade_from_previous_release_only_adds_avatar_and_preserves_users():void {
+        [$db]=$this->fixture();$service=new AdditiveDatabaseUpgrade;
+        $required=array_map(fn($file)=>pathinfo($file,PATHINFO_FILENAME),glob(database_path('migrations/*.php')));
+        $avatar='2026_10_29_160000_add_user_avatar';
+        foreach(array_diff($required,[$avatar]) as $name)$db->table('migrations')->insert(['migration'=>$name,'batch'=>1]);
+        $db->table('users')->insert(['id'=>42]);
+        $this->assertSame([$avatar],$service->pending($db,$required));
+        $service->apply($db,[$avatar]);
+        $this->assertSame(42,(int)$db->table('users')->value('id'));
+        $this->assertNull($db->table('users')->value('avatar_path'));
+        $this->assertSame([],$service->pending($db,$required));
+    }
     private function fixture():array {
         $path=tempnam(sys_get_temp_dir(),'vkupgrade-');
         config(['database.connections.update_fixture'=>['driver'=>'sqlite','database'=>$path,'prefix'=>'','foreign_key_constraints'=>true]]);
         DB::purge('update_fixture');$db=DB::connection('update_fixture');
         $db->getSchemaBuilder()->create('migrations',fn($t)=>[$t->increments('id'),$t->string('migration'),$t->integer('batch')]);
-        $db->getSchemaBuilder()->create('service_tickets',fn($t)=>[$t->increments('id'),$t->string('subject')]);
+        $db->getSchemaBuilder()->create('service_tickets',fn($t)=>[$t->increments('id'),$t->unsignedBigInteger('customer_id')->default(1),$t->string('subject')]);
         $db->table('service_tickets')->insert(['subject'=>'Customer data retained']);
         $db->getSchemaBuilder()->create('customers',fn($t)=>[$t->increments('id'),$t->unsignedBigInteger('tenant_id')->default(1),$t->string('name')]);
+        foreach(['leads','customer_contacts'] as $table) $db->getSchemaBuilder()->create($table,fn($t)=>[$t->increments('id'),$t->string('name')]);
+        $db->table('leads')->insert(['name'=>'Đoàn Trường học']);
         $db->getSchemaBuilder()->create('skus',fn($t)=>[$t->increments('id'),$t->unsignedBigInteger('tenant_id')->default(1)]);
         $db->getSchemaBuilder()->create('deals',fn($t)=>[$t->increments('id'),$t->string('name')]);
         $db->getSchemaBuilder()->create('product_categories',fn($t)=>[$t->increments('id'),$t->string('name')]);
-        foreach(['tenants','users','quotations'] as $table)$db->getSchemaBuilder()->create($table,fn($t)=>$t->increments('id'));
+        foreach(['tenants','users','quotations','contracts'] as $table)$db->getSchemaBuilder()->create($table,fn($t)=>$t->increments('id'));
         $db->getSchemaBuilder()->create('roles',fn($t)=>[$t->increments('id'),$t->string('code')]);
         $db->getSchemaBuilder()->create('permissions',fn($t)=>[$t->increments('id'),$t->string('code'),$t->string('name')]);
         $db->getSchemaBuilder()->create('role_permissions',fn($t)=>[$t->unsignedInteger('role_id'),$t->unsignedInteger('permission_id')]);
@@ -31,6 +45,9 @@ class AdditiveDatabaseUpgradeTest extends TestCase
         $this->assertSame(hash_file('sha256',$backup),file_get_contents($backup.'.sha256'));
         $copy=new \PDO('sqlite:'.$backup);$this->assertSame('Customer data retained',$copy->query('SELECT subject FROM service_tickets')->fetchColumn());
         $service->apply($db,$pending);
+        $this->assertTrue($db->getSchemaBuilder()->hasColumn('users','avatar_path'));
+        $this->assertSame('doan truong hoc',$db->table('leads')->value('search_text'));
+        $this->assertTrue($db->getSchemaBuilder()->hasColumn('leads','handover_to'));
         $this->assertSame('Customer data retained',$db->table('service_tickets')->value('subject'));
         $this->assertTrue($db->getSchemaBuilder()->hasColumn('service_tickets','document_id'));
         $this->assertTrue($db->getSchemaBuilder()->hasTable('ticket_attachments'));
@@ -44,6 +61,7 @@ class AdditiveDatabaseUpgradeTest extends TestCase
     public function test_failure_rolls_back_schema_and_migration_ledger():void {
         [$db]=$this->fixture();$service=new AdditiveDatabaseUpgrade;
         try{$service->apply($db,array_keys(AdditiveDatabaseUpgrade::STEPS),fn()=>throw new \RuntimeException('FAULT'));$this->fail('Expected fault');}catch(\RuntimeException $e){$this->assertSame('FAULT',$e->getMessage());}
+        $this->assertFalse($db->getSchemaBuilder()->hasColumn('users','avatar_path'));
         $this->assertFalse($db->getSchemaBuilder()->hasColumn('service_tickets','related_document'));
         $this->assertSame(0,$db->table('migrations')->count());
         $this->assertSame('Customer data retained',$db->table('service_tickets')->value('subject'));

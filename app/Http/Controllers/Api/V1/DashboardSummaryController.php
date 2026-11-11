@@ -115,6 +115,7 @@ class DashboardSummaryController extends Controller
     private function leads(Request $request, int $pageSize = 20): array
     {
         $query = Lead::query()
+            ->whereNull('merged_into_id')
             ->where('tenant_id', $request->user()->tenant_id)
             ->with('assignee:id,name,email');
         DataScope::owned($query, $request->user(), 'assigned_to', 'assignee');

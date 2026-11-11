@@ -31,7 +31,7 @@ class PersonnelHandoverController extends Controller
         $query = $model::where('tenant_id', $user->tenant_id)->where($owner, $user->id);
         return match ($group) {
             'customers' => $query->whereNull('merged_into_id'),
-            'leads' => $query->whereNotIn('status', ['qualified', 'converted', 'lost', 'disqualified']),
+            'leads' => $query->whereNull('merged_into_id')->where(fn($q)=>$q->whereNull('handover_status')->orWhere('handover_status','!=','pending'))->whereNotIn('status', ['qualified', 'converted', 'lost', 'disqualified']),
             'deals' => $query->where('status', 'open'),
             // Approval responsibilities are deliberately excluded.
             'tasks' => $query->whereIn('status', ['new','in_progress','overdue'])->where(function ($q) {

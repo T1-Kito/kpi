@@ -1,5 +1,5 @@
 (function () {
-let skuState = { rows: [], categories: [], brands: [], q: '', status: '' };
+let skuState = { page:1,total:0, rows: [], categories: [], brands: [], q: '', status: '' };
 skuState.category='';
 function skuCategoryFields(id){
     const item=skuState.categories.find(x=>String(x.id)===String(id));
@@ -9,18 +9,20 @@ function skuCategoryFields(id){
 }
 function skuCategoryChildren(parent){return [{value:parent || '',label:parent?'Chưa chọn nhóm chi tiết':'Chọn nhóm cấp 1 trước'},...skuState.categories.filter(x=>String(x.parent_id)===String(parent) && x.status==='active').map(x=>({value:x.id,label:x.name}))];}
 document.addEventListener('change',event=>{
-    if(event.target.matches('[data-sku-category-filter]')){skuState.category=event.target.value;loadSkus();return;}
+    if(event.target.matches('[data-sku-category-filter]')){skuState.category=event.target.value;skuState.page=1;loadSkus();return;}
     if(event.target.id!=='sku_category_root')return;
     const field=document.getElementById('category_id');if(!field)return;
     field.innerHTML=skuCategoryChildren(event.target.value).map(x=>`<option value="${x.value}">${VKTable.escapeHtml(x.label)}</option>`).join('');
 });
 
+let listSearchTimer,listRequestVersion=0;
+document.addEventListener('click',event=>{if(!document.getElementById('skusRoot'))return;const pager=event.target.closest('[data-module-page]');if(pager){skuState.page=Number(pager.dataset.modulePage);loadSkus();}});
 document.addEventListener('vk:ready', () => loadSkus());
 document.addEventListener('input', (event) => {
     if (!document.getElementById('skusRoot')) return;
     if (event.target.matches('[data-list-search]')) {
         skuState.q = event.target.value.toLowerCase();
-        renderSkus();
+        skuState.page=1;++listRequestVersion;clearTimeout(listSearchTimer);listSearchTimer=setTimeout(loadSkus,280);
     }
     if (event.target.matches('[data-money-input]')) {
         formatSkuMoneyInput(event.target);
@@ -30,7 +32,7 @@ document.addEventListener('change', (event) => {
     if (!document.getElementById('skusRoot')) return;
     if (event.target.matches('[data-list-status]')) {
         skuState.status = event.target.value;
-        renderSkus();
+        skuState.page=1;++listRequestVersion;clearTimeout(listSearchTimer);listSearchTimer=setTimeout(loadSkus,280);
     }
 });
 document.addEventListener('click', (event) => {
@@ -47,16 +49,19 @@ document.addEventListener('click', (event) => {
 
 async function loadSkus() {
     if (!document.getElementById('skusRoot')) return;
-    const [skus, categories, brands] = await Promise.all([VKApi.request('/skus'+(skuState.category?`?category_id=${encodeURIComponent(skuState.category)}`:''), {cache:false}), VKApi.request('/product-categories'), VKApi.request('/product-brands')]);
+    const listVersion=++listRequestVersion;
+    const [skus, categories, brands] = await Promise.all([VKApi.request('/skus?'+new URLSearchParams({page_size:20,page:skuState.page,q:skuState.q,status:skuState.status,category_id:skuState.category}),{cache:false}), VKApi.request('/product-categories'), VKApi.request('/product-brands')]);
+    if(listVersion!==listRequestVersion || !document.getElementById('skusRoot'))return;
+    skuState.total=skus.meta?.total ?? skus.data?.length ?? 0;
     skuState.rows = skus.data || [];
     skuState.categories = categories.data || [];
     skuState.brands = brands.data || [];
     renderSkus(skus.meta.total);
 }
 
-function renderSkus(total = skuState.rows.length) {
-    const rows = filterRows();
-    document.getElementById('skusRoot').innerHTML = VKTable.fullList({
+function renderSkus(total = skuState.total) {
+    const rows = skuState.rows;
+    VKTable.updateList(document.getElementById('skusRoot'), VKTable.fullList({
         title: 'Danh sách mã hàng',
         subtitle: 'Quản lý danh mục, hãng, hình ảnh và thông tin kỹ thuật của sản phẩm.',
         meta: `${VKTable.money(rows.length)} / ${VKTable.money(total)} mã hàng`,
@@ -69,7 +74,8 @@ function renderSkus(total = skuState.rows.length) {
             ],
         }),
         table: renderSkuTable(rows),
-    });
+    }));
+    document.getElementById('skusRoot').insertAdjacentHTML('beforeend',VKTable.pager({page:skuState.page,total:skuState.total,page_size:20},'data-module-page'));
     restoreFilters();
 }
 
@@ -133,8 +139,8 @@ ${VKModal.field('product_name', 'Tên sản phẩm', 'text', row?.product?.name 
             <div class="sku-stock-price-grid">
             ${VKModal.field('serial_number', 'Số serial', 'text', row?.serial_number || '')}
             ${VKModal.field('unit', 'Đơn vị tính', 'text', row?.unit || 'pcs')}
-            ${VKModal.field('min_stock', 'Tồn tối thiểu', 'number', row?.min_stock || '0')}
-            ${VKModal.field('max_stock', 'Tồn tối đa', 'number', row?.max_stock || '0')}
+            ${VKModal.field('min_stock', 'Tồn tối thiểu', 'number', Number(row?.min_stock || 0))}
+            ${VKModal.field('max_stock', 'Tồn tối đa', 'number', Number(row?.max_stock || 0))}
             ${VKLayout.hasPermission('master.cost.view') ? `<div class="field"><label for="cost_price">Giá vốn</label><input id="cost_price" name="cost_price" type="text" inputmode="numeric" autocomplete="off" data-money-input value="${formatSkuMoney(row?.cost_price || 0)}"><small>Nhập số, hệ thống tự ngăn cách hàng nghìn.</small></div>` : ''}
             <div class="field"><label for="sale_price">Giá bán</label><input id="sale_price" name="sale_price" type="text" inputmode="numeric" autocomplete="off" data-money-input value="${formatSkuMoney(row?.sale_price || 0)}"><small>Nhập số, hệ thống tự ngăn cách hàng nghìn.</small></div>
             ${VKModal.select('status', 'Trạng thái', [
@@ -158,16 +164,17 @@ ${VKModal.field('product_name', 'Tên sản phẩm', 'text', row?.product?.name 
 }
 
 function parseSkuMoney(value) {
-    return Number(String(value ?? '').replace(/\D/g, '')) || 0;
+    return VKMoney.parse(value);
 }
 
 function formatSkuMoney(value) {
-    return parseSkuMoney(value).toLocaleString('vi-VN');
+    const amount = typeof value === 'number' ? value : Number(value || 0);
+    return Number.isFinite(amount) ? amount.toLocaleString('vi-VN', { maximumFractionDigits: 2 }) : '0';
 }
 
 function formatSkuMoneyInput(input) {
     const cursorFromEnd = input.value.length - input.selectionStart;
-    input.value = formatSkuMoney(input.value);
+    input.value = VKMoney.format(input.value);
     const nextPosition = Math.max(0, input.value.length - cursorFromEnd);
     input.setSelectionRange(nextPosition, nextPosition);
 }

@@ -24,7 +24,7 @@ class KpiService
     public function buildMetrics(int $tenantId): array
     {
         // Aggregate in the database: memory and response size do not grow with the document lists.
-        $leadTotal = Lead::where('tenant_id', $tenantId)->count();
+        $leadTotal = Lead::where('tenant_id', $tenantId)->whereNull('merged_into_id')->count();
         $quotations = Quotation::where('tenant_id', $tenantId)->selectRaw("COUNT(*) as total, COALESCE(SUM(total_amount),0) as amount, SUM(CASE WHEN status = 'pending_approval' THEN 1 ELSE 0 END) as pending")->first();
         $salesOrders = SalesOrder::where('tenant_id', $tenantId)->selectRaw("COUNT(*) as total, COALESCE(SUM(total_amount),0) as amount, SUM(CASE WHEN stock_status = 'shortage' THEN 1 ELSE 0 END) as shortages")->first();
         $purchaseRequests = DB::table('purchase_requests')->where('tenant_id', $tenantId)->selectRaw("COUNT(*) as total, SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved")->first();

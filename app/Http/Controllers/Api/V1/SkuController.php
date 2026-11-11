@@ -35,6 +35,7 @@ class SkuController extends Controller
             $query->whereHas('product',fn($q)=>$q->whereIn('category_id',$ids));
         }
 
+        if($status=$request->query('status'))$query->where('status',$status);
         if ($search = $request->query('q')) {
             $query->where(fn ($q) => $q
                 ->where('sku_code', 'like', "%{$search}%")

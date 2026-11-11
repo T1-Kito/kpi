@@ -36,6 +36,7 @@ class AlertController extends Controller
             $query->where('level', $level);
         }
 
+        if ($search = trim((string)$request->query('q',''))) {$term='%'.$search.'%';$query->where(function($q)use($term){$q->where('title','like',$term)->orWhere('message','like',$term)->orWhere('source_type','like',$term);});}
         $alerts = $query->latest('id')->paginate($pageSize);
 
         return response()->json([

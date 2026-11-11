@@ -341,6 +341,7 @@ class PrintTemplateController extends Controller
             return [...$common,
                 ['key' => 'ma_hop_dong', 'label' => 'Số hợp đồng'],
                 ['key' => 'ten_hop_dong', 'label' => 'Tên hợp đồng'],
+                ['key'=>'loai_hop_dong','label'=>'Loại hợp đồng'],
                 ['key' => 'ngay_hop_dong', 'label' => 'Ngày lập hợp đồng'],
                 ['key' => 'ngay_hieu_luc', 'label' => 'Ngày hiệu lực'],
                 ['key' => 'ngay_het_han', 'label' => 'Ngày hết hạn'],

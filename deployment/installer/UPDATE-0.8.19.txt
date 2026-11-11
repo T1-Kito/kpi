@@ -1,0 +1,33 @@
+VK CRM 0.8.19
+
+CÀI MỚI (SỬA LỖI SQL_STAGE_INPUT)
+1. Giải nén ZIP, chạy Setup.exe mới trong gói này.
+2. Nhập hai email khác nhau cho Chủ tịch và Admin; mỗi mật khẩu tối thiểu 8 ký tự.
+3. Chọn đúng cơ sở dữ liệu trống và hoàn tất thiết lập.
+   Lỗi SQL_STAGE_INPUT ở bản trước dừng trước khi tạo bảng. Không xóa
+   database hay thư mục cũ; kiểm tra trạng thái trước khi thử lại.
+
+CẬP NHẬT BẢN ĐANG SỬ DỤNG
+1. Giải nén ZIP ngoài thư mục CRM đang dùng.
+2. Cho người dùng ngừng thao tác và dừng máy chủ CRM.
+3. Chạy Setup.exe mới → Cập nhật bản đã cài → chọn đúng thư mục cũ.
+4. Chỉ tiếp tục khi sao lưu và kiểm chứng database thành công.
+5. Mở trình quản lý VK CRM và khởi động lại. Nhấn Ctrl + F5 trên trình duyệt.
+6. Giữ nguyên cấu hình, tài khoản, dữ liệu và file bản quyền đã cấp.
+   Máy chưa kích hoạt cần gửi mã máy để nhận file .vkcrm.
+
+THAY ĐỔI
+- Sửa bộ cài SQL Server bỏ sót email và mật khẩu Admin khi khởi tạo.
+- Thông báo rõ khi thông tin Chủ tịch hoặc Admin chưa hợp lệ.
+- Kiểm tra số điện thoại trên giao diện, khi lưu và khi nhập Excel;
+  không chấp nhận chữ, vẫn hỗ trợ +84 và các dấu định dạng thông dụng.
+- Đồng bộ giao diện thiết lập duyệt báo giá nhà cung cấp, đơn mua, nhập kho.
+- Chỉnh bộ lọc kỳ tính điểm và trạng thái trong Sổ điểm nhân viên.
+- Bao gồm các thay đổi của bản 0.8.18.
+
+LƯU Ý
+- Không cài mới đè lên dữ liệu đang sử dụng.
+- Không gửi khóa riêng hoặc công cụ cấp bản quyền cho khách.
+- Bản cài chưa ký số. SQL Server và mạng thực tế cần được kiểm tra trên máy khách.
+
+GÓI GỒM: Setup.exe, HUONG-DAN-CAP-NHAT.txt, SHA256SUMS.txt.

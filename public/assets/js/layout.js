@@ -34,52 +34,53 @@
     };
 
     const features = {
-        'import-center':['import-center.js?v=20261023-organization1','loadImportCenter'],
-        dashboard: ['dashboard.js?v=20261029-activity-vi1', 'loadDashboard'],
-        leads: ['leads.js?v=20261029-compact2', 'loadLeads'],
-        deals: ['deals.js?v=20261028-workspace1', 'loadDeals'],
-        'sales-master-data': ['sales-master-data.js?v=20260923-1', 'loadSalesMasterData'],
-        contracts: ['contracts.js?v=20261028-template-picker1', 'loadContracts'],
-        quotations: ['quotations.js?v=20261029-workflow-soft1', 'loadQuotations'],
-        'sales-orders': ['sales-orders.js?v=20261028-auto-order2', 'loadSalesOrders'],
-        deliveries: ['sales-fulfillment.js?v=20261028-http-uuid1', 'loadDeliveries'],
-        'sales-invoices': ['sales-fulfillment.js?v=20261028-http-uuid1', 'loadSalesInvoices'],
-        'customer-receivables': ['customer-receivables.js?v=20260617-1', 'loadCustomerReceivables'],
-        'customer-payments': ['sales-fulfillment.js?v=20261028-http-uuid1', 'loadCustomerPayments'],
-        customers: ['customers.js?v=20261028-perf2', 'loadCustomers'],
-        'customer-groups': ['customer-groups-page.js?v=20261025-4', 'loadCustomerGroupsPage'],
-        'customer-contacts': ['customer-contacts.js?v=20261023-list-audit2', 'loadCustomerContacts'],
-        suppliers: ['suppliers.js?v=20261023-procurement1', 'loadSuppliers'],
-        skus: ['skus.js?v=20261028-category-tree4', 'loadSkus'],
-        'product-categories': ['product-catalog.js?v=20261028-table6', 'loadProductCatalog'],
-        'product-brands': ['product-catalog.js?v=20261028-table6', 'loadProductCatalog'],
-        inventory: ['inventory.js?v=20260615-3', 'loadInventory'],
-        'inventory-transactions': ['inventory.js?v=20260615-3', 'loadInventory'],
-        warehouses: ['warehouses.js?v=20261023-procurement1', 'loadWarehouses'],
-        'purchase-requests': ['purchase-requests.js?v=20261013-quick2', 'loadPurchaseRequests'],
-        'supplier-quotations': ['supplier-quotations.js?v=20261028-template-picker1', 'loadSupplierQuotations'],
-        'purchase-orders': ['purchase-orders.js?v=20261009-workflow1', 'loadPurchaseOrders'],
-        'goods-receipts': ['goods-receipts.js?v=20261008-menu1', 'loadGoodsReceipts'],
-        'goods-issues': ['goods-issues.js?v=20261028-template-picker1', 'loadGoodsIssues'],
-        'stock-takes': ['stock-takes.js?v=20260619-1', 'loadStockTakes'],
-        tasks: ['tasks.js?v=20261029-create2', 'loadTasks'],
-        approvals: ['approvals.js?v=20261028-pjax3', 'loadApprovals'],
-        alerts: ['alerts.js?v=20260615-2', 'loadAlerts'],
-        kpi: ['kpi.js?v=20261011-scope1', 'loadKpi'],
-        'kpi-reports': ['kpi-reports.js?v=20261029-compact1', 'loadKpiReports'],
-        'business-reports': ['business-reports.js?v=20261013-permissions1', 'loadBusinessReports'],
-        'my-kpi': ['my-kpi.js?v=20261011-assign2', 'loadMyKpi'],
-        'kpi-adjustments': ['kpi-adjustments.js?v=20261019-safety1', 'loadKpiAdjustments'],
-        'kpi-settings': ['kpi-settings.js?v=20261029-confirm2', 'loadKpiSettings'],
-        workflows: ['workflows.js?v=20260618-2', 'loadWorkflows'],
-        users: ['users.js?v=20261023-organization1', 'loadUsers'],
-        roles: ['roles.js?v=20261008-1', 'loadRoles'],
-        organization: ['organization.js?v=20261011-master1', 'loadOrganization'],
-        'print-templates': ['print-templates.js?v=20261027-shared-preview10', 'loadPrintTemplates'],
-        'audit-logs': ['audit-logs.js?v=20261029-scroll2', 'loadAuditLogs'],
-        'service-tickets': ['service-desk.js?v=20261029-list2', 'loadServiceTickets'],
-        'warranty-claims': ['service-desk.js?v=20261029-list2', 'loadWarrantyClaims'],
-        settings: ['settings.js?v=20261029-approval-unified1', 'loadSettings'],
+        'hospitality-integration': ['hospitality-integration.js?v=20261110-readonly1', 'loadHospitalityIntegration'],
+        'import-center':['import-center.js?v=20261031-full-pagination12','loadImportCenter'],
+        dashboard: ['dashboard.js?v=20261103-month16', 'loadDashboard'],
+        leads: ['leads.js?v=20261031-full-pagination12', 'loadLeads'],
+        deals: ['deals.js?v=20261101-full-pagination12', 'loadDeals'],
+        'sales-master-data': ['sales-master-data.js?v=20261031-full-pagination12', 'loadSalesMasterData'],
+        contracts: ['contracts.js?v=20261103-customer-care18', 'loadContracts'],
+        quotations: ['quotations.js?v=20261103-customer-care18', 'loadQuotations'],
+        'sales-orders': ['sales-orders.js?v=20261104-care-list22', 'loadSalesOrders'],
+        deliveries: ['sales-fulfillment.js?v=20261103-customer-care18', 'loadDeliveries'],
+        'sales-invoices': ['sales-fulfillment.js?v=20261103-customer-care18', 'loadSalesInvoices'],
+        'customer-receivables': ['customer-receivables.js?v=20261101-full-pagination12', 'loadCustomerReceivables'],
+        'customer-payments': ['sales-fulfillment.js?v=20261103-customer-care18', 'loadCustomerPayments'],
+        customers: ['customers.js?v=20261110-faceid1', 'loadCustomers'],
+        'customer-groups': ['customer-groups-page.js?v=20261031-full-pagination12', 'loadCustomerGroupsPage'],
+        'customer-contacts': ['customer-contacts.js?v=20261031-full-pagination12', 'loadCustomerContacts'],
+        suppliers: ['suppliers.js?v=20261101-full-pagination12', 'loadSuppliers'],
+        skus: ['skus.js?v=20261101-full-pagination12', 'loadSkus'],
+        'product-categories': ['product-catalog.js?v=20261031-full-pagination12', 'loadProductCatalog'],
+        'product-brands': ['product-catalog.js?v=20261031-full-pagination12', 'loadProductCatalog'],
+        inventory: ['inventory.js?v=20261103-stock-pager17', 'loadInventory'],
+        'inventory-transactions': ['inventory.js?v=20261103-stock-pager17', 'loadInventory'],
+        warehouses: ['warehouses.js?v=20261101-full-pagination12', 'loadWarehouses'],
+        'purchase-requests': ['purchase-requests.js?v=20261101-full-pagination12', 'loadPurchaseRequests'],
+        'supplier-quotations': ['supplier-quotations.js?v=20261103-vat-contract14', 'loadSupplierQuotations'],
+        'purchase-orders': ['purchase-orders.js?v=20261101-full-pagination12', 'loadPurchaseOrders'],
+        'goods-receipts': ['goods-receipts.js?v=20261101-full-pagination12', 'loadGoodsReceipts'],
+        'goods-issues': ['goods-issues.js?v=20261101-full-pagination12', 'loadGoodsIssues'],
+        'stock-takes': ['stock-takes.js?v=20261101-full-pagination12', 'loadStockTakes'],
+        tasks: ['tasks.js?v=20261103-vat-contract14', 'loadTasks'],
+        approvals: ['approvals.js?v=20261101-full-pagination12', 'loadApprovals'],
+        alerts: ['alerts.js?v=20261101-full-pagination12', 'loadAlerts'],
+        kpi: ['kpi.js?v=20261101-full-pagination12', 'loadKpi'],
+        'kpi-reports': ['kpi-reports.js?v=20261031-full-pagination12', 'loadKpiReports'],
+        'business-reports': ['business-reports.js?v=20261031-full-pagination12', 'loadBusinessReports'],
+        'my-kpi': ['my-kpi.js?v=20261101-full-pagination12', 'loadMyKpi'],
+        'kpi-adjustments': ['kpi-adjustments.js?v=20261101-full-pagination12', 'loadKpiAdjustments'],
+        'kpi-settings': ['kpi-settings.js?v=20261103-kpi-full15', 'loadKpiSettings'],
+        workflows: ['workflows.js?v=20261031-full-pagination12', 'loadWorkflows'],
+        users: ['users.js?v=20261101-full-pagination12', 'loadUsers'],
+        roles: ['roles.js?v=20261101-full-pagination12', 'loadRoles'],
+        organization: ['organization.js?v=20261031-full-pagination12', 'loadOrganization'],
+        'print-templates': ['print-templates.js?v=20261101-full-pagination12', 'loadPrintTemplates'],
+        'audit-logs': ['audit-logs.js?v=20261101-full-pagination12', 'loadAuditLogs'],
+        'service-tickets': ['service-desk.js?v=20261110-faceid1', 'loadServiceTickets'],
+        'warranty-claims': ['service-desk.js?v=20261110-faceid1', 'loadWarrantyClaims'],
+        settings: ['settings.js?v=20261101-full-pagination12', 'loadSettings'],
     };
     const routePrefetch = {
         '/dashboard': ['dashboard', [
@@ -240,6 +241,7 @@
         if (avatar) {
             avatar.textContent = String(user.name || 'U').trim().charAt(0).toUpperCase();
         }
+        document.dispatchEvent(new CustomEvent('vk:user-hydrated'));
     }
 
     function hydrateLogo(logoUrl) {
@@ -688,6 +690,7 @@
             const href = new URL(link.href, window.location.origin);
             const active = linkMatchesPath(link, href.pathname, pathname);
             link.classList.toggle('active', active);
+            if (active) link.closest('[data-nav-key="dashboard-faceid"]')?.classList.remove('collapsed');
         });
         saveSidebarState();
     }
@@ -729,7 +732,7 @@
         const [file, fn] = feature;
         await loadScript(`/assets/js/features/${file}`);
         if (page === 'dashboard' && document.getElementById('myKpiRoot')) {
-            await loadScript('/assets/js/features/my-kpi.js?v=20261011-assign2');
+            await loadScript('/assets/js/features/my-kpi.js?v=20261101-full-pagination12');
             window.loadMyKpi?.();
         }
         if (typeof window[fn] === 'function') {

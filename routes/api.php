@@ -78,6 +78,10 @@ Route::prefix('v1')->group(function () {
         Route::post('/chat/{id}/messages', [\App\Http\Controllers\Api\V1\ChatController::class, 'send'])->whereNumber('id')->middleware('throttle:120,1');
         Route::post('/chat/{id}/read', [\App\Http\Controllers\Api\V1\ChatController::class, 'read'])->whereNumber('id');
         Route::get('/me', [MeController::class, 'show']);
+        Route::post('/interaction-logs',[\App\Http\Controllers\Api\V1\InteractionLogController::class,'store'])->middleware('throttle:30,1');
+        Route::get('/me/avatar', [\App\Http\Controllers\Api\V1\AccountController::class, 'avatar']);
+        Route::post('/me/avatar', [\App\Http\Controllers\Api\V1\AccountController::class, 'updateAvatar'])->middleware('throttle:10,1');
+        Route::post('/me/password', [\App\Http\Controllers\Api\V1\AccountController::class, 'password'])->middleware('throttle:5,1');
         Route::get('/service-interests',[\App\Http\Controllers\Api\V1\ServiceInterestController::class,'index'])->middleware('permission:sales.deal.view');
         Route::post('/crm-intake/preview',[\App\Http\Controllers\Api\V1\CrmIntakeController::class,'preview'])->middleware(['permission:sales.deal.manage','throttle:10,1']);
         Route::post('/crm-intake/commit',[\App\Http\Controllers\Api\V1\CrmIntakeController::class,'commit'])->middleware(['permission:sales.deal.manage','throttle:10,1']);
@@ -104,6 +108,15 @@ Route::prefix('v1')->group(function () {
             Route::get('/customers/duplicates', [CustomerController::class, 'duplicates']);
             Route::get('/customers/care-board', [\App\Http\Controllers\Api\V1\CustomerCareController::class, 'board']);
             Route::get('/customers/{customer}', [CustomerController::class, 'show']);
+            Route::prefix('/customers/{customer}/faceid')->controller(\App\Http\Controllers\Api\V1\CustomerFaceIdController::class)->group(function () {
+                Route::get('/', 'index');
+                Route::get('/guests', 'search')->middleware(['permission:user.manage', 'throttle:10,1']);
+                Route::post('/guests', 'link')->middleware(['permission:user.manage', 'throttle:10,1']);
+                Route::delete('/guests/{guest}', 'unlink')->whereNumber('guest')->middleware('permission:user.manage');
+                Route::get('/guests/{guest}/access', 'access')->whereNumber('guest')->middleware('throttle:20,1');
+                Route::get('/guests/{guest}/history', 'history')->whereNumber('guest')->middleware('throttle:20,1');
+                Route::get('/guests/{guest}/stay', 'stay')->whereNumber('guest')->middleware('throttle:20,1');
+            });
             Route::get('/customers/{customer}/care', [\App\Http\Controllers\Api\V1\CustomerCareController::class, 'index']);
             Route::post('/customers/{customer}/care', [\App\Http\Controllers\Api\V1\CustomerCareController::class, 'store'])->middleware('permission:task.create');
             Route::post('/customers/{customer}/care/{task}/complete', [\App\Http\Controllers\Api\V1\CustomerCareController::class, 'complete'])->middleware('permission:task.create');
@@ -180,6 +193,7 @@ Route::prefix('v1')->group(function () {
 
         Route::get('/notifications', [NotificationController::class, 'index']);
         Route::get('/approval-center', ApprovalCenterController::class);
+        Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
         Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
         Route::get('/print-templates/active', [PrintTemplateController::class, 'active']);
         Route::get('/print-templates/choices', [PrintTemplateController::class, 'choices']);
@@ -235,6 +249,13 @@ Route::prefix('v1')->group(function () {
         });
 
         Route::middleware('permission:user.manage')->group(function () {
+            Route::get('/integrations/hospitality/status', [\App\Http\Controllers\Api\V1\HospitalityPreviewController::class, 'status']);
+            Route::get('/integrations/hospitality/catalog', [\App\Http\Controllers\Api\V1\HospitalityPreviewController::class, 'catalog']);
+            Route::post('/integrations/hospitality/sync', [\App\Http\Controllers\Api\V1\HospitalityPreviewController::class, 'sync'])->middleware('throttle:4,1');
+            Route::get('/integrations/hospitality/read', [\App\Http\Controllers\Api\V1\HospitalityPreviewController::class, 'read'])->middleware('throttle:10,1');
+            Route::put('/service-desk/routing', [ServiceDeskController::class, 'saveRouting']);
+            Route::get('/tenant/lead-handover', [TenantSettingController::class, 'leadHandover']);
+            Route::post('/tenant/lead-handover', [TenantSettingController::class, 'saveLeadHandover']);
             Route::get('/tenant/work-assignment', [TenantSettingController::class, 'workAssignment']);
             Route::post('/tenant/work-assignment', [TenantSettingController::class, 'saveWorkAssignment']);
             Route::post('/tenant/logo', [TenantSettingController::class, 'updateLogo']);
@@ -282,6 +303,8 @@ Route::prefix('v1')->group(function () {
         });
 
         Route::middleware('permission:sales.lead.view')->group(function () {
+            Route::get('/leads/duplicate-check', [LeadController::class, 'duplicates']);
+            Route::get('/leads/handover-candidates', [LeadController::class, 'handoverCandidates']);
             Route::get('/leads', [LeadController::class, 'index']);
             Route::get('/leads/{lead}', [LeadController::class, 'show']);
         });
@@ -289,6 +312,10 @@ Route::prefix('v1')->group(function () {
             Route::get('/directory-import/leads/template',[\App\Http\Controllers\Api\V1\DirectoryImportController::class,'template'])->defaults('kind','leads');
             Route::post('/directory-import/leads',[\App\Http\Controllers\Api\V1\DirectoryImportController::class,'store'])->defaults('kind','leads');
             Route::post('/leads', [LeadController::class, 'store']);
+            Route::put('/leads/{lead}', [LeadController::class, 'update']);
+            Route::post('/leads/{lead}/handover', [LeadController::class, 'handover']);
+            Route::post('/leads/{lead}/handover-response', [LeadController::class, 'respondHandover']);
+            Route::post('/leads/{lead}/merge', [LeadController::class, 'merge']);
             Route::post('/leads/{lead}/assign', [LeadController::class, 'assign']);
             Route::post('/leads/{lead}/follow-ups', [LeadController::class, 'createFollowUp']);
             Route::post('/leads/{lead}/follow-ups/{task}/status', [LeadController::class, 'updateFollowUpStatus']);
@@ -486,6 +513,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/service-tickets/{ticket}/attachments', [\App\Http\Controllers\Api\V1\TicketAttachmentController::class, 'store']);
             Route::post('/service-tickets/{ticket}/worklogs', [ServiceDeskController::class, 'addWorklog']);
             Route::put('/service-tickets/{ticket}', [ServiceDeskController::class, 'updateTicket']);
+            Route::post('/service-tickets/{ticket}/accept', [ServiceDeskController::class, 'acceptTicket']);
             Route::post('/service-tickets/{ticket}/sla-clock', [ServiceDeskController::class, 'clock']);
             Route::post('/warranty-claims', [ServiceDeskController::class, 'storeWarranty']);
         });

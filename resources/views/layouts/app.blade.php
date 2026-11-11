@@ -5,9 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@yield('title', 'VK-KPI')</title>
     <link rel="icon" type="image/x-icon" href="/assets/branding/vk-crm.ico?v=20261022-1">
-    <link rel="stylesheet" href="/assets/css/app.css?v=20261024-apps1">
-    <link rel="stylesheet" href="/assets/css/components.css?v=20261027-contact-payment3">
-    <link rel="stylesheet" href="/assets/css/pages.css?v=20261029-service-list2">
+    <link rel="stylesheet" href="/assets/css/app.css?v=20261030-logo-size1">
+    <link rel="stylesheet" href="/assets/css/customer-faceid.css?v=20261110-1">
+    <link rel="stylesheet" href="/assets/css/components.css?v=20261102-worklist-height13">
+    <link rel="stylesheet" href="/assets/css/pages.css?v=20261104-intake33">
     <link rel="stylesheet" href="/assets/css/chat-final.css?v=20261015-sidebar9">
     <link rel="stylesheet" href="/assets/css/app-switcher.css?v=20261024-1">
     <link rel="stylesheet" href="/assets/css/catalog-sharing.css?v=20261024-1">
@@ -17,7 +18,7 @@
     <link rel="stylesheet" href="/assets/css/directory-import.css?v=20261026-1">
     <link rel="stylesheet" href="/assets/css/customer-editor.css?v=20261028-address6">
     <link rel="stylesheet" href="/assets/css/deal-overview.css?v=20261028-spacing2">
-    <link rel="stylesheet" href="/assets/css/quotation-editor.css?v=20261028-credit3">
+    <link rel="stylesheet" href="/assets/css/quotation-editor.css?v=20261103-vat14">
     <link rel="stylesheet" href="/assets/css/sales-approval-settings.css?v=20261029-approval-unified1">
 </head>
 <body data-page="@yield('page', 'dashboard')">
@@ -53,23 +54,26 @@
     @include('components.detail-drawer')
     <div id="toast" class="toast" role="status"></div>
 
-    <script src="/assets/js/services/api.js?v=20261028-http-uuid1"></script>
-    <script src="/assets/js/table.js?v=20261029-activity-vi1"></script>
+    <script src="/assets/js/services/api.js?v=20261101-full-pagination12"></script>
+    <script src="/assets/js/table.js?v=20261101-full-pagination12"></script>
+    <script src="/assets/js/interaction-log.js?v=20261031-audit1"></script>
     <script src="/assets/js/catalog-sharing.js?v=20261024-2"></script>
     <script src="/assets/js/customer-groups.js?v=20261028-perf2"></script>
+    <script src="/assets/js/customer-faceid.js?v=20261110-1"></script>
     <script src="/assets/js/deal-services.js?v=20261028-catalog4"></script>
     <script src="/assets/js/crm-intake.js?v=20261025-1"></script>
     <script src="/assets/js/money-input.js?v=20261020-2"></script>
-    <script src="/assets/js/word-preview.js?v=20261028-loader2"></script>
+    <script src="/assets/js/word-preview.js?v=20261031-zoom1"></script>
     <script src="/assets/js/document-export.js?v=20261028-picker2"></script>
-    <script src="/assets/js/modal.js?v=20261028-toast-confirm2"></script>
-    <script src="/assets/js/record-page.js?v=20261028-workspace1"></script>
+    <script src="/assets/js/modal.js?v=20261031-regression1"></script>
+    <script src="/assets/js/account.js?v=20261029-account1"></script>
+    <script src="/assets/js/record-page.js?v=20261110-faceid1"></script>
     <script src="/assets/js/detail-drawer.js?v=20261016-cost1"></script>
-    <script src="/assets/js/features/directory-import.js?v=20261026-1"></script>
-    <script src="/assets/js/layout.js?v=20261029-service-list2"></script>
-    <script src="/assets/js/notifications.js?v=20261023-perf1"></script>
+    <script src="/assets/js/features/directory-import.js?v=20261031-full-pagination12"></script>
+    <script src="/assets/js/layout.js?v=20261110-faceid-readonly1"></script>
+    <script src="/assets/js/notifications.js?v=20261030-retry2"></script>
     <script src="/assets/js/app.js"></script>
-    <script src="/assets/js/chat.js?v=20261028-http-uuid1"></script>
+    <script src="/assets/js/chat.js?v=20261031-regression1"></script>
     @stack('scripts')
 </body>
 </html>

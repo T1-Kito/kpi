@@ -1,0 +1,12 @@
+VK CRM 0.8.27 — CẬP NHẬT PHẦN MỀM
+
+1. Giải nén ZIP ngoài thư mục CRM đang dùng.
+2. Thông báo cho người dùng ngừng thao tác và dừng máy chủ CRM.
+3. Mở Setup.exe trong thư mục vừa giải nén. Chọn Cập nhật bản đã cài và chọn đúng thư mục CRM đang dùng.
+4. Đợi trình cập nhật kiểm tra cấu trúc và sao lưu dữ liệu nếu cần nâng cấp cấu trúc.
+5. Khởi động lại CRM và tải lại trang trên máy con.
+
+Bản này cập nhật luồng tiếp nhận, xử lý và tra cứu yêu cầu CSKH, gồm liên kết chứng từ và hiển thị trên chứng từ liên quan.
+Gói dành cho bản đã cài, giữ cấu hình kết nối, tài khoản, dữ liệu và bản quyền tại máy khách.
+Màn hình thử tích hợp Resort và FaceID nằm ngoài phạm vi gói này.
+Cần kiểm tra vận hành trên SQL Server thực tế sau cập nhật.

@@ -1,15 +1,16 @@
 (function () {
-    let state = { rows: [], q: '' };
+    let state = { rows: [], q: '', page: 1, total: 0, lastPage: 1 };
 
+    let searchTimer, loadVersion=0;
     document.addEventListener('vk:ready', loadContracts);
     document.addEventListener('input', event => {
         if (document.getElementById('contractsRoot') && event.target.matches('[data-list-search]')) {
-            state.q = event.target.value.toLowerCase();
-            render();
+            state.q = event.target.value; state.page=1;clearTimeout(searchTimer);searchTimer=setTimeout(loadContracts,280);
         }
     });
     document.addEventListener('click', event => {
         if (!document.getElementById('contractsRoot')) return;
+        const pager=event.target.closest('[data-contract-page]');if(pager){state.page=Number(pager.dataset.contractPage);loadContracts();return;}
         if (event.target.matches('[data-contract-create]')) openCreate();
         const open = event.target.closest('[data-contract-open]');
         if (open) openDetail(open.dataset.contractOpen);
@@ -19,8 +20,11 @@
     async function loadContracts() {
         const root = document.getElementById('contractsRoot');
         if (!root) return;
+        const version=++loadVersion;
         try {
-            const response = await VKApi.request('/contracts?page_size=100');
+            const response = await VKApi.request('/contracts?'+new URLSearchParams({page_size:20,page:state.page,q:state.q}),{cache:false});
+            if(version!==loadVersion || document.getElementById('contractsRoot')!==root)return;
+            state.total=response.meta?.total ?? response.data?.length ?? 0;state.lastPage=Math.max(1,Math.ceil(state.total/20));
             state.rows = response.data || [];
             render();
         } catch (error) {
@@ -31,11 +35,13 @@
     function render() {
         const root = document.getElementById('contractsRoot');
         if (!root) return;
-        const rows = state.rows.filter(row => `${row.code} ${row.name} ${row.customer?.name || ''}`.toLowerCase().includes(state.q));
+        const focused=document.activeElement?.matches('[data-list-search]');
+        const caret=focused?document.activeElement.selectionStart:null;
+        const rows = state.rows;
         root.innerHTML = VKTable.fullList({
             title: 'Danh sách hợp đồng',
             subtitle: 'Tạo hợp đồng từ báo giá hoặc đơn hàng; theo dõi từng mốc đến nghiệm thu.',
-            meta: `${rows.length} hợp đồng`,
+            meta: `${state.total} hợp đồng`,
             filters: VKTable.filterBar({ searchPlaceholder: 'Tìm số hợp đồng, tên hoặc khách hàng...' }),
             table: VKTable.renderTable([
                 { label: 'Hợp đồng', render: row => `<strong>${VKTable.escapeHtml(row.name)}</strong><span class="row-note mono">${VKTable.escapeHtml(row.code)}</span>` },
@@ -46,21 +52,23 @@
                 { label: '', render: row => VKTable.rowActions([VKTable.smallButton('Mở', `data-contract-open="${row.id}"`)]) },
             ], rows, 'Chưa có hợp đồng'),
         });
+        root.insertAdjacentHTML('beforeend', `<div class="customer-list-pagination"><button class="btn small" data-contract-page="${state.page-1}" ${state.page<=1?'disabled':''}>Trang trước</button><span> Trang ${state.page} / ${state.lastPage} · ${state.total} hợp đồng </span><button class="btn small" data-contract-page="${state.page+1}" ${state.page>=state.lastPage?'disabled':''}>Trang sau</button></div>`);
         const search = document.querySelector('[data-list-search]');
-        if (search) search.value = state.q;
+        if (search) {search.value = state.q;if(focused){search.focus();search.setSelectionRange(caret,caret);}}
     }
 
     async function openCreate() {
         const [quotes, orders, customers] = await Promise.all([
-            VKApi.request('/quotations?page_size=100'),
-            VKApi.request('/sales-orders?page_size=100'),
-            VKApi.request('/customers?page_size=100'),
+            VKApi.allPages('/quotations'),
+            VKApi.allPages('/sales-orders'),
+            VKApi.allPages('/customers'),
         ]);
         const customerOptions = [{ value: '', label: 'Tự lấy từ báo giá / đơn hàng' }, ...(customers.data || []).map(row => ({ value: row.id, label: `${row.code} - ${row.name}` }))];
         const quoteOptions = [{ value: '', label: 'Không chọn' }, ...(quotes.data || []).map(row => ({ value: row.id, label: `${row.code} - ${row.customer?.name || ''}` }))];
         const orderOptions = [{ value: '', label: 'Không chọn' }, ...(orders.data || []).map(row => ({ value: row.id, label: `${row.code} - ${row.customer?.name || ''}` }))];
         const form = `<div class="form-grid">
             ${VKModal.field('name', 'Tên hợp đồng')}
+            ${VKModal.field('contract_type','Loại hợp đồng','text','', {placeholder:'VD: Dịch vụ, mua bán, nguyên tắc…'})}
             ${VKModal.select('customer_id', 'Khách hàng', customerOptions)}
             ${VKModal.select('quotation_id', 'Báo giá tham chiếu', quoteOptions)}
             ${VKModal.select('sales_order_id', 'Đơn hàng tham chiếu', orderOptions)}
@@ -82,6 +90,8 @@
         const response = await VKApi.request(`/contracts/${id}`);
         const contract = response.data;
         VKModal.open(`${contract.code} · ${contract.name}`, contractDetailHtml(contract), async () => {}, { hideSubmit: true, cancelText: 'Đóng', className: 'contract-detail-modal' });
+        const care=document.querySelector('[data-contract-service-panel]');
+        if(care)window.VKDocumentCare.mount(care,{document_type:'contract',document_id:contract.id,customer_id:contract.customer_id || contract.customer?.id});
     }
 
     function contractDetailHtml(contract) {
@@ -110,8 +120,9 @@
             <section class="contract-meta-grid">
                 <div><span>▣ Ngày tạo</span><strong>${date(contract.created_at)}</strong></div>
                 <div><span>♙ Người tạo</span><strong>${VKTable.escapeHtml(contract.owner?.name || '-')}</strong></div>
-                <div><span># Mã hợp đồng</span><strong>${VKTable.escapeHtml(contract.code)}</strong></div>
+                <div><span>Loại hợp đồng</span><strong>${VKTable.escapeHtml(contract.contract_type || 'Chưa khai báo')}</strong></div><div><span># Mã hợp đồng</span><strong>${VKTable.escapeHtml(contract.code)}</strong></div>
             </section>
+            ${window.VKUser?.permissions?.includes('service.ticket.view') ? '<div data-contract-service-panel></div>' : ''}
             <footer class="contract-record-actions">
                 <div class="contract-document-actions">
                     <button class="btn secondary" type="button" data-contract-print="${contract.id}">◉ Xem / in</button>
@@ -200,6 +211,7 @@
             ngay_chung_tu: date(contract.created_at),
             ma_hop_dong: contract.code,
             ten_hop_dong: contract.name,
+            loai_hop_dong: contract.contract_type || '',
             ngay_hop_dong: date(contract.created_at),
             ngay_hieu_luc: date(contract.effective_date),
             ngay_het_han: date(contract.expiry_date),

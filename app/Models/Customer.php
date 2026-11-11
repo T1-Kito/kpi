@@ -8,10 +8,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Customer extends Model
 {
+    use \App\Models\Concerns\HasVietnameseSearch;
     use \App\Models\Concerns\CastsDatabaseIdentifiers;
     use \App\Models\Concerns\HasCatalogSharing;
 
     protected $casts = ['is_shared' => 'boolean'];
+    protected $hidden = ['search_text'];
     protected $attributes = ['is_shared' => false];
     protected $appends = ['can_manage_sharing'];
 

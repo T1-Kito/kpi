@@ -1,10 +1,11 @@
 (function () {
     const states = {
-        deliveries: { rows: [], q: '', status: '', view: 'list', total: 0 },
-        invoices: { rows: [], q: '', status: '', view: 'list', total: 0 },
-        payments: { rows: [], q: '', method: '', view: 'list', total: 0 },
+        deliveries: { rows: [], q: '', status: '', view: 'list', total: 0, page:1, stats:{}, version:0 },
+        invoices: { rows: [], q: '', status: '', view: 'list', total: 0, page:1, stats:{}, version:0 },
+        payments: { rows: [], q: '', method: '', view: 'list', total: 0, page:1, stats:{}, version:0 },
     };
 
+    let searchTimer;
     document.addEventListener('vk:ready', loadCurrentPage);
     document.addEventListener('vk:flow-updated', loadCurrentPage);
 
@@ -12,23 +13,24 @@
         const context = currentContext();
         if (!context || !event.target.matches('[data-list-search]')) return;
         states[context].q = event.target.value.toLowerCase();
-        renderList(context);
+        states[context].page=1;states[context].version++;clearTimeout(searchTimer);searchTimer=setTimeout(()=>loadCurrentPage({quiet:true}),280);
     });
 
     document.addEventListener('change', (event) => {
         const context = currentContext();
         if (!context) return;
         if (event.target.matches('[data-list-status]')) {
-            states[context].status = event.target.value;
-            renderList(context);
+            states[context].status = event.target.value;states[context].page=1;
+            loadCurrentPage();
         }
         if (event.target.matches('[data-payment-method]')) {
-            states.payments.method = event.target.value;
-            renderList('payments');
+            states.payments.method = event.target.value;states.payments.page=1;
+            loadCurrentPage();
         }
     });
 
     document.addEventListener('click', (event) => {
+        const pager=event.target.closest('[data-fulfillment-page]');if(pager){const context=currentContext();if(context){states[context].page=Number(pager.dataset.fulfillmentPage);loadCurrentPage();}return;}
         const back = event.target.closest('[data-fulfillment-back]');
         if (back) {
             const context = back.dataset.fulfillmentBack;
@@ -67,7 +69,10 @@
     async function loadDeliveries(options = {}) {
         if (!document.getElementById('deliveriesRoot')) return;
         resetView('deliveries', options);
-        const response = await VKApi.request('/deliveries?page_size=100');
+        const version=++states.deliveries.version;
+        const response = await VKApi.request('/deliveries?'+new URLSearchParams({page_size:20,page:states.deliveries.page,q:states.deliveries.q,status:states.deliveries.status || '',payment_method:states.deliveries.method || ''}),{cache:false});
+        if(version!==states.deliveries.version || currentContext()!=='deliveries')return;
+        states.deliveries.stats=response.meta?.stats || {};
         states.deliveries.rows = response.data || [];
         states.deliveries.total = response.meta?.total || states.deliveries.rows.length;
         renderList('deliveries');
@@ -76,7 +81,10 @@
     async function loadSalesInvoices(options = {}) {
         if (!document.getElementById('salesInvoicesRoot')) return;
         resetView('invoices', options);
-        const response = await VKApi.request('/sales-invoices?page_size=100');
+        const version=++states.invoices.version;
+        const response = await VKApi.request('/sales-invoices?'+new URLSearchParams({page_size:20,page:states.invoices.page,q:states.invoices.q,status:states.invoices.status || '',payment_method:states.invoices.method || ''}),{cache:false});
+        if(version!==states.invoices.version || currentContext()!=='invoices')return;
+        states.invoices.stats=response.meta?.stats || {};
         states.invoices.rows = response.data || [];
         states.invoices.total = response.meta?.total || states.invoices.rows.length;
         renderList('invoices');
@@ -85,7 +93,10 @@
     async function loadCustomerPayments(options = {}) {
         if (!document.getElementById('customerPaymentsRoot')) return;
         resetView('payments', options);
-        const response = await VKApi.request('/customer-payments?page_size=100');
+        const version=++states.payments.version;
+        const response = await VKApi.request('/customer-payments?'+new URLSearchParams({page_size:20,page:states.payments.page,q:states.payments.q,status:states.payments.status || '',payment_method:states.payments.method || ''}),{cache:false});
+        if(version!==states.payments.version || currentContext()!=='payments')return;
+        states.payments.stats=response.meta?.stats || {};
         states.payments.rows = response.data || [];
         states.payments.total = response.meta?.total || states.payments.rows.length;
         renderList('payments');
@@ -104,15 +115,11 @@
     }
 
     function renderDeliveries(root) {
-        const rows = states.deliveries.rows.filter((row) => {
-            const delivery = row.deliveries?.[0] || {};
-            const text = `${row.code} ${row.customer?.name || ''} ${delivery.recipient_name || ''}`.toLowerCase();
-            return (!states.deliveries.q || text.includes(states.deliveries.q))
-                && (!states.deliveries.status || row.delivery_status === states.deliveries.status);
-        });
-        const pending = states.deliveries.rows.filter(row => row.delivery_status === 'pending').length;
-        const awaitingAcceptance = states.deliveries.rows.filter(row => row.delivery_status === 'delivered_pending_acceptance').length;
-        const delivered = states.deliveries.rows.filter(row => row.delivery_status === 'delivered').length;
+        const focused=document.activeElement?.matches('[data-list-search]'),caret=focused?document.activeElement.selectionStart:null;
+        const rows = states.deliveries.rows;
+        const pending = states.deliveries.stats.pending || 0;
+        const awaitingAcceptance = states.deliveries.stats.awaiting || 0;
+        const delivered = states.deliveries.stats.delivered || 0;
 
         root.innerHTML = summary([
             ['Chờ giao hàng', pending, 'Cần xác nhận khách đã nhận', 'blue'],
@@ -141,22 +148,21 @@
                 { label: '', render: row => `<button class="btn icon-only small" type="button" title="Mở chi tiết" data-delivery-detail="${row.id}">›</button>` },
             ], rows, 'Chưa có đơn cần giao', { rowAttr: row => `data-delivery-detail="${row.id}"` }),
         });
+        root.insertAdjacentHTML('beforeend',VKTable.pager({page:states.deliveries.page,page_size:20,total:states.deliveries.total},'data-fulfillment-page'));
         restoreFilters('deliveries');
+        if(focused){const input=document.querySelector('[data-list-search]');input?.focus();if(caret!==null)input?.setSelectionRange(caret,caret);}
     }
 
     function renderInvoices(root) {
-        const rows = states.invoices.rows.filter((row) => {
-            const text = `${row.code} ${row.sales_order?.code || ''} ${row.sales_order?.customer?.name || ''}`.toLowerCase();
-            return (!states.invoices.q || text.includes(states.invoices.q))
-                && (!states.invoices.status || row.status === states.invoices.status);
-        });
-        const outstanding = states.invoices.rows.reduce((sum, row) => sum + Number(row.balance_amount || 0), 0);
-        const overdue = states.invoices.rows.filter(row => row.status !== 'paid' && row.due_date && new Date(row.due_date) < startOfToday()).length;
+        const focused=document.activeElement?.matches('[data-list-search]'),caret=focused?document.activeElement.selectionStart:null;
+        const rows = states.invoices.rows;
+        const outstanding = Number(states.invoices.stats.outstanding || 0);
+        const overdue = Number(states.invoices.stats.overdue || 0);
 
         root.innerHTML = summary([
             ['Còn phải thu', money(outstanding), 'Tổng dư nợ hóa đơn', 'orange'],
             ['Hóa đơn quá hạn', overdue, 'Chưa thanh toán đủ', overdue ? 'red' : 'green'],
-            ['Đã thanh toán', states.invoices.rows.filter(row => row.status === 'paid').length, 'Đã tất toán', 'green'],
+            ['Đã thanh toán', Number(states.invoices.stats.paid || 0), 'Đã tất toán', 'green'],
         ]) + VKTable.fullList({
             title: 'Sổ hóa đơn bán hàng',
             subtitle: 'Kiểm soát ngày phát hành, hạn thanh toán và số tiền còn phải thu.',
@@ -180,16 +186,15 @@
                 { label: '', render: row => `<button class="btn icon-only small" type="button" title="Mở chi tiết" data-invoice-detail="${row.id}">›</button>` },
             ], rows, 'Chưa có hóa đơn bán hàng', { rowAttr: row => `data-invoice-detail="${row.id}"` }),
         });
+        root.insertAdjacentHTML('beforeend',VKTable.pager({page:states.invoices.page,page_size:20,total:states.invoices.total},'data-fulfillment-page'));
         restoreFilters('invoices');
+        if(focused){const input=document.querySelector('[data-list-search]');input?.focus();if(caret!==null)input?.setSelectionRange(caret,caret);}
     }
 
     function renderPayments(root) {
-        const rows = states.payments.rows.filter((row) => {
-            const text = `${row.code} ${row.reference_no || ''} ${row.invoice?.code || ''} ${row.sales_order?.customer?.name || ''}`.toLowerCase();
-            return (!states.payments.q || text.includes(states.payments.q))
-                && (!states.payments.method || row.payment_method === states.payments.method);
-        });
-        const collected = states.payments.rows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+        const focused=document.activeElement?.matches('[data-list-search]'),caret=focused?document.activeElement.selectionStart:null;
+        const rows = states.payments.rows;
+        const collected = Number(states.payments.stats.collected || 0);
 
         root.innerHTML = summary([
             ['Tổng đã thu', money(collected), 'Theo các phiếu thu đã ghi nhận', 'green'],
@@ -219,7 +224,9 @@
                 { label: '', render: row => `<button class="btn icon-only small" type="button" title="Mở chi tiết" data-payment-detail="${row.id}">›</button>` },
             ], rows, 'Chưa có phiếu thu khách hàng', { rowAttr: row => `data-payment-detail="${row.id}"` }),
         });
+        root.insertAdjacentHTML('beforeend',VKTable.pager({page:states.payments.page,page_size:20,total:states.payments.total},'data-fulfillment-page'));
         restoreFilters('payments');
+        if(focused){const input=document.querySelector('[data-list-search]');input?.focus();if(caret!==null)input?.setSelectionRange(caret,caret);}
     }
 
     async function openDeliveryDetail(id) {
@@ -257,7 +264,10 @@
                 ]) : ''}
                 ${(row.invoices || []).length ? relatedInvoices(row.invoices) : ''}
                 ${itemsTable(row.items || [])}
+                ${can('service.ticket.view') ? '<div data-delivery-service-panel></div>' : ''}
             `, `${deliveryActions(row, hasInvoice)}${delivery?.acceptance_file_path ? `<button class="btn small" type="button" data-delivery-acceptance-file="${delivery.id}">Tải biên bản đã ký</button>` : ''}`);
+            const care=root.querySelector('[data-delivery-service-panel]');
+            if(care)window.VKDocumentCare.mount(care,{document_type:'order',document_id:row.id,customer_id:row.customer_id || row.customer?.id});
         } catch (error) {
             showError(root, 'Không tải được chi tiết giao hàng', error);
         }

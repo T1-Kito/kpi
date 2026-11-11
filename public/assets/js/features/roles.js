@@ -62,7 +62,7 @@ const rolePermissionGroups = [
 
 async function loadRoles() {
     if (!document.getElementById('rolesRoot')) return;
-    const roles = await VKApi.request('/roles');
+    const roles = await VKApi.allPages('/roles');
     roleState = { rows: roles.data, permissions: roles.meta.permissions || [] };
 
     const companyScope = roles.data.filter(row => row.data_scope === 'company').length;
@@ -88,7 +88,7 @@ async function loadRoles() {
 }
 
 function renderRoleTable(rows) {
-    return VKTable.renderTable([
+    return VKTable.clientTable('roles', [
         { label: 'Vai trò', render: row => renderRole(row) },
         { label: 'Phạm vi', render: row => scopeBadge(row.data_scope) },
         { label: 'Số quyền', render: row => `<strong>${row.permissions?.length || 0}</strong>` },

@@ -14,15 +14,29 @@ class LeadSourceImportTest extends TestCase
         parent::setUp();$this->seed();$this->actor=User::where('email','admin@vk-kpi.local')->firstOrFail();$this->token=app(\App\Support\JwtTokenService::class)->issue($this->actor);
         $this->source=$this->withToken($this->token)->postJson('/api/v1/import-center/sources',['code'=>'LEAD','name'=>'Nguồn tiềm năng','is_active'=>true,'member_ids'=>[$this->actor->id]])->assertCreated()->json('data.id');
     }
-    private function preview(int $revision=1,string $name='Tiềm năng nguồn',string $phone='0900333999',string $external='LEAD-EXT-1',string $owner='',string $customer='',bool $simple=false){
+    private function preview(int $revision=1,string $name='Tiềm năng nguồn',string $phone='0900333999',string $external='LEAD-EXT-1',string $owner='',string $customer='',bool $simple=false,bool $legacy=false,array $needs=[]){
         $path=tempnam(sys_get_temp_dir(),'lead-v1-');copy(resource_path('templates/import/khach-tiem-nang-theo-nguon-v1.xlsx'),$path);
         try{$z=new \ZipArchive;$z->open($path);$xml='<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>';
-            foreach([array_values(LeadSourceImport::LABELS),['1',$external,(string)$revision,$name,$phone,'version-lead@example.test','Hội chợ','FAIR-01',$owner,$customer]] as $i=>$values){if($simple)$values=array_values(array_filter($values,fn($key)=>!in_array($key,[0,2],true),ARRAY_FILTER_USE_KEY));$xml.='<row r="'.($i+1).'">';foreach($values as $j=>$v)$xml.='<c r="'.chr(65+$j).($i+1).'" t="inlineStr"><is><t>'.htmlspecialchars($v,ENT_XML1).'</t></is></c>';$xml.='</row>';}
+            foreach([$legacy?array_slice(array_values(LeadSourceImport::LABELS),0,10):array_values(LeadSourceImport::LABELS),array_merge(['1',$external,(string)$revision,$name,$phone,'version-lead@example.test','Hội chợ','FAIR-01',$owner,$customer],$needs)] as $i=>$values){if($simple)$values=array_values(array_filter($values,fn($key)=>!in_array($key,[0,2],true),ARRAY_FILTER_USE_KEY));$xml.='<row r="'.($i+1).'">';foreach($values as $j=>$v)$xml.='<c r="'.chr(65+$j).($i+1).'" t="inlineStr"><is><t>'.htmlspecialchars($v,ENT_XML1).'</t></is></c>';$xml.='</row>';}
             $z->addFromString('xl/worksheets/sheet1.xml',$xml.'</sheetData></worksheet>');$z->setMtimeName('xl/worksheets/sheet1.xml',946684800);$z->close();
             return $this->withToken($this->token)->post($simple?'/api/v1/import-center/lead-preview':'/api/v1/import-center/batches',['source_id'=>$this->source,'catalog'=>'leads-v1','file'=>UploadedFile::fake()->createWithContent('tiem-nang.xlsx',file_get_contents($path))],['Accept'=>'application/json']);
         }finally{unlink($path);}
     }
     private function commit($id){return $this->withToken($this->token)->postJson('/api/v1/import-center/batches/'.$id.'/commit',['confirmed'=>true]);}
+    public function test_new_empty_columns_preserve_legacy_replay_and_duplicates_stay_blocked():void {
+        $id=$this->preview(legacy:true)->assertCreated()->json('data.id');$this->commit($id)->assertOk();
+        $next=$this->preview()->assertCreated()->assertJsonPath('data.status','ready')->json('data.id');
+        $this->commit($next)->assertOk();
+        $this->assertSame(1,Lead::where('email','version-lead@example.test')->count());
+        $id=$this->preview(name:'Đoàn có nhu cầu',phone:'0900333888',external:'LEAD-EXT-2',needs:['Tham quan','Đồng Nai','15/12/2026','50','Vé đoàn','Có xe'])->assertCreated()->assertJsonPath('data.status','invalid')->json('data.id');
+        // A repeated email is rejected even when the new file contains valid needs.
+        $this->assertDatabaseMissing('leads',['name'=>'Đoàn có nhu cầu']);
+    }
+    public function test_source_import_carries_needs_and_vietnamese_date():void {
+        $id=$this->preview(needs:['Tham quan','Đồng Nai','15/12/2026','50','Vé đoàn','Có xe'])->assertCreated()->assertJsonPath('data.status','ready')->json('data.id');
+        $this->commit($id)->assertOk();
+        $this->assertDatabaseHas('leads',['phone'=>'0900333999','needs'=>'Tham quan','region'=>'Đồng Nai','guest_count'=>50,'expected_service_date'=>'2026-12-15']);
+    }
     public function test_simple_template_without_technical_columns_or_external_id_generates_code_and_followup():void {
         $id=$this->preview(external:'',simple:true)->assertCreated()->assertJsonPath('data.status','ready')->json('data.id');
         $this->assertDatabaseMissing('leads',['email'=>'version-lead@example.test']);

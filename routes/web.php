@@ -68,6 +68,10 @@ Route::get('/purchase-requests', PurchaseRequestController::class)->name('purcha
 Route::get('/supplier-quotations', SupplierQuotationController::class)->name('supplier-quotations.index');
 Route::get('/purchase-orders', PurchaseOrderController::class)->name('purchase-orders.index');
 Route::get('/goods-receipts', GoodsReceiptController::class)->name('goods-receipts.index');
+// Keep document links and bookmarked detail URLs compatible with list workspaces.
+Route::get('/purchase-orders/{id}', fn (string $id) => redirect('/purchase-orders?order='.$id))->whereNumber('id');
+Route::get('/purchase-requests/{id}', fn (string $id) => redirect('/purchase-requests?request='.$id))->whereNumber('id');
+Route::get('/goods-receipts/{id}', fn (string $id) => redirect('/goods-receipts?receipt='.$id))->whereNumber('id');
 Route::get('/goods-issues', GoodsIssueController::class)->name('goods-issues.index');
 Route::get('/stock-takes', StockTakeController::class)->name('stock-takes.index');
 Route::get('/tasks', TaskController::class)->name('tasks.index');
@@ -82,6 +86,7 @@ Route::get('/kpi-settings', KpiSettingController::class)->name('kpi-settings.ind
 Route::view('/workflows', 'pages.workflows.index')->name('workflows.index');
 Route::get('/audit-logs', AuditLogController::class)->name('audit-logs.index');
 Route::get('/settings', SettingController::class)->name('settings.index');
+Route::view('/integrations/hospitality/{section?}', 'pages.integrations.hospitality')->whereIn('section', ['guests', 'stays', 'rooms', 'devices', 'commands'])->name('integrations.hospitality');
 Route::view('/customer-contacts', 'pages.customer-contacts.index')->name('customer-contacts.index');
 Route::get('/sales-master-data', SalesMasterDataController::class)->name('sales-master-data.index');
 Route::get('/service-tickets', [ServiceDeskController::class, 'tickets'])->name('service-tickets.index');

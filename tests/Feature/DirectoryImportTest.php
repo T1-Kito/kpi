@@ -8,17 +8,39 @@ class DirectoryImportTest extends TestCase
 {
     use RefreshDatabase;
     private function file(string $kind,array $rows):UploadedFile {
-        $path=tempnam(sys_get_temp_dir(),'directory-');copy(resource_path('templates/import/'.$kind.'.xlsx'),$path);
+        $path=tempnam(sys_get_temp_dir(),'directory-');
+        if($kind==='leads') { $generated=\App\Support\LeadImportTemplate::build();copy($generated,$path);unlink($generated); }
+        else copy(resource_path('templates/import/'.$kind.'.xlsx'),$path);
         $zip=new \ZipArchive;$zip->open($path);$xml=$zip->getFromName('xl/worksheets/sheet1.xml');
         foreach($rows as $index=>$values) {
             $line=5+$index;$row='<row xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" r="'.$line.'">';
-            foreach($values as $col=>$v) $row.='<c r="'.chr(65+$col).$line.'" t="inlineStr"><is><t>'.htmlspecialchars($v,ENT_XML1).'</t></is></c>';
+            foreach($values as $col=>$v) $row.=is_array($v) ? '<c r="'.chr(65+$col).$line.'"><v>'.$v['number'].'</v></c>' : '<c r="'.chr(65+$col).$line.'" t="inlineStr"><is><t>'.htmlspecialchars($v,ENT_XML1).'</t></is></c>';
             $row.='</row>';$xml=preg_replace('~<(?:x:)?row\b[^>]*\br="'.$line.'"[^>]*(?:/>|>.*?</(?:x:)?row>)~s',$row,$xml,1);
         }
         $zip->addFromString('xl/worksheets/sheet1.xml',$xml);$zip->close();$bytes=file_get_contents($path);unlink($path);
         return UploadedFile::fake()->createWithContent('directory.xlsx',$bytes);
     }
     private function token():string { $this->seed();return $this->postJson('/api/v1/auth/login',['email'=>'admin@vk-kpi.local','password'=>'Admin@123'])->json('data.access_token'); }
+    public function test_lead_excel_dates_accept_native_excel_date_and_vietnamese_text():void {
+        $token=$this->token();
+        $serial=(new \DateTimeImmutable('2026-12-01'))->diff(new \DateTimeImmutable('1899-12-30'))->days;
+        $rows=[['Ngày Excel','0908111222','','','','','',''.$serial,'1','',''],['Ngày Việt','0908111223','','','','','','02/12/2026','2','','']];
+        $rows[0][7]=['number'=>$serial];
+        $this->withToken($token)->post('/api/v1/directory-import/leads',['file'=>$this->file('leads',$rows),'confirm'=>'1'])->assertOk()->assertJsonPath('data.imported',2);
+        $this->assertDatabaseHas('leads',['name'=>'Ngày Excel','expected_service_date'=>'2026-12-01']);
+        $this->assertDatabaseHas('leads',['name'=>'Ngày Việt','expected_service_date'=>'2026-12-02']);
+    }
+    public function test_extended_lead_template_imports_needs_and_rejects_whole_invalid_batch():void {
+        $token=$this->token();
+        $rows=[['Đoàn Excel','0908666555','doan@example.test','Giới thiệu','CT-12','Tham quan','Đồng Nai','2026-12-01','120','Vé công viên','Cần xe đưa đón']];
+        $this->withToken($token)->post('/api/v1/directory-import/leads',['file'=>$this->file('leads',$rows),'confirm'=>'1'])->assertOk()->assertJsonPath('data.imported',1);
+        $this->assertDatabaseHas('leads',['name'=>'Đoàn Excel','guest_count'=>120,'expected_service_date'=>'2026-12-01','needs'=>'Tham quan','region'=>'Đồng Nai']);
+        $rows[0][0]='Không ghi khi lô lỗi';$rows[0][1]='0908666556';$rows[0][2]='khac@example.test';
+        $rows[]=['Sai ngày','0908666557','','','','','31/99/2026','-1','',''];
+        $response=$this->withToken($token)->post('/api/v1/directory-import/leads',['file'=>$this->file('leads',$rows),'confirm'=>'1'])->assertOk()->assertJsonPath('data.imported',0)->assertJsonPath('data.can_import',false);
+        $this->assertStringContainsString('Ngày dự kiến sử dụng',$response->json('data.errors.0.message'));
+        $this->assertDatabaseMissing('leads',['name'=>'Không ghi khi lô lỗi']);
+    }
     public function test_contact_preview_import_replay_and_customer_guard():void {
         $token=$this->token();$actor=User::where('email','admin@vk-kpi.local')->firstOrFail();
         $c=Customer::where('tenant_id',$actor->tenant_id)->where('customer_type','organization')->firstOrFail();$before=$c->contacts()->count();

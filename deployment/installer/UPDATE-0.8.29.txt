@@ -1,0 +1,13 @@
+VK CRM 0.8.29 — CẬP NHẬT KẾT NỐI FACEID
+
+1. Giải nén gói ZIP vào thư mục riêng bên ngoài thư mục VK CRM đang dùng.
+2. Trong trình quản lý VK CRM, bấm Cập nhật phần mềm và chọn Setup.exe vừa giải nén.
+3. Kiểm tra đúng thư mục CRM đang dùng, rồi bấm Cập nhật.
+4. Sau khi cập nhật thành công, mở file .env trong thư mục cài CRM bằng Notepad.
+   Đổi địa chỉ thành cổng HTTP của máy FaceID nội bộ và bật tùy chọn HTTP, ví dụ
+   HOSPITALITY_BASE_URL="http://192.168.40.8:5210"
+   HOSPITALITY_ALLOW_HTTP=true
+5. Lưu, khởi động lại CRM và bấm FaceID → Tổng quan kết nối → Đồng bộ ngay.
+
+HTTP truyền tài khoản và dữ liệu không mã hóa. Chỉ bật trên mạng nội bộ được kiểm soát.
+API nguồn cần hỗ trợ cả đăng nhập và đọc dữ liệu qua HTTP. Kiểm tra dữ liệu thật tại máy triển khai.

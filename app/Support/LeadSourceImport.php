@@ -10,9 +10,9 @@ use Illuminate\Validation\ValidationException;
 /** Leads are create-only. Existing mapped leads may only be replayed unchanged. */
 final class LeadSourceImport
 {
-    public const LABELS=['schema_version'=>'Phiên bản mẫu','external_id'=>'Mã ngoài','source_revision'=>'Phiên bản nguồn','name'=>'Tên khách hàng tiềm năng','phone'=>'Số điện thoại','email'=>'Email','source'=>'Nguồn','campaign_code'=>'Mã chiến dịch','assigned_to_ref'=>'Người phụ trách','customer_ref'=>'Mã khách hàng'];
+    public const LABELS=['schema_version'=>'Phiên bản mẫu','external_id'=>'Mã ngoài','source_revision'=>'Phiên bản nguồn','name'=>'Tên khách hàng tiềm năng','phone'=>'Số điện thoại','email'=>'Email','source'=>'Nguồn','campaign_code'=>'Mã chiến dịch','assigned_to_ref'=>'Người phụ trách','customer_ref'=>'Mã khách hàng','needs'=>'Nhu cầu','region'=>'Khu vực','expected_service_date'=>'Ngày dự kiến sử dụng','guest_count'=>'Số khách dự kiến','interested_services'=>'Dịch vụ quan tâm','notes'=>'Ghi chú'];
     private function snapshot(Lead $lead):array {
-        return $lead->only(['name','phone','email','source','campaign_code','assigned_to','customer_id','status'])+['_updated_at'=>$lead->getRawOriginal('updated_at')];
+        return $lead->only(['name','phone','email','source','campaign_code','assigned_to','customer_id','status'])+array_filter($lead->only(['needs','region','expected_service_date','guest_count','interested_services','notes']),fn($v)=>$v!==null)+['_updated_at'=>$lead->getRawOriginal('updated_at')];
     }
     private function keys(array $d):array {
         $p=preg_replace('/\D/','',$d['phone'] ?? '');if(str_starts_with($p,'84') && strlen($p)>=11)$p='0'.substr($p,2);
@@ -21,13 +21,16 @@ final class LeadSourceImport
     public function run(Request $request,string $path,int $sourceId,bool $confirm):array {
         if(DB::connection()->transactionLevel()<1)throw new \LogicException('Nhập khách tiềm năng cần giao dịch lô.');
         abort_unless(Schema::hasTable('import_record_links'),503,'Chưa nâng cấp liên kết nguồn nhập.');
-        $rows=(new CustomerImportWorkbook(self::LABELS,['external_id','phone']))->read($path);
+        $rows=(new CustomerImportWorkbook(self::LABELS,['external_id','phone'],['expected_service_date']))->read($path);
         $actor=$request->user();$plans=[];$errors=[];$seen=[];$seenKeys=[];
         $existing=[];foreach(Lead::where('tenant_id',$actor->tenant_id)->select(['id','phone','email'])->cursor() as $lead)foreach($this->keys($lead->toArray()) as $key)$existing[$key][]=$lead->id;
         foreach($rows as $row){try{
-$raw=$row['data'];$raw['schema_version']??='1';$raw['source_revision']??='1';Validator::make($raw,['schema_version'=>'required|in:1','external_id'=>'nullable|string|max:100|regex:/^[A-Za-z0-9_.-]+$/','source_revision'=>'required|integer|min:1|max:2147483647','name'=>'required|string|max:255','phone'=>'required|string|max:50','email'=>'nullable|email|max:255','source'=>'nullable|string|max:100','campaign_code'=>'nullable|string|max:100','assigned_to_ref'=>'nullable|string|max:255','customer_ref'=>'nullable|string|max:150'],ImportValidation::MESSAGES,self::LABELS)->validate();
+$raw=$row['data'];$raw['schema_version']??='1';$raw['source_revision']??='1';Validator::make($raw,['schema_version'=>'required|in:1','external_id'=>'nullable|string|max:100|regex:/^[A-Za-z0-9_.-]+$/','source_revision'=>'required|integer|min:1|max:2147483647','name'=>'required|string|max:255','phone'=>'required|string|max:50|phone_number','email'=>'nullable|email|max:255','source'=>'nullable|string|max:100','campaign_code'=>'nullable|string|max:100','assigned_to_ref'=>'nullable|string|max:255','customer_ref'=>'nullable|string|max:150'],ImportValidation::MESSAGES,self::LABELS)->validate();
+            if(array_key_exists('expected_service_date',$raw)) $raw['expected_service_date']=ImportValidation::isoDate($raw['expected_service_date']);
+            Validator::make($raw,['needs'=>'nullable|string|max:2048','region'=>'nullable|string|max:255','expected_service_date'=>'nullable|date_format:Y-m-d','guest_count'=>'nullable|integer|min:1|max:1000000','interested_services'=>'nullable|string|max:2000','notes'=>'nullable|string|max:2048'],ImportValidation::MESSAGES+['date_format'=>':attribute phải là ngày hợp lệ, ví dụ 15/11/2026.'],self::LABELS)->validate();
             $external=strtolower(trim($raw['external_id'] ?? ''));if($external!==''){if(isset($seen[$external]))throw ValidationException::withMessages(['file'=>'Mã ngoài bị trùng trong file.']);$seen[$external]=true;}
             $values=[];foreach(['name','phone','email','source','campaign_code'] as $field)$values[$field]=$raw[$field] ?? null;$values['source']??='manual';
+            foreach(['needs','region','expected_service_date','guest_count','interested_services','notes'] as $field) if(filled($raw[$field] ?? null)) $values[$field]=$raw[$field];
             $assigned=$actor->id;$customerId=null;
             if(filled($raw['assigned_to_ref'] ?? null)){
                 $email=preg_replace('/^crm:/i','',trim($raw['assigned_to_ref']));

@@ -1,6 +1,6 @@
 (function () {
 let state = {
-    rows: [],
+    page:1,meta:{},rows: [],
     summary: [],
     users: [],
     status: '',
@@ -17,17 +17,18 @@ document.addEventListener('vk:ready', () => {
 document.addEventListener('change', (event) => {
     if (!document.getElementById('kpiAdjustmentsRoot')) return;
     if (event.target.matches('[data-kpi-adjustment-status]')) {
-        state.status = event.target.value;
+        state.page=1;state.status = event.target.value;
         loadKpiAdjustments({ keepView: true });
     }
     if (event.target.matches('[data-kpi-adjustment-period]')) {
-        state.periodType = event.target.value;
+        state.page=1;state.periodType = event.target.value;
         loadKpiAdjustments({ keepView: true });
     }
 });
 
 document.addEventListener('click', (event) => {
     if (!document.getElementById('kpiAdjustmentsRoot')) return;
+    const pager=event.target.closest('[data-ledger-page]');if(pager){state.page=Number(pager.dataset.ledgerPage);loadKpiAdjustments({keepView:true});return;}
     if (event.target.closest('[data-kpi-ledger-retry]')) {
         loadKpiAdjustments({ keepView: true });
         return;
@@ -143,7 +144,7 @@ async function loadKpiAdjustments(options = {}) {
         root.innerHTML = renderLoading();
     }
 
-    const query = new URLSearchParams({ page_size: '100', period_type: state.periodType });
+    const query = new URLSearchParams({ page_size: '20',page:state.page, period_type: state.periodType });
     if (state.status) query.set('status', state.status);
 
     try {
@@ -153,10 +154,10 @@ async function loadKpiAdjustments(options = {}) {
             canManagePoints() ? safeRequest('/lookups/users') : Promise.resolve({data:[]}),
         ]);
         if (version !== ledgerLoadVersion || document.getElementById('kpiAdjustmentsRoot') !== root) return;
-        state.rows = adjustments.data || [];
+        state.meta=adjustments.meta || {};state.rows = adjustments.data || [];
         state.summary = summary.data || [];
         state.users = users?.data || [];
-        root.innerHTML = renderPage();
+        root.innerHTML = renderPage()+VKTable.pager(state.meta,'data-ledger-page');
         openRequestedAdjustment();
     } catch (error) {
         if (version !== ledgerLoadVersion || document.getElementById('kpiAdjustmentsRoot') !== root) return;
@@ -198,20 +199,20 @@ function renderPage() {
                     </div>
                     ${canManagePoints() ? '<button class="btn primary" type="button" data-create-kpi-adjustment>Tạo phiếu điểm</button>' : ''}
                 </div>
-                <div class="toolbar">
-                    <select data-kpi-adjustment-period>
+                <div class="kpi-ledger-toolbar">
+                    <label class="kpi-ledger-filter"><span>Kỳ tính điểm</span><select data-kpi-adjustment-period>
                         ${option('day', 'Theo ngày', state.periodType)}
                         ${option('week', 'Theo tuần', state.periodType)}
                         ${option('month', 'Theo tháng', state.periodType)}
                         ${option('quarter', 'Theo quý', state.periodType)}
                         ${option('year', 'Theo năm', state.periodType)}
-                    </select>
-                    <select data-kpi-adjustment-status>
+                    </select></label>
+                    <label class="kpi-ledger-filter"><span>Trạng thái phiếu</span><select data-kpi-adjustment-status>
                         ${option('', 'Tất cả trạng thái', state.status)}
                         ${option('pending', 'Chờ duyệt', state.status)}
                         ${option('approved', 'Đã duyệt', state.status)}
                         ${option('rejected', 'Từ chối', state.status)}
-                    </select>
+                    </select></label>
                 </div>
                 ${renderSummary()}
                 ${renderTable()}

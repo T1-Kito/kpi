@@ -15,6 +15,22 @@ class TenantSettingController extends Controller
     {
     }
 
+    public function leadHandover(Request $request): JsonResponse {
+        return response()->json(['data'=>$request->user()->tenant->ui_settings['lead_handover'] ?? ['role_ids'=>[]],
+            'roles'=>\App\Models\Role::where('tenant_id',$request->user()->tenant_id)->orderBy('name')->get(['id','name','code'])]);
+    }
+    public function saveLeadHandover(Request $request): JsonResponse {
+        $data=$request->validate(['role_ids'=>['present','array','max:100'],'role_ids.*'=>['integer','distinct',Rule::exists('roles','id')->where('tenant_id',$request->user()->tenant_id)]]);
+        $data['role_ids']=array_map('intval',$data['role_ids']);
+        \Illuminate\Support\Facades\DB::transaction(function() use($request,$data) {
+            $tenant=\App\Models\Tenant::whereKey($request->user()->tenant_id)->lockForUpdate()->firstOrFail();
+            $settings=$tenant->ui_settings ?? []; $old=$settings['lead_handover'] ?? null;
+            $settings['lead_handover']=$data;$tenant->update(['ui_settings'=>$settings]);
+            $this->audit->record('tenant',$tenant->id,'configure_lead_handover',$request->user(),$old,$data,$request);
+        });
+        return response()->json(['data'=>$data]);
+    }
+
     public function procurementApproval(Request $request): JsonResponse
     {
         return response()->json(['data' => $request->user()->tenant->ui_settings['procurement_approval'] ?? ['enabled' => false, 'rules' => []],
@@ -190,7 +206,7 @@ class TenantSettingController extends Controller
         return response()->json([
             'data' => [
                 'logo_path' => $path,
-                'logo_url' => Storage::disk('public')->url($path),
+                'logo_url' => \App\Support\TenantLogo::url($path),
             ],
         ]);
     }

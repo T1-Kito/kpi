@@ -8,9 +8,7 @@
         ->where('status', 'active')
         ->orderBy('id')
         ->first();
-    $loginLogoUrl = $loginTenant?->logo_path
-        ? \Illuminate\Support\Facades\Storage::disk('public')->url($loginTenant->logo_path)
-        : asset('assets/branding/vk-software-logo.png');
+    $loginLogoUrl = \App\Support\TenantLogo::url($loginTenant?->logo_path) ?? '/assets/branding/vk-software-logo.png';
 @endphp
 <main class="login-page">
     <section class="login-panel">
@@ -46,5 +44,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/auth.js?v=20260618-1"></script>
+<script src="/assets/js/features/auth.js?v=20261031-full-pagination12"></script>
 @endpush

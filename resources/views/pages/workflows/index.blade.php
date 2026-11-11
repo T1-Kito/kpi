@@ -10,5 +10,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/workflows.js?v=20260618-2"></script>
+<script src="/assets/js/features/workflows.js?v=20261031-full-pagination12"></script>
 @endpush

@@ -260,12 +260,21 @@
             transition_deal: 'Chuyển giai đoạn cơ hội',
             qualify_lead: 'Chuyển khách tiềm năng thành cơ hội',
             assign_lead: 'Giao khách hàng tiềm năng',
+            update_lead: 'Cập nhật khách hàng tiềm năng',
+            handover_lead: 'Bàn giao khách hàng tiềm năng cho Sales',
+            configure_lead_handover: 'Thiết lập nhóm nhận bàn giao Sales',
+            configure_service_routing: 'Thiết lập bộ phận và thời hạn CSKH',
+            accept_lead_handover: 'Sales tiếp nhận khách hàng tiềm năng',
+            return_lead_handover: 'Sales trả lại khách hàng tiềm năng',
+            merge_leads: 'Gộp khách hàng tiềm năng trùng',
             create_role: 'Tạo vai trò',
             sync_role_permissions: 'Cập nhật quyền vai trò',
             create_user: 'Tạo người dùng',
             sync_user_roles: 'Cập nhật vai trò người dùng',
             update_user_organization: 'Cập nhật tổ chức người dùng',
             update_user_status: 'Cập nhật trạng thái người dùng',
+            update_own_avatar: 'Đổi ảnh đại diện cá nhân',
+            change_own_password: 'Đổi mật khẩu cá nhân',
             change_user_status: 'Cập nhật trạng thái người dùng',
             create_task: 'Tạo công việc',
             update_task_status: 'Cập nhật trạng thái công việc',
@@ -325,6 +334,14 @@
         return `<span class="badge ${style}">${translateStatus(value)}</span>`;
     }
 
+    const clientLists=new Map();
+    function clientTable(key, columns, rows, emptyText='Chưa có dữ liệu', options={}, page=1) {
+        const last=Math.max(1,Math.ceil(rows.length/20));page=Math.min(Math.max(1,page),last);
+        clientLists.set(key,{columns,rows,emptyText,options,page});
+        return `<div data-client-list="${escapeHtml(key)}">${renderTable(columns,rows.slice((page-1)*20,page*20),emptyText,options)}${pager({page,total:rows.length,page_size:20},'data-client-list-page',`data-client-key="${escapeHtml(key)}"`)}</div>`;
+    }
+    document.addEventListener('click',event=>{const button=event.target.closest('[data-client-list-page]');if(!button)return;const key=button.dataset.clientKey,item=clientLists.get(key),root=button.closest('[data-client-list]');if(item && root)root.outerHTML=clientTable(key,item.columns,item.rows,item.emptyText,item.options,Number(button.dataset.clientListPage));});
+
     function renderTable(columns, rows, emptyText = 'Chưa có dữ liệu', options = {}) {
         if (!rows || rows.length === 0) {
             return `<div class="empty"><strong>${emptyText}</strong><span>Dữ liệu mới sẽ hiển thị tại đây.</span></div>`;
@@ -369,6 +386,12 @@
                 <div class="list-filter-actions">${actions}</div>
             </div>
         `;
+    }
+
+    function pager(meta, attribute, extra = '') {
+        const page=Math.max(1,Number(meta.page || 1)), total=Number(meta.total || 0);
+        const last=Math.max(1,Number(meta.last_page || Math.ceil(total/Number(meta.page_size || 20))));
+        return `<div class="customer-list-pagination"><button type="button" class="btn small" ${attribute}="${page-1}" ${extra} ${page<=1?'disabled':''}>Trang trước</button><span>Trang ${page} / ${last} · ${money(total)} dòng</span><button type="button" class="btn small" ${attribute}="${page+1}" ${extra} ${page>=last?'disabled':''}>Trang sau</button></div>`;
     }
 
     function fullList({ title, subtitle = '', filters = '', table = '', meta = '' }) {
@@ -430,7 +453,7 @@
         return `<button class="btn small ${variant}" type="button" ${attr}>${escapeHtml(label)}</button>`;
     }
 
-    window.VKTable = {
+    window.VKTable = { pager, clientTable,
         escapeHtml,
         money,
         statusBadge,

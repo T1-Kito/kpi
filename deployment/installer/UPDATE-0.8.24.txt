@@ -1,0 +1,37 @@
+VK CRM 0.8.24 — BÀN GIAO SALES VÀ NHẬT KÝ THAO TÁC
+
+CẬP NHẬT
+1. Giải nén ZIP ngoài thư mục CRM đang dùng.
+2. Cho người dùng ngừng thao tác và dừng máy chủ CRM.
+3. Chạy Setup.exe mới, chọn Cập nhật bản đã cài và đúng thư mục CRM cũ.
+4. Chỉ tiếp tục sau khi sao lưu, kiểm chứng và kiểm tra cấu trúc thành công.
+5. Khởi động lại CRM, nhấn Ctrl + F5 trên các máy sử dụng.
+
+THAY ĐỔI
+- Form tạo và sửa lead rộng hơn, sắp xếp gọn, nút lưu luôn hiển thị.
+- Hồ sơ lead dùng phần đầu trắng, mã hồng và menu thao tác gọn.
+- Sửa nhãn Chờ Sales tiếp nhận bị đè lên tiêu đề.
+- Quản trị chọn Nhóm nhận bàn giao trên trang Khách hàng tiềm năng.
+  Chọn vai trò Sales phù hợp; thành viên phải đang hoạt động và có quyền
+  quản lý khách hàng tiềm năng, cơ hội. Không tự chọn sẵn Admin.
+- Chọn người nhận hiển thị tên và phòng ban; kiểm tra nhóm nhận ở máy chủ.
+- Tìm số +84 và số bắt đầu 0 ra cùng hồ sơ, kể cả số cũ có khoảng trắng.
+- Tóm tắt nhu cầu tự cập nhật theo ngày, số khách và dịch vụ.
+  Giữ mô tả nhập tay; nhắc kiểm tra lại khi thông tin dự kiến thay đổi.
+- Hiển thị rõ người tiếp tục phụ trách trong lúc chờ Sales nhận.
+- Nhật ký bàn giao hiển thị tên người gửi và nhận.
+- Nhật ký chi tiết mở gần toàn màn hình, dòng thời gian ngang đánh số và màu.
+- Ghi nhận một số thao tác giao diện có ý nghĩa và phản hồi yêu cầu.
+  Phân biệt ghi nhận trình duyệt với nhật ký nghiệp vụ của máy chủ.
+  Không ghi mật khẩu, giá trị ô nhập hoặc tham số truy vấn URL.
+  Không khôi phục click trước khi nâng cấp. Có thể thiếu sự kiện nếu mất mạng.
+- Giữ các sửa lỗi và cấu trúc nâng cấp của bản 0.8.23.
+
+SAU KHI CẬP NHẬT
+Quản trị vào Khách hàng tiềm năng → Nhóm nhận bàn giao → chọn vai trò Sales.
+Kiểm tra bằng tài khoản Marketing và Sales trước khi sử dụng chính thức.
+
+GIỮ NGUYÊN cấu hình kết nối, dữ liệu, tài khoản và file bản quyền đang dùng.
+Không cài mới đè database hoặc bỏ qua bước sao lưu/kiểm tra migration.
+Gói không kèm database local, .env hoặc khóa riêng cấp bản quyền.
+Bộ cài chưa ký số; cần kiểm tra vận hành trên SQL Server thực tế của khách.

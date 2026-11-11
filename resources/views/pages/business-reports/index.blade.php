@@ -5,7 +5,7 @@
 @section('page_subtitle', 'Khách hàng, chăm sóc, phản hồi, bán hàng, mua hàng, kho và công nợ.')
 @section('content')
 <section class="module-panel business-report-panel">
-    <div class="panel-head"><h2>Báo cáo và Excel</h2><button type="button" class="btn primary" id="businessReportExport" disabled>Xuất Excel</button></div>
+    <div class="panel-head"><h2>Báo cáo và Excel</h2><div class="business-report-header-actions"><button class="btn primary" type="submit" form="businessReportFilters">Xem báo cáo</button><button class="btn secondary" type="button" id="businessReportReset">Đặt lại</button><button type="button" class="btn secondary" id="businessReportExport" disabled>Xuất Excel</button></div></div>
     <form id="businessReportFilters" class="kpi-report-filters">
         <label>Báo cáo<select name="type"></select></label>
         <label data-date-filter>Khoảng thời gian<select name="range"><option value="month">Tháng này</option><option value="quarter">Quý này</option><option value="year">Năm nay</option><option value="custom">Tùy chọn</option></select></label>
@@ -17,8 +17,6 @@
         <label data-party-filter>Đối tượng<select name="party_id"><option value="">Tất cả được xem</option></select></label>
         <label data-user-filter>Nhân viên<select name="user_id"><option value="">Tất cả được xem</option></select></label>
         <label data-sku-filter hidden>Mã hàng<select name="sku_id"><option value="">Tất cả mã hàng</option></select></label>
-        <button class="btn secondary" type="submit">Xem báo cáo</button>
-        <button class="btn secondary" type="button" id="businessReportReset">Đặt lại</button>
     </form>
     <p id="businessReportStatus" class="form-note" role="status"></p>
     <div id="businessReportRoot" aria-live="polite"></div>
@@ -26,5 +24,5 @@
 </section>
 @endsection
 @push('scripts')
-<script src="/assets/js/features/business-reports.js?v=20261020-care-report1"></script>
+<script src="/assets/js/features/business-reports.js?v=20261031-full-pagination12"></script>
 @endpush

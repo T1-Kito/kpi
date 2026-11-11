@@ -45,14 +45,17 @@ class ApprovalCenterController extends Controller
         }
 
         $pending = $pending->sortByDesc('created_at')->values();
-        $recent = $recent->sortByDesc('decided_at')->take(12)->values();
+        $recent = $recent->sortByDesc('decided_at')->values();
         $type = (string) $request->query('type', 'all');
         $needle = mb_strtolower(trim((string) $request->query('q', '')));
         $filtered = $pending->when($type !== 'all', fn (Collection $rows) => $rows->where('type', $type))
             ->when($needle !== '', fn (Collection $rows) => $rows->filter(fn (array $row) => str_contains(mb_strtolower(implode(' ', [$row['code'], $row['title'], $row['owner'], $row['summary']])), $needle)))->values();
+        $filteredRecent=$recent->when($type !== 'all',fn(Collection $rows)=>$rows->where('type',$type))->when($needle !== '',fn(Collection $rows)=>$rows->filter(fn(array $row)=>str_contains(mb_strtolower(implode(' ',[$row['code'],$row['title'],$row['owner'],$row['summary']])),$needle)))->values();
+        $size=max(1,min((int)$request->query('page_size',20),100));
+        $page=max(1,(int)$request->query('page',1));$historyPage=max(1,(int)$request->query('history_page',1));
         $today = now()->toDateString();
 
-        return response()->json(['data' => ['pending' => $filtered, 'recent' => $recent, 'counts' => $pending->countBy('type'), 'metrics' => [
+        return response()->json(['data' => ['pending' => $filtered->forPage($page,$size)->values(), 'recent' => $filteredRecent->forPage($historyPage,$size)->values(), 'pagination'=>['page'=>$page,'page_size'=>$size,'total'=>$filtered->count()], 'history_pagination'=>['page'=>$historyPage,'page_size'=>$size,'total'=>$filteredRecent->count()], 'counts' => $pending->countBy('type'), 'metrics' => [
             'pending' => $pending->count(),
             'overdue' => $pending->filter(fn ($row) => $row['created_at']?->lt(now()->subDay()))->count(),
             'today' => $pending->filter(fn ($row) => $row['created_at']?->toDateString() === $today)->count(),
@@ -63,7 +66,7 @@ class ApprovalCenterController extends Controller
 
     private function quotations(int $tenantId, array $statuses, bool $pending, Collection $assigned): Collection
     {
-        return Quotation::where('tenant_id', $tenantId)->whereIn('status', $statuses)->whereIn('id', $assigned)->with(['customer:id,name', 'salesOwner:id,name'])->withCount('items')->latest('id')->limit(50)->get()->map(fn ($row) => $this->row(
+        return Quotation::where('tenant_id', $tenantId)->whereIn('status', $statuses)->whereIn('id', $assigned)->with(['customer:id,name', 'salesOwner:id,name'])->withCount('items')->latest('id')->get()->map(fn ($row) => $this->row(
             'quotation', $row, 'Duyệt báo giá biên lợi nhuận', $row->salesOwner?->name ?? '-', ($row->customer?->name ?? 'Khách hàng').' · '.number_format((float) $row->total_amount, 0, ',', '.').' đ',
             $row->items_count.' dòng'.(request()->user()->hasPermission('master.cost.view') ? ' · Biên lợi nhuận '.number_format((float) $row->margin_percent, 2, ',', '.').'%' : ''), (float) $row->margin_percent < 15 ? 'high' : 'normal', '/quotations?record='.$row->id, $pending
         ));
@@ -71,7 +74,7 @@ class ApprovalCenterController extends Controller
 
     private function requests(int $tenantId, array $statuses, bool $pending): Collection
     {
-        return PurchaseRequest::where('tenant_id', $tenantId)->whereIn('status', $statuses)->with('requester:id,name')->withCount('items')->latest('id')->limit(50)->get()->map(fn ($row) => $this->row(
+        return PurchaseRequest::where('tenant_id', $tenantId)->whereIn('status', $statuses)->with('requester:id,name')->withCount('items')->latest('id')->get()->map(fn ($row) => $this->row(
             'purchase_request', $row, 'Duyệt nhu cầu mua hàng', $row->requester?->name ?? '-', $row->reason ?: 'Yêu cầu mua hàng',
             $row->items_count.' dòng · Nguồn '.($row->source_type ?: 'Thủ công'), $row->source_type === 'SalesOrder' ? 'high' : 'normal', '/purchase-requests?record='.$row->id, $pending
         ));
@@ -79,7 +82,7 @@ class ApprovalCenterController extends Controller
 
     private function orders(int $tenantId, array $statuses, bool $pending, ?\App\Models\User $actor = null): Collection
     {
-        return PurchaseOrder::where('tenant_id', $tenantId)->whereIn('status', $statuses)->with(['supplier:id,name', 'purchaseRequest:id,code'])->withCount('items')->latest('id')->get()->filter(fn ($row) => ! $pending || app(\App\Support\OperationalApproval::class)->isCurrentApprover($row->approval_flow, $actor))->take(50)->map(fn ($row) => $this->row(
+        return PurchaseOrder::where('tenant_id', $tenantId)->whereIn('status', $statuses)->with(['supplier:id,name', 'purchaseRequest:id,code'])->withCount('items')->latest('id')->get()->filter(fn ($row) => ! $pending || app(\App\Support\OperationalApproval::class)->isCurrentApprover($row->approval_flow, $actor))->map(fn ($row) => $this->row(
             'purchase_order', $row, 'Duyệt đơn mua', $row->supplier?->name ?? 'Chưa chọn nhà cung cấp', number_format((float) $row->total_amount, 0, ',', '.').' đ · '.($row->purchaseRequest?->code ?? 'Không có PR'),
             $row->items_count.' dòng · Dự kiến giao '.($row->expected_delivery_date?->format('d/m/Y') ?? 'Chưa xác định'), 'normal', '/purchase-orders?record='.$row->id, $pending
         ));
@@ -92,7 +95,7 @@ class ApprovalCenterController extends Controller
         $query = \App\Support\DataScope::owned($model::where('tenant_id', $tenantId), $actor, 'user_id', 'user');
         return $query->whereIn('status', $statuses)
             ->when($pending,fn($q)=>$q->where($adjustment?'created_by':'user_id','<>',$actor->id))
-            ->with($relations)->latest('id')->limit(50)->get()->map(function ($row) use ($adjustment, $pending) {
+            ->with($relations)->latest('id')->get()->map(function ($row) use ($adjustment, $pending) {
             $code = ($adjustment ? 'KPI-ADJ-' : 'KPI-EXC-').$row->id;
             $title = $adjustment ? ($row->adjustment_type === 'bonus' ? 'Duyệt cộng điểm nhân viên' : 'Duyệt trừ điểm nhân viên') : 'Duyệt giải trình ngoại lệ KPI';
             $detail = $adjustment ? (($row->adjustment_type === 'bonus' ? '+' : '-').number_format((float) $row->points, 2, ',', '.').' điểm · Người tạo '.($row->creator?->name ?? '-')) : (($row->definition?->name ?? 'KPI').' · '.$row->period_start?->format('d/m/Y').' - '.$row->period_end?->format('d/m/Y'));

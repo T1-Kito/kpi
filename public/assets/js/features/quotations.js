@@ -1,10 +1,12 @@
 (function () {
-let quotationState = { rows: [], q: '', status: '', view: 'list', detail: null, detailTab: 'overview', detailCache: {} };
+let quotationState = { page:1,total:0, rows: [], q: '', status: '', view: 'list', detail: null, detailTab: 'overview', detailCache: {} };
 let quotationTemplateCache = null;
 let customerSearchTimer = null;
 let customerSearchResults = [];
 let quotationCustomers = [];
 
+let listSearchTimer,listRequestVersion=0;
+document.addEventListener('click',event=>{if(!document.getElementById('quotationsRoot'))return;const pager=event.target.closest('[data-module-page]');if(pager){quotationState.page=Number(pager.dataset.modulePage);loadQuotations();}});
 document.addEventListener('vk:ready', async () => {
     await loadQuotations();
     const params = new URLSearchParams(location.search);
@@ -17,7 +19,7 @@ document.addEventListener('input', (event) => {
     if (!document.getElementById('quotationsRoot')) return;
     if (event.target.matches('[data-list-search]')) {
         quotationState.q = event.target.value.toLowerCase();
-        renderQuotations();
+        quotationState.page=1;++listRequestVersion;clearTimeout(listSearchTimer);listSearchTimer=setTimeout(loadQuotations,280);
     }
     if (event.target.matches('[name="quantity[]"], [name="unit_price[]"]')) {
         updateQuotationDraftTotals();
@@ -40,14 +42,14 @@ document.addEventListener('change', (event) => {
     if (!document.getElementById('quotationsRoot')) return;
     if (event.target.matches('[data-list-status]')) {
         quotationState.status = event.target.value;
-        renderQuotations();
+        quotationState.page=1;++listRequestVersion;clearTimeout(listSearchTimer);listSearchTimer=setTimeout(loadQuotations,280);
     }
     if (event.target.matches('[name="price_book_id"]')) {
         const field = document.querySelector('[name="discount_percent"]');
         if (field) field.value = event.target.selectedOptions[0]?.dataset.discount || 0;
         updateQuotationDraftTotals();
     }
-    if (event.target.matches('[name="vat_rate[]"]')) updateQuotationDraftTotals();
+    if (event.target.matches('[name="vat_rate[]"], [name="prices_include_vat"]')) updateQuotationDraftTotals();
 });
 document.addEventListener('click', (event) => {
     if (!document.getElementById('quotationsRoot')) return;
@@ -131,7 +133,7 @@ document.addEventListener('click', (event) => {
         event.preventDefault();
         quotationState.view = 'list';
         quotationState.detail = null;
-        renderQuotations();
+        quotationState.page=1;++listRequestVersion;clearTimeout(listSearchTimer);listSearchTimer=setTimeout(loadQuotations,280);
     }
     if (event.target.matches('[data-quotation-page-tab]')) {
         event.preventDefault();
@@ -212,7 +214,7 @@ document.addEventListener('change', (event) => {
         if (terms && option?.value) terms.value = option.textContent.replace(' (mặc định)', '');
         updateQuotationPaymentPlan();
     }
-    if (event.target.matches('[name="vat_rate[]"]')) {
+    if (event.target.matches('[name="vat_rate[]"], [name="prices_include_vat"]')) {
         updateQuotationDraftTotals();
     }
 });
@@ -224,7 +226,10 @@ async function loadQuotations(options = {}) {
         quotationState.detail = null;
         quotationState.detailTab = 'overview';
     }
-    const quotations = await VKApi.request('/quotations');
+    const listVersion=++listRequestVersion;
+    const quotations = await VKApi.request('/quotations?'+new URLSearchParams({page_size:20,page:quotationState.page,q:quotationState.q,status:quotationState.status}),{cache:false});
+    if(listVersion!==listRequestVersion || !document.getElementById('quotationsRoot'))return;
+    quotationState.total=quotations.meta?.total ?? quotations.data?.length ?? 0;
     quotationState.rows = quotations.data || [];
     if (quotationState.view === 'detail' && quotationState.detail?.id) {
         await openQuotationDetail(quotationState.detail.id);
@@ -233,8 +238,8 @@ async function loadQuotations(options = {}) {
     renderQuotations(quotations.meta.total);
 }
 
-function renderQuotations(total = quotationState.rows.length) {
-    const rows = filterRows();
+function renderQuotations(total = quotationState.total) {
+    const rows = quotationState.rows;
     VKTable.updateList(document.getElementById('quotationsRoot'), VKTable.fullList({
         title: 'Danh sách báo giá',
         subtitle: 'Theo dõi biên lợi nhuận, trạng thái duyệt và khả năng tạo đơn bán.',
@@ -256,6 +261,7 @@ function renderQuotations(total = quotationState.rows.length) {
         }),
         table: renderQuotationTable(rows),
     }));
+    document.getElementById('quotationsRoot').insertAdjacentHTML('beforeend',VKTable.pager({page:quotationState.page,total:quotationState.total,page_size:20},'data-module-page'));
     restoreFilters();
 }
 
@@ -366,7 +372,7 @@ async function openQuotationEditor(id) {
 }
 
 async function openQuotationModal(row = null, preset = {}) {
-    const [customers, skus, masterData] = await Promise.all([VKApi.request('/customers?page_size=100'), VKApi.request('/skus?page_size=100'), VKApi.request('/sales-master-data')]);
+    const [customers, skus, masterData] = await Promise.all([VKApi.allPages('/customers'), VKApi.allPages('/skus'), VKApi.request('/sales-master-data')]);
     quotationCustomers = customers.data || [];
     const encodedSkus = encodeURIComponent(JSON.stringify(skus.data || []));
     const isEdit = Boolean(row?.id);
@@ -492,6 +498,7 @@ async function openQuotationModal(row = null, preset = {}) {
                     <div class="field full"><label for="payment_terms">Nội dung điều khoản thanh toán</label><textarea id="payment_terms" name="payment_terms" maxlength="255" rows="2">${VKTable.escapeHtml(row?.payment_terms || quotationCustomers.find(customer => String(customer.id) === String(preset.customer_id))?.payment_terms || '')}</textarea><small>Nội dung này được lưu theo báo giá và đưa vào trường trộn điều khoản thanh toán.</small></div>
                     ${VKModal.select('price_book_id', 'Chính sách giá', [{ value: '', label: 'Giá bán tiêu chuẩn' }, ...(masterData.data?.price_books || []).filter(item => item.is_active).map(item => ({ value: item.id, label: `${item.name} · giảm ${Number(item.discount_percent || 0).toFixed(0)}%` }))], row?.price_book_id || (masterData.data?.price_books || []).find(item => item.is_active && item.is_default)?.id || '')}
                     ${VKModal.field('discount_percent', 'Chiết khấu (%) — tự lấy theo chính sách giá', 'number', row?.discount_percent ?? (masterData.data?.price_books || []).find(item => item.is_active && item.is_default)?.discount_percent ?? 0)}
+                    <label class="field qe-vat-mode"><span>Cách nhập giá</span><select name="prices_include_vat"><option value="0" ${!row?.prices_include_vat?'selected':''}>Giá chưa bao gồm VAT</option><option value="1" ${row?.prices_include_vat?'selected':''}>Giá đã bao gồm VAT</option></select></label>
                     <div class="field full"><label for="note">Ghi chú báo giá</label><textarea id="note" name="note" rows="3">${VKTable.escapeHtml(row?.note || '')}</textarea></div>
                 </div>
             </section>
@@ -548,6 +555,7 @@ async function openQuotationModal(row = null, preset = {}) {
                 contact_id: data.contact_id ? Number(data.contact_id) : null,
                 deal_id: data.deal_id ? Number(data.deal_id) : null,
                 price_book_id: data.price_book_id ? Number(data.price_book_id) : null,
+                prices_include_vat: data.prices_include_vat === '1',
                 discount_percent: Number(data.discount_percent || 0),
                 payment_term_id: data.payment_term_id ? Number(data.payment_term_id) : null,
                 valid_until: data.valid_until || null,
@@ -603,6 +611,7 @@ function arrangeQuotationEditor() {
     const note = editor.querySelector('[name="note"]').closest('.field');
     const price = editor.querySelector('[name="price_book_id"]').closest('.field');
     const discount = editor.querySelector('[name="discount_percent"]').closest('.field');
+    const vatMode = editor.querySelector('[name="prices_include_vat"]').closest('.field');
     const validity = editor.querySelector('[name="valid_until"]').closest('.field');
     const termList = editor.querySelector('[name="payment_term_id"]').closest('.field');
     const plan = editor.querySelector('.quotation-payment-plan');
@@ -628,7 +637,7 @@ function arrangeQuotationEditor() {
     updateQuotationEditorIdentity();
     const middle = document.createElement('section'); middle.className = 'qe-card qe-middle';
     const options = document.createElement('div');options.className = 'qe-options';
-    const pricing = document.createElement('div');pricing.className = 'qe-pricing';pricing.append(price,discount);
+    const pricing = document.createElement('div');pricing.className = 'qe-pricing';pricing.append(price,discount,vatMode);
     terms.classList.add('qe-terms');note.classList.add('qe-note');
     terms.querySelector('label').insertAdjacentHTML('afterbegin',quotationEditorIcon('document'));
     price.querySelector('label').insertAdjacentHTML('afterbegin',quotationEditorIcon('tag'));
@@ -677,6 +686,7 @@ async function previewQuotationEditor() {
         try {
             const form = new FormData(editor.closest('form'));
             const payload = Object.fromEntries(form);
+            payload.prices_include_vat=payload.prices_include_vat==='1';
             payload.template_id=Number(templateSelect.value);
             payload.payment_plan=readQuotationPaymentPlan(editor.closest('form'));
             payload.items=form.getAll('sku_id[]').map((id,i)=>({sku_id:Number(id),quantity:Number(form.getAll('quantity[]')[i]),unit_price:VKMoney.parse(form.getAll('unit_price[]')[i]),vat_rate:Number(form.getAll('vat_rate[]')[i])}));
@@ -1016,8 +1026,10 @@ function updateQuotationDraftTotals() {
         const listPrice = VKMoney.parse(line.querySelector('[name="unit_price[]"]')?.value || 0);
         const price = Math.round(listPrice * (100 - discount)) / 100;
         const vatRate = Number(line.querySelector('[name="vat_rate[]"]')?.value || 0);
-        const lineSubtotal = quantity * price;
-        const lineTax = lineSubtotal * vatRate / 100;
+        const inclusive=document.querySelector('[name="prices_include_vat"]')?.value==='1';
+        const gross=quantity*price;
+        const lineSubtotal = inclusive ? gross/(1+vatRate/100) : gross;
+        const lineTax = inclusive ? gross-lineSubtotal : lineSubtotal * vatRate / 100;
         const lineTotal = lineSubtotal + lineTax;
         subtotal += lineSubtotal;
         tax += lineTax;
@@ -1084,6 +1096,12 @@ function renderQuotationContactResults(query = '') {
 }
 
 document.addEventListener('keydown', event=>{
+    if (event.key === 'Enter' && !event.isComposing && event.target.matches('input') && event.target.closest('.quotation-create-modal') && !event.target.matches('[data-quotation-contact-search], [data-quotation-customer-search]')) {
+        event.preventDefault();
+        const inputs = Array.from(event.target.closest('form').querySelectorAll('input:not([type="hidden"]),select,textarea')).filter(node => !node.disabled && node.getClientRects().length);
+        inputs[inputs.indexOf(event.target) + 1]?.focus();
+        return;
+    }
     const picker = event.target.closest('.quotation-contact-picker');
     if (!picker) return;
     const results = picker.querySelector('[data-quotation-contact-results]');
@@ -1335,10 +1353,13 @@ function renderQuotationDetailPage() {
             <nav class="quote-breadcrumb" aria-label="Đường dẫn"><span>Bán hàng</span><span>/</span><button type="button" data-back-quotation-list>Báo giá</button><span>/</span><strong>${VKTable.escapeHtml(row.code || '-')}</strong></nav>
             ${renderQuotationPageTabs(row)}
             <div class="record-page-body ${quotationState.detailTab === 'overview' ? 'quote-form-body' : ''}">
-                ${renderQuotationPageTabContent(row)}
+                ${quotationState.detailTab === 'care' ? '' : renderQuotationPageTabContent(row)}
+                ${['overview','care'].includes(quotationState.detailTab) && (window.VKUser?.permissions || []).includes('service.ticket.view') ? '<div data-quotation-service-panel></div>' : ''}
             </div>
         </section>
     `;
+    const care=root.querySelector('[data-quotation-service-panel]');
+    if(care)window.VKDocumentCare.mount(care,{document_type:'quotation',document_id:row.id,customer_id:row.customer_id || row.customer?.id});
 }
 
 function renderQuotationSplitList(activeId) {
@@ -1451,6 +1472,7 @@ function renderQuotationPageTabs(row) {
         ['items', `Dòng hàng (${row.items?.length || 0})`],
         ['history', 'Lịch sử'],
         ['approval', 'Thanh toán & duyệt'],
+        ...((window.VKUser?.permissions || []).includes('service.ticket.view') ? [['care', 'CSKH & Khiếu nại']] : []),
         ['notes', 'Ghi chú'],
     ];
 
@@ -2026,12 +2048,12 @@ async function getQuotationTemplateChoices() {
 
 async function getQuotationTemplateChoicesFromList() {
     try {
-        const response = await VKApi.request('/print-templates?page_size=100&module=quotation', { cache: false });
+        const response = await VKApi.allPages('/print-templates?module=quotation', { cache: false });
         return (response.data || [])
             .filter(template => template.module === 'quotation' && template.status === 'active')
             .map(normalizeQuotationTemplateChoice);
     } catch (error) {
-        return getQuotationTemplateChoicesDirect('/api/v1/print-templates?page_size=100&module=quotation');
+        return getQuotationTemplateChoicesDirect('/api/v1/print-templates/choices?module=quotation');
     }
 }
 

@@ -1,6 +1,8 @@
 (function () {
-let receivableState = { rows: [], q: '', status: '', total: 0 };
+let receivableState = { rows: [], q: '', status: '', total: 0, page:1, stats:{} };
 
+let searchTimer, loadVersion=0;
+document.addEventListener('click',event=>{if(!document.getElementById('customerReceivablesRoot'))return;const button=event.target.closest('[data-receivable-page]');if(button){receivableState.page=Number(button.dataset.receivablePage);loadCustomerReceivables();}});
 document.addEventListener('vk:ready', () => loadCustomerReceivables());
 document.addEventListener('vk:flow-updated', () => loadCustomerReceivables());
 
@@ -8,35 +10,39 @@ document.addEventListener('input', (event) => {
     if (!document.getElementById('customerReceivablesRoot')) return;
     if (!event.target.matches('[data-list-search]')) return;
     receivableState.q = event.target.value.toLowerCase();
-    renderCustomerReceivables();
+    receivableState.page=1;++loadVersion;clearTimeout(searchTimer);searchTimer=setTimeout(()=>loadCustomerReceivables(true),280);
 });
 
 document.addEventListener('change', (event) => {
     if (!document.getElementById('customerReceivablesRoot')) return;
     if (!event.target.matches('[data-list-status]')) return;
     receivableState.status = event.target.value;
-    renderCustomerReceivables();
+    receivableState.page=1;loadCustomerReceivables();
 });
 
-async function loadCustomerReceivables() {
+async function loadCustomerReceivables(quiet=false) {
     const root = document.getElementById('customerReceivablesRoot');
     if (!root) return;
 
-    root.innerHTML = VKTable.skeletonRows ? VKTable.skeletonRows() : '<p>Đang tải công nợ...</p>';
-    const response = await VKApi.request('/customer-receivables?page_size=100');
+    const version=++loadVersion;
+    if(!quiet)root.innerHTML = VKTable.skeletonRows ? VKTable.skeletonRows() : '<p>Đang tải công nợ...</p>';
+    const response = await VKApi.request('/customer-receivables?'+new URLSearchParams({page_size:20,page:receivableState.page,q:receivableState.q,status:receivableState.status}),{cache:false});
+    if(version!==loadVersion || document.getElementById('customerReceivablesRoot')!==root)return;
+    receivableState.stats=response.meta?.stats || {};
     receivableState.rows = response.data || [];
     receivableState.total = response.meta?.total || receivableState.rows.length;
     renderCustomerReceivables();
 }
 
 function renderCustomerReceivables() {
+    const focused=document.activeElement?.matches('[data-list-search]'), caret=focused?document.activeElement.selectionStart:null;
     const root = document.getElementById('customerReceivablesRoot');
     if (!root) return;
 
-    const rows = filteredRows();
-    const openDebt = receivableState.rows.reduce((sum, row) => sum + Number(row.balance_amount || 0), 0);
-    const overdueDebt = receivableState.rows.reduce((sum, row) => sum + Number(row.overdue_amount || 0), 0);
-    const overLimit = receivableState.rows.filter(row => row.status === 'over_limit').length;
+    const rows = receivableState.rows;
+    const openDebt = Number(receivableState.stats.balance || 0);
+    const overdueDebt = Number(receivableState.stats.overdue || 0);
+    const overLimit = Number(receivableState.stats.over_limit || 0);
 
     root.innerHTML = `
         <div class="summary-grid compact">
@@ -60,7 +66,9 @@ function renderCustomerReceivables() {
             table: renderReceivableTable(rows),
         })}
     `;
+    root.insertAdjacentHTML('beforeend',VKTable.pager({page:receivableState.page,page_size:20,total:receivableState.total},'data-receivable-page'));
     restoreFilters();
+    if(focused){const input=document.querySelector('[data-list-search]');input?.focus();if(caret!==null)input?.setSelectionRange(caret,caret);}
 }
 
 function renderReceivableTable(rows) {

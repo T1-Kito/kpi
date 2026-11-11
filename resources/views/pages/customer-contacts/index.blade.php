@@ -11,5 +11,5 @@
 <div id="customerContactsRoot"></div>
 @endsection
 @push('scripts')
-<script src="/assets/js/features/customer-contacts.js?v=20261023-list-audit2"></script>
+<script src="/assets/js/features/customer-contacts.js?v=20261031-full-pagination12"></script>
 @endpush

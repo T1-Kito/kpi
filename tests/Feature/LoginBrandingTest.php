@@ -33,7 +33,11 @@ class LoginBrandingTest extends TestCase
 
     public function test_explicit_company_logo_is_preserved(): void
     {
+        \Illuminate\Support\Facades\Storage::fake('public');
+        \Illuminate\Support\Facades\Storage::disk('public')->put('logos/custom.png','test image');
         Tenant::create(['code'=>'BRAND','name'=>'Company','status'=>'active','logo_path'=>'logos/custom.png']);
         $this->get('/')->assertOk()->assertSee('/storage/logos/custom.png')->assertDontSee('assets/branding/vk-software-logo.png');
+        $this->assertSame('/storage/logos/custom.png',\App\Support\TenantLogo::url('logos/custom.png'));
     }
+
 }

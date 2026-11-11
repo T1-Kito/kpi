@@ -24,6 +24,7 @@ class LeadService
         return DB::transaction(function () use ($actor, $data) {
             $data['assigned_to'] = $data['assigned_to'] ?? app(WorkAssignmentService::class)->pick($actor->tenant_id, 'lead');
             $lead = Lead::create([
+                ...array_intersect_key($data,array_flip(['needs','region','expected_service_date','guest_count','interested_services','notes'])),
                 'tenant_id' => $actor->tenant_id,
                 'code' => $this->codes->next('leads', 'code', 'LEAD-', fn ($query) => $query->where('tenant_id', $actor->tenant_id)),
                 'name' => $data['name'],
@@ -49,6 +50,7 @@ class LeadService
 
     public function assign(Lead $lead, User $actor, int $salesUserId): Lead
     {
+        abort_if($lead->merged_into_id,409,'Hồ sơ đã được gộp.');
         return DB::transaction(function () use ($lead, $actor, $salesUserId) {
             if ($lead->assigned_to === $salesUserId && $lead->status === 'assigned') return $lead;
             $old = $lead->assigned_to;
@@ -79,8 +81,12 @@ class LeadService
     /** @param array<string, mixed> $data */
     public function qualify(Lead $lead, User $actor, array $data): array
     {
+        abort_if($lead->merged_into_id || $lead->handover_status==='pending',409,'Hồ sơ đã gộp hoặc đang chờ Sales tiếp nhận.');
         return DB::transaction(function () use ($lead, $actor, $data) {
+            \App\Models\Tenant::whereKey($actor->tenant_id)->lockForUpdate()->firstOrFail();
             $lead = Lead::whereKey($lead->id)->lockForUpdate()->firstOrFail();
+            abort_unless($lead->tenant_id===$actor->tenant_id && (!$lead->assigned_to || DataScope::owned(Lead::whereKey($lead->id),$actor,'assigned_to','assignee')->exists()),404);
+            abort_if($lead->merged_into_id || $lead->handover_status==='pending',409,'Hồ sơ đã gộp hoặc đang chờ Sales tiếp nhận.');
             if ($lead->status === 'qualified') {
                 return ['lead' => $lead, 'customer' => Customer::findOrFail($lead->customer_id),
                     'deal' => \App\Models\Deal::where('tenant_id', $lead->tenant_id)->where('lead_id', $lead->id)->firstOrFail()];
@@ -141,6 +147,9 @@ class LeadService
                 'amount' => $data['amount'] ?? 0,
                 'expected_close_date' => $data['expected_close_date'] ?? null,
                 'next_activity_at' => $data['next_activity_at'] ?? null,
+                'needs'=>['purpose'=>$lead->needs,'guest_count'=>$lead->guest_count,'service_date'=>$lead->expected_service_date,
+                    'interests'=>$lead->interested_services ? [$lead->interested_services] : [],'special_requests'=>$lead->notes,
+                    'intake'=>$lead->only(['needs','region','expected_service_date','guest_count','interested_services','notes'])],
                 'stage' => 'qualified',
             ]);
 

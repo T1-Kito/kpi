@@ -1,0 +1,33 @@
+.customer-faceid-panel [data-faceid-content] {
+    padding: 14px 18px;
+}
+.customer-faceid-panel .customer-faceid-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 10px;
+    margin: 8px 0 14px;
+}
+.customer-faceid-panel label {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+}
+.customer-faceid-panel :is(input, select) {
+    width: 100%;
+    min-height: 34px;
+    border: 1px solid #d4deed;
+    border-radius: 6px;
+    padding: 5px 8px;
+}
+.customer-faceid-panel details {
+    padding: 10px 0;
+    border-top: 1px solid #e4eaf2;
+}
+.customer-faceid-panel summary {
+    cursor: pointer;
+    font-weight: 600;
+}
+.customer-faceid-panel [data-faceid-scans] {
+    overflow-wrap: anywhere;
+}

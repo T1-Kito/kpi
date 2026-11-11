@@ -1,17 +1,19 @@
 (function () {
-let dealState = { rows: [], q: '', stage: '', stages: {} };
+let dealState = { rows: [], q: '', stage: '', stages: {}, page: 1, total: 0, lastPage: 1 };
 
+let dealSearchTimer, dealLoadVersion=0;
 document.addEventListener('vk:ready', () => loadDeals());
 document.addEventListener('input', event => {
     if (!document.getElementById('dealsRoot') || !event.target.matches('[data-list-search]')) return;
-    dealState.q = event.target.value.toLowerCase(); renderDeals();
+    dealState.q = event.target.value; dealState.page=1; clearTimeout(dealSearchTimer); dealSearchTimer=setTimeout(loadDeals,280);
 });
 document.addEventListener('change', event => {
     if (!document.getElementById('dealsRoot') || !event.target.matches('[data-deal-stage]')) return;
-    dealState.stage = event.target.value; renderDeals();
+    dealState.stage = event.target.value; dealState.page=1; loadDeals();
 });
 document.addEventListener('click', event => {
     if (!document.getElementById('dealsRoot')) return;
+    const pager=event.target.closest('[data-deal-page]'); if(pager){dealState.page=Number(pager.dataset.dealPage);loadDeals();return;}
     const create = event.target.closest('[data-create-deal]');
     const transition = event.target.closest('[data-transition-deal]');
     const detail = event.target.closest('[data-deal-detail]');
@@ -46,22 +48,21 @@ document.addEventListener('keydown',event=>{
 async function loadDeals() {
     const root = document.getElementById('dealsRoot');
     if (!root) return;
+    const version=++dealLoadVersion;
     await window.VKDealServices?.load();
-    const response = await VKApi.request('/deals?page_size=100');
-    if (document.getElementById('dealsRoot') !== root) return;
+    const response = await VKApi.request('/deals?'+new URLSearchParams({page_size:20,page:dealState.page,q:dealState.q,stage:dealState.stage}),{cache:false});
+    if (version!==dealLoadVersion || document.getElementById('dealsRoot') !== root) return;
     dealState.rows = response.data || [];
+    dealState.total=response.meta?.total ?? dealState.rows.length;dealState.lastPage=Math.max(1,Math.ceil(dealState.total/20));
     dealState.stages = response.meta?.stages || {};
     renderDeals(response.meta?.total || dealState.rows.length);
     const requestedId = new URLSearchParams(window.location.search).get('open');
     if (requestedId && /^\d+$/.test(requestedId)) openDealDetail(requestedId);
 }
 
-function renderDeals(total = dealState.rows.length) {
+function renderDeals(total = dealState.total) {
     const canManage = window.VKLayout?.hasPermission('sales.deal.manage');
-    const rows = dealState.rows.filter(row => {
-        const text = `${row.code || ''} ${row.name || ''} ${row.customer?.name || ''} ${row.lead?.name || ''} ${row.owner?.name || ''}`.toLowerCase();
-        return (!dealState.q || text.includes(dealState.q)) && (!dealState.stage || row.stage === dealState.stage);
-    });
+    const rows = dealState.rows;
     const stages = Object.keys(dealState.stages).map(key => ({ value: key, label: stageLabel(key) }));
     VKTable.updateList(document.getElementById('dealsRoot'), VKTable.fullList({
         title: 'Danh sách cơ hội bán hàng',
@@ -86,6 +87,7 @@ function renderDeals(total = dealState.rows.length) {
             ].filter(Boolean)) : VKTable.statusBadge(row.status) },
         ], rows, 'Chưa có cơ hội bán hàng', {rowAttr:row=>`data-deal-row="${Number(row.id)}" tabindex="0" aria-label="Mở cơ hội ${VKTable.escapeHtml(row.name || row.code || '')}"`}),
     }));
+    document.getElementById('dealsRoot').insertAdjacentHTML('beforeend', `<div class="customer-list-pagination"><button class="btn small" data-deal-page="${dealState.page-1}" ${dealState.page<=1?'disabled':''}>Trang trước</button><span> Trang ${dealState.page} / ${dealState.lastPage} · ${dealState.total} cơ hội </span><button class="btn small" data-deal-page="${dealState.page+1}" ${dealState.page>=dealState.lastPage?'disabled':''}>Trang sau</button></div>`);
     const search = document.querySelector('[data-list-search]'); if (search && document.activeElement !== search) search.value = dealState.q;
     const stage = document.querySelector('[data-deal-stage]'); if (stage) stage.value = dealState.stage;
 }
@@ -187,7 +189,7 @@ async function openDealNeeds(id){
 async function openDealItemsModal(id) {
     const [detail, skuResponse] = await Promise.all([
         VKApi.request(`/deals/${id}`),
-        VKApi.request('/skus?page_size=100'),
+        VKApi.allPages('/skus'),
     ]);
     const deal = detail.data;
     const skus = skuResponse.data || [];

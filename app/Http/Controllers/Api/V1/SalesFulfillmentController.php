@@ -34,6 +34,7 @@ class SalesFulfillmentController extends Controller
                 'invoices:id,sales_order_id,code,status,total_amount,paid_amount,balance_amount',
             ]);
 
+        $stats = ['pending'=>(clone $query)->where('delivery_status','pending')->count(),'awaiting'=>(clone $query)->where('delivery_status','delivered_pending_acceptance')->count(),'delivered'=>(clone $query)->where('delivery_status','delivered')->count()];
         if ($search = trim((string) $request->query('q'))) {
             $query->where(function ($builder) use ($search) {
                 $builder->where('code', 'like', "%{$search}%")
@@ -45,7 +46,7 @@ class SalesFulfillmentController extends Controller
             $query->where('delivery_status', $status);
         }
 
-        return $this->paginated($query->latest('id'), $request);
+        return $this->paginated($query->latest('id'), $request, $stats);
     }
 
     public function deliveryRecords(Request $request): JsonResponse
@@ -54,16 +55,15 @@ class SalesFulfillmentController extends Controller
             ->where('tenant_id', $request->user()->tenant_id)
             ->with('salesOrder.customer:id,name')
             ->latest('id')
-            ->limit(100)
-            ->get()
-            ->map(fn (Delivery $delivery) => [
+            ->paginate(max(1,min((int)$request->query('page_size',100),100)));
+        $data = $rows->getCollection()->map(fn (Delivery $delivery) => [
                 'id' => $delivery->id,
                 'code' => $delivery->code,
                 'status' => $delivery->acceptance_status,
                 'customer' => ['name' => $delivery->salesOrder?->customer?->name],
             ]);
 
-        return response()->json(['data' => $rows]);
+        return response()->json(['data'=>$data,'meta'=>['page'=>$rows->currentPage(),'page_size'=>$rows->perPage(),'total'=>$rows->total()]]);
     }
 
     public function delivery(Request $request, SalesOrder $salesOrder): JsonResponse
@@ -91,6 +91,7 @@ class SalesFulfillmentController extends Controller
                 'issuedBy:id,name',
             ]);
 
+        $stats = ['outstanding'=>(clone $query)->sum('balance_amount'),'overdue'=>(clone $query)->where('balance_amount','>',0)->where('due_date','<',now()->toDateString())->count(),'paid'=>(clone $query)->where('status','paid')->count()];
         if ($search = trim((string) $request->query('q'))) {
             $query->where(function ($builder) use ($search) {
                 $builder->where('code', 'like', "%{$search}%")
@@ -102,7 +103,7 @@ class SalesFulfillmentController extends Controller
             $query->where('status', $status);
         }
 
-        return $this->paginated($query->latest('invoice_date'), $request);
+        return $this->paginated($query->latest('invoice_date')->latest('id'), $request, $stats);
     }
 
     public function invoice(Request $request, SalesInvoice $salesInvoice): JsonResponse
@@ -128,6 +129,7 @@ class SalesFulfillmentController extends Controller
                 'receivedBy:id,name',
             ]);
 
+        $stats = ['collected'=>(clone $query)->sum('amount')];
         if ($search = trim((string) $request->query('q'))) {
             $query->where(function ($builder) use ($search) {
                 $builder->where('code', 'like', "%{$search}%")
@@ -140,7 +142,7 @@ class SalesFulfillmentController extends Controller
             $query->where('payment_method', $method);
         }
 
-        return $this->paginated($query->latest('paid_at'), $request);
+        return $this->paginated($query->latest('paid_at')->latest('id'), $request, $stats);
     }
 
     public function receivables(Request $request): JsonResponse
@@ -189,6 +191,13 @@ class SalesFulfillmentController extends Controller
                 'customers.status',
             ]);
 
+        $summary = DB::query()->fromSub((clone $query)->toBase(), 'debts')->selectRaw('COALESCE(SUM(balance_amount),0) as balance, COALESCE(SUM(overdue_amount),0) as overdue, SUM(CASE WHEN credit_limit > 0 AND balance_amount > credit_limit THEN 1 ELSE 0 END) as over_limit')->first();
+        $stats = ['balance'=>(float)$summary->balance,'overdue'=>(float)$summary->overdue,'over_limit'=>(int)$summary->over_limit];
+        $status = $request->query('status');
+        if ($status==='paid') $query->havingRaw('COALESCE(SUM(sales_invoices.balance_amount),0) <= 0');
+        if ($status==='unpaid') $query->havingRaw('COALESCE(SUM(sales_invoices.balance_amount),0) > 0');
+        if ($status==='overdue') $query->havingRaw('SUM(CASE WHEN sales_invoices.balance_amount > 0 AND sales_invoices.due_date < ? THEN sales_invoices.balance_amount ELSE 0 END) > 0',[$today]);
+        if ($status==='over_limit') $query->havingRaw('customers.credit_limit > 0 AND COALESCE(SUM(sales_invoices.balance_amount),0) > customers.credit_limit');
         if ($search = trim((string) $request->query('q'))) {
             $query->where(function ($builder) use ($search) {
                 $builder->where('customers.code', 'like', "%{$search}%")
@@ -201,7 +210,7 @@ class SalesFulfillmentController extends Controller
 
         $pageSize = min(max((int) $request->query('page_size', 20), 1), 100);
         $rows = $query
-            ->orderByDesc(DB::raw('balance_amount'))
+            ->orderByDesc(DB::raw('balance_amount'))->orderBy('customers.id')
             ->paginate($pageSize);
 
         $data = collect($rows->items())->map(function ($row) {
@@ -241,6 +250,7 @@ class SalesFulfillmentController extends Controller
         return response()->json([
             'data' => $data,
             'meta' => [
+                'stats' => $stats,
                 'page' => $rows->currentPage(),
                 'page_size' => $rows->perPage(),
                 'total' => $rows->total(),
@@ -265,7 +275,7 @@ class SalesFulfillmentController extends Controller
         abort_if($salesOrder->tenant_id !== $request->user()->tenant_id, 404);
         $data = $request->validate([
             'recipient_name' => ['required', 'string', 'max:150'],
-            'recipient_phone' => ['nullable', 'string', 'max:30'],
+            'recipient_phone' => ['nullable', 'string', 'max:30', 'phone_number'],
             'delivery_address' => ['required', 'string', 'max:500'],
             'delivered_at' => ['nullable', 'date'],
             'proof_note' => ['nullable', 'string', 'max:1000'],
@@ -353,7 +363,7 @@ class SalesFulfillmentController extends Controller
         return response()->json(['data' => $this->fulfillment->recordPayment($salesInvoice, $request->user(), $data)], 201);
     }
 
-    private function paginated($query, Request $request): JsonResponse
+    private function paginated($query, Request $request, array $stats = []): JsonResponse
     {
         $pageSize = min(max((int) $request->query('page_size', 20), 1), 100);
         $rows = $query->paginate($pageSize);
@@ -361,6 +371,7 @@ class SalesFulfillmentController extends Controller
         return response()->json([
             'data' => $rows->items(),
             'meta' => [
+                'stats' => $stats,
                 'page' => $rows->currentPage(),
                 'page_size' => $rows->perPage(),
                 'total' => $rows->total(),

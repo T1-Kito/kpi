@@ -12,6 +12,8 @@ class ChatController extends Controller {
         $uid=$r->user()->id;
         $rows=DB::table('chat_conversations as c')->join('chat_members as m','m.conversation_id','=','c.id')->where('c.tenant_id',$r->user()->tenant_id)->where('m.user_id',$uid)->select('c.*','m.last_read_id')->orderByDesc('c.updated_at')->get();
         foreach($rows as $row){
+            $row->updated_at = \Illuminate\Support\Carbon::parse($row->updated_at, 'UTC')->toIso8601String();
+            $row->created_at = \Illuminate\Support\Carbon::parse($row->created_at, 'UTC')->toIso8601String();
             $row->members=DB::table('chat_members as m')->join('users as u','u.id','=','m.user_id')->where('m.conversation_id',$row->id)->get(['u.id','u.name','u.is_active']);
             $row->title=$row->name ?: ($row->members->firstWhere('id','!=',$uid)?->name ?? 'Hội thoại');
             $row->last_message=DB::table('chat_messages')->where('conversation_id',$row->id)->latest('id')->value('body');
@@ -38,6 +40,10 @@ class ChatController extends Controller {
         $this->conversation($r,$id);
         $data=$r->validate(['before'=>['nullable','integer','min:1']]);
         $rows=DB::table('chat_messages as m')->join('users as u','u.id','=','m.sender_id')->where('m.conversation_id',$id)->when($data['before']??null,fn($q,$before)=>$q->where('m.id','<',$before))->orderByDesc('m.id')->limit(51)->get(['m.*','u.name as sender_name']);
+        foreach ($rows as $row) {
+            $row->created_at = \Illuminate\Support\Carbon::parse($row->created_at, 'UTC')->toIso8601String();
+            $row->updated_at = \Illuminate\Support\Carbon::parse($row->updated_at, 'UTC')->toIso8601String();
+        }
         return response()->json(['data'=>$rows->take(50)->reverse()->values(),'meta'=>['has_more'=>$rows->count()>50]]);
     }
     public function send(Request $r,int $id){

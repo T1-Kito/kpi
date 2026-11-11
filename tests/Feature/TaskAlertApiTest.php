@@ -10,6 +10,22 @@ class TaskAlertApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_mark_all_notifications_read_is_scoped_to_current_recipient(): void
+    {
+        $this->seed();
+        $user = \App\Models\User::where('email', 'sales@vk-kpi.local')->firstOrFail();
+        $other = \App\Models\User::where('email', 'admin@vk-kpi.local')->firstOrFail();
+        foreach (range(1, 12) as $number) {
+            \App\Models\VkNotification::create(['tenant_id' => $user->tenant_id, 'recipient_id' => $user->id, 'title' => 'Thông báo '.$number, 'message' => 'Kiểm tra', 'status' => 'unread']);
+        }
+        $protected = \App\Models\VkNotification::create(['tenant_id' => $other->tenant_id, 'recipient_id' => $other->id, 'title' => 'Riêng tư', 'message' => 'Kiểm tra', 'status' => 'unread']);
+        $token = $this->loginAs('sales@vk-kpi.local');
+        $this->withToken($token)->postJson('/api/v1/notifications/read-all')->assertOk();
+        $this->assertSame(0, \App\Models\VkNotification::where('recipient_id', $user->id)->where('status', 'unread')->count());
+        $this->assertSame('unread', $protected->fresh()->status);
+        $this->withToken($token)->postJson('/api/v1/notifications/read-all')->assertOk()->assertJsonPath('data.updated', 0);
+    }
+
     public function test_admin_can_create_task_with_sla_due_date(): void
     {
         $this->seed();

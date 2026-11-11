@@ -1,5 +1,6 @@
 (function () {
     const can = (permission) => window.VKLayout?.hasPermission?.(permission) === true;
+    let listPage=1, listVersion=0;
     let data = { stockTakes: [], warehouses: [], skus: [] };
 
     window.loadStockTakes = loadStockTakes;
@@ -8,6 +9,7 @@
     document.addEventListener('click', (event) => {
         if (!document.getElementById('stockTakesRoot')) return;
 
+        const pager=event.target.closest('[data-stocktake-page]');if(pager){listPage=Number(pager.dataset.stocktakePage);loadStockTakes();return;}
         if (event.target.closest('[data-create-stock-take]')) {
             openCreateModal();
             return;
@@ -28,14 +30,16 @@
     async function loadStockTakes() {
         const root = document.getElementById('stockTakesRoot');
         if (!root) return;
+        const version=++listVersion;
         try {
             const [stockTakes, warehouses, skus] = await Promise.all([
-                VKApi.request('/stock-takes?page_size=100', {cache:false}),
-                VKApi.request('/warehouses?page_size=100', {cache:false}),
-                VKApi.request('/skus?page_size=100', {cache:false}),
+                VKApi.request(`/stock-takes?page_size=20&page=${listPage}`, {cache:false}),
+                VKApi.allPages('/warehouses', {cache:false}),
+                VKApi.allPages('/skus', {cache:false}),
             ]);
+            if(version!==listVersion || document.getElementById('stockTakesRoot')!==root)return;
             data = {stockTakes:stockTakes.data||[],warehouses:(warehouses.data||[]).filter(row=>row.status==='active'),skus:(skus.data||[]).filter(row=>row.status==='active')};
-            root.innerHTML = renderList(stockTakes.meta?.total || data.stockTakes.length);
+            root.innerHTML = renderList(stockTakes.meta?.total || data.stockTakes.length)+VKTable.pager(stockTakes.meta || {},'data-stocktake-page');
         } catch (error) {
             data = { stockTakes: [], warehouses: [], skus: [] };
             root.innerHTML = `<section class="module-panel"><p class="form-note">${escape(error.message || 'Không thể tải dữ liệu kiểm kê.')}</p></section>`;

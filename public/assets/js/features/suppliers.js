@@ -1,19 +1,21 @@
 (function () {
-let supplierState = { rows: [], q: '', status: '' };
+let supplierState = { page:1,total:0, rows: [], q: '', status: '' };
 
+let listSearchTimer,listRequestVersion=0;
+document.addEventListener('click',event=>{if(!document.getElementById('suppliersRoot'))return;const pager=event.target.closest('[data-module-page]');if(pager){supplierState.page=Number(pager.dataset.modulePage);loadSuppliers();}});
 document.addEventListener('vk:ready', () => loadSuppliers());
 document.addEventListener('input', (event) => {
     if (!document.getElementById('suppliersRoot')) return;
     if (event.target.matches('[data-list-search]')) {
         supplierState.q = event.target.value.toLowerCase();
-        renderSuppliers();
+        supplierState.page=1;++listRequestVersion;clearTimeout(listSearchTimer);listSearchTimer=setTimeout(loadSuppliers,280);
     }
 });
 document.addEventListener('change', (event) => {
     if (!document.getElementById('suppliersRoot')) return;
     if (event.target.matches('[data-list-status]')) {
         supplierState.status = event.target.value;
-        renderSuppliers();
+        supplierState.page=1;++listRequestVersion;clearTimeout(listSearchTimer);listSearchTimer=setTimeout(loadSuppliers,280);
     }
 });
 document.addEventListener('click', (event) => {
@@ -34,15 +36,18 @@ async function loadSuppliers(options = {}) {
     if (options.source === 'pjax' && supplierState.rows.length) {
         renderSuppliers();
     }
-    const suppliers = await VKApi.request('/suppliers',{cache:false});
+    const listVersion=++listRequestVersion;
+    const suppliers = await VKApi.request('/suppliers?'+new URLSearchParams({page_size:20,page:supplierState.page,q:supplierState.q,status:supplierState.status}),{cache:false});
     if (document.getElementById('suppliersRoot') !== root) return;
+    if(listVersion!==listRequestVersion || !document.getElementById('suppliersRoot'))return;
+    supplierState.total=suppliers.meta?.total ?? suppliers.data?.length ?? 0;
     supplierState.rows = suppliers.data || [];
     renderSuppliers(suppliers.meta.total);
 }
 
-function renderSuppliers(total = supplierState.rows.length) {
-    const rows = filterRows();
-    document.getElementById('suppliersRoot').innerHTML = VKTable.fullList({
+function renderSuppliers(total = supplierState.total) {
+    const rows = supplierState.rows;
+    VKTable.updateList(document.getElementById('suppliersRoot'), VKTable.fullList({
         title: 'Danh sách nhà cung cấp',
         subtitle: 'Quản lý nguồn mua hàng, điều khoản, đánh giá và trạng thái sử dụng.',
         meta: `${VKTable.money(rows.length)} / ${VKTable.money(total)} nhà cung cấp`,
@@ -54,7 +59,8 @@ function renderSuppliers(total = supplierState.rows.length) {
             ],
         }),
         table: renderSupplierTable(rows),
-    });
+    }));
+    document.getElementById('suppliersRoot').insertAdjacentHTML('beforeend',VKTable.pager({page:supplierState.page,total:supplierState.total,page_size:20},'data-module-page'));
     restoreFilters();
 }
 

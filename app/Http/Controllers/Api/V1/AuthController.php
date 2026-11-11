@@ -93,7 +93,7 @@ class AuthController extends Controller
                 'id' => $user->tenant->id,
                 'code' => $user->tenant->code,
                 'name' => $user->tenant->name,
-                'logo_url' => $user->tenant->logo_path ? Storage::disk('public')->url($user->tenant->logo_path) : null,
+                'logo_url' => \App\Support\TenantLogo::url($user->tenant->logo_path),
                 'ui_settings' => $user->tenant->ui_settings ?? [],
             ] : null,
             'roles' => $user->roles->pluck('code')->values(),

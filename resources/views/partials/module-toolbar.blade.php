@@ -59,7 +59,7 @@
         [
             'match' => ['service-tickets', 'warranty-claims'],
             'items' => [
-                ['label' => 'Ticket hỗ trợ', 'href' => '/service-tickets', 'match' => 'service-tickets', 'permission' => 'service.ticket.view'],
+                ['label' => 'Yêu cầu khách hàng', 'href' => '/service-tickets', 'match' => 'service-tickets', 'permission' => 'service.ticket.view'],
                 ['label' => 'Bảo hành', 'href' => '/warranty-claims', 'match' => 'warranty-claims', 'permission' => 'service.ticket.view'],
             ],
         ],

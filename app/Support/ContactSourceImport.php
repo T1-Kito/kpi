@@ -45,7 +45,7 @@ Validator::make($raw,['schema_version'=>'required|in:1','external_id'=>'nullable
                 if(isset($primaryCustomers[$customer->id]))$this->fail('Một khách hàng không được có hai liên hệ chính trong cùng file.');
                 $primaryCustomers[$customer->id]=true;
             }
-            Validator::make($values,['name'=>'required|string|max:255','phone'=>'nullable|string|max:50','email'=>'nullable|email|max:255','position'=>'nullable|string|max:255'],ImportValidation::MESSAGES,self::LABELS)->validate();
+            Validator::make($values,['name'=>'required|string|max:255','phone'=>'nullable|string|max:50|phone_number','email'=>'nullable|email|max:255','position'=>'nullable|string|max:255'],ImportValidation::MESSAGES,self::LABELS)->validate();
             $keys=$this->keys($values);if(!$keys)$this->fail('Cần điện thoại hoặc email để kiểm tra trùng.');
             foreach($keys as $key){$key=$customer->id.':'.$key;if(isset($seenKeys[$key]))$this->fail('Điện thoại hoặc email trùng người liên hệ khác trong file.');$seenKeys[$key]=true;}
             foreach(CustomerContact::where('customer_id',$customer->id)->when($contact,fn($q)=>$q->whereKeyNot($contact->id))->get(['phone','email']) as $other)if(array_intersect($keys,$this->keys($other->toArray())))$this->fail('Điện thoại hoặc email đã thuộc người liên hệ khác của khách hàng. Không tự ghép.');

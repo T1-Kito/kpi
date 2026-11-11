@@ -14,10 +14,12 @@ class ServiceTicket extends Model
     protected $appends = ['response_sla', 'resolution_sla', 'sla_clock'];
     protected $hidden = ['slaEvents'];
     public function getSlaClockAttribute(): array { $rules=\App\Support\ServiceTicketSla::rules($this); return ['clock'=>$rules['clock'] ?? 'continuous','allow_pause'=>(bool)($rules['allow_pause'] ?? false),'paused'=>(bool)\App\Support\ServiceTicketSla::pausedAt($this)]; }
-    public function getFillable() { return [...parent::getFillable(), 'document_type','document_id']; }
+    public function getFillable() { return [...parent::getFillable(), 'document_type','document_id','request_details','department_id','coordinator_id','supervisor_id']; }
     public function getResponseSlaAttribute(): array { return \App\Support\TicketDeadline::describe($this, 'response'); }
     public function getResolutionSlaAttribute(): array { return \App\Support\TicketDeadline::describe($this, 'resolution'); }
-    protected function casts(): array { return ['document_id'=>'integer','first_responded_at' => 'datetime', 'response_due_at' => 'datetime', 'resolution_due_at' => 'datetime', 'resolved_at' => 'datetime', 'satisfaction_score' => 'integer']; }
+    protected function casts(): array { return ['request_details'=>'array','department_id'=>'integer','coordinator_id'=>'integer','supervisor_id'=>'integer','document_id'=>'integer','first_responded_at' => 'datetime', 'response_due_at' => 'datetime', 'resolution_due_at' => 'datetime', 'resolved_at' => 'datetime', 'satisfaction_score' => 'integer']; }
+    public function coordinator(): BelongsTo { return $this->belongsTo(User::class,'coordinator_id'); }
+    public function department(): BelongsTo { return $this->belongsTo(Department::class); }
     public function customer(): BelongsTo { return $this->belongsTo(Customer::class)->withoutGlobalScope('catalog_visibility'); }
     public function assignee(): BelongsTo { return $this->belongsTo(User::class, 'assignee_id'); }
     public function worklogs(): HasMany { return $this->hasMany(TicketWorklog::class); }

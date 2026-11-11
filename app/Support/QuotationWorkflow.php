@@ -139,7 +139,7 @@ class QuotationWorkflow
             $copy = app(QuotationService::class)->create($actor, [
                 'customer_id' => $quote->customer_id, 'lead_id' => $quote->lead_id, 'deal_id' => $quote->deal_id,
                 'price_book_id' => $quote->price_book_id, 'payment_term_id' => $quote->payment_term_id,
-                'discount_percent' => $quote->discount_percent, 'valid_until' => $quote->valid_until?->toDateString(),
+                'prices_include_vat'=>$quote->prices_include_vat, 'discount_percent' => $quote->discount_percent, 'valid_until' => $quote->valid_until?->toDateString(),
                 'payment_terms' => $quote->payment_terms, 'delivery_terms' => $quote->delivery_terms, 'note' => $quote->note,
                 'payment_plan' => $quote->payment_plan, 'contact_id' => $quote->contact_id,
                 'items' => $quote->items->map(fn ($item) => ['sku_id' => $item->sku_id, 'quantity' => $item->quantity, 'unit_price' => $item->list_unit_price ?? $item->unit_price, 'vat_rate' => $item->vat_rate])->all()]);

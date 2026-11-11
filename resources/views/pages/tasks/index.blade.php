@@ -13,5 +13,5 @@
 @endsection
 
 @push('scripts')
-<script src="/assets/js/features/tasks.js?v=20261029-create2"></script>
+<script src="/assets/js/features/tasks.js?v=20261103-vat-contract14"></script>
 @endpush
